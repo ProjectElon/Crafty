@@ -237,7 +237,7 @@ namespace minecraft {
     glm::vec2 top_right;
 };
 )";
-        header_file_stream << "enum Texture_Id\n{\n";
+        header_file_stream << "enum Texture_Id : uint16_t\n{\n";
         header_file_stream << texture_enum_stream.str();
         header_file_stream << "};\n";
 

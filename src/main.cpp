@@ -21,6 +21,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <time.h>
+#include <thread>
+
 namespace minecraft {
 
     static bool on_quit(const Event *event, void *sender)
@@ -48,10 +51,12 @@ namespace minecraft {
             game->config.update_camera = !game->config.update_camera;
         }
 
+#ifndef MC_DIST
         if (key == MC_KEY_L)
         {
             Opengl_Renderer::internal_data.should_print_stats = !Opengl_Renderer::internal_data.should_print_stats;
         }
+#endif
 
         return false;
     }
@@ -161,11 +166,7 @@ int main()
 
     f32 current_time = platform.get_current_time();
     f32 last_time = current_time;
-
-    Camera camera;
-    camera.initialize(glm::vec3(0.0f, 0.0f, 50.0f));
-    Event_System::register_event(EventType_Resize, on_resize, &camera);
-
+    
     Opengl_Shader block_shader;
     block_shader.load_from_file("../assets/shaders/block.glsl");
 
@@ -183,14 +184,55 @@ int main()
 
     game.is_running = true;
 
-    World* world = new World;
-    world->initialize();
+    Camera camera;
+    camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f));
+    Event_System::register_event(EventType_Resize, on_resize, &camera);
+
+    srand(time(nullptr));
+    u32 seed = rand();
+
+    auto& loaded_chunks = World::loaded_chunks;
+
+    glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+    
+    glm::ivec2 start = player_chunk_coords - glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));
+    glm::ivec2 end   = player_chunk_coords + glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));           
+
+    for (i32 z = start.y - 1; z <= end.y + 1; ++z)
+    {
+        for (i32 x = start.x - 1; x <= end.x + 1; ++x)
+        {
+            glm::ivec2 chunk_coords = { x, z };
+            i64 chunk_hash = z * MC_CHUNK_WIDTH + x;
+            auto it = loaded_chunks.find(chunk_hash);
+
+            if (it == loaded_chunks.end()) 
+            {
+                Chunk* chunk = new Chunk;
+                chunk->initialize(chunk_coords);
+                chunk->generate(seed);
+                loaded_chunks.emplace(chunk_hash, chunk);
+            }
+        }
+    }
+
+    f32 frame_timer = 0;
+    u32 frames_per_second = 0;
 
     while (game.is_running)
     {
         f32 delta_time = current_time - last_time;
         last_time = current_time;
         current_time = platform.get_current_time();
+
+        frame_timer += delta_time;
+
+        if (frame_timer >= 1.0f) 
+        {
+            frame_timer -= 1.0f;
+            fprintf(stderr, "FPS: %d\n", frames_per_second);
+            frames_per_second = 0;
+        }
 
         platform.pump_messages();
         Input::update();
@@ -202,21 +244,59 @@ int main()
 
         glm::vec4 clear_color(0.1f, 0.1f, 0.1f, 1.0f);
 
-        Opengl_Renderer::begin(clear_color, &camera, &block_shader);
+        auto& loaded_chunks = World::loaded_chunks;
+
+        glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
         
-        for (u32 y = 0; y < MC_WORLD_HEIGHT; ++y)
+        glm::ivec2 start = player_chunk_coords - glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));
+        glm::ivec2 end   = player_chunk_coords + glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));    
+
+        Opengl_Renderer::begin(clear_color, &camera, &block_shader);
+
+        for (i32 z = start.y - 1; z <= end.y + 1; ++z)
         {
-            for (u32 z = 0; z < MC_WORLD_DEPTH; ++z)
+            for (i32 x = start.x - 1; x <= end.x + 1; ++x)
             {
-                for (u32 x = 0; x < MC_WORLD_WIDTH; ++x)
+                glm::ivec2 chunk_coords = { x, z };
+                Chunk* chunk = nullptr;
+
+                i64 chunk_hash = z * MC_CHUNK_WIDTH + x;
+                auto it = loaded_chunks.find(chunk_hash);
+
+                if (it == loaded_chunks.end()) 
                 {
-                    Chunk& chunk = world->chunks[y][z][x];
-                    Opengl_Renderer::submit_chunk(&chunk);
+                    chunk = new Chunk;
+                    chunk->initialize(chunk_coords);
+                    chunk->generate(seed);
+                    loaded_chunks.emplace(chunk_hash, chunk);
+                }
+                else
+                {
+                    chunk = it->second;
                 }
             }
         }
 
+        for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
+        {
+            Chunk* chunk = it->second;
+
+            if (chunk->world_coords.x < (start.x - 1) || chunk->world_coords.x > (end.x + 1) ||
+                chunk->world_coords.y < (start.y - 1) || chunk->world_coords.y > (end.y + 1))
+            {
+                delete chunk;
+                it = loaded_chunks.erase(it);
+            }
+            else if (chunk->world_coords.x >= start.x && chunk->world_coords.x <= end.x && 
+                     chunk->world_coords.y >= start.y && chunk->world_coords.y <= end.y)
+            {
+                Opengl_Renderer::submit_chunk(chunk);
+            }
+        }
+
         Opengl_Renderer::end();
+
+        frames_per_second++;
     }
 
     Opengl_Renderer::shutdown();

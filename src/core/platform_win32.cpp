@@ -123,11 +123,13 @@ namespace minecraft {
             game->config.window_y = monitor_y + (monitor_height - game->config.window_height) / 2;
         }
 
+#ifndef MC_DIST
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
+#endif
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_SAMPLES, 16);
+        // glfwWindowHint(GLFW_SAMPLES, 16);
 
         window_handle = glfwCreateWindow(game->config.window_width,
                                          game->config.window_height,

@@ -1,16 +1,27 @@
 #include "world.h"
 
+#include <glm/gtc/noise.hpp>
+#include <time.h>
+
 namespace minecraft {
 
-    bool Chunk::initialize(World *world, const glm::vec3& position)
+    bool Chunk::initialize(const glm::ivec2& world_coords)
     {
-        glm::vec3 offset = { (MC_CHUNK_WIDTH - 1.0f) / 2.0f, (MC_CHUNK_HEIGHT - 1.0f) / 2.0f,  (MC_CHUNK_DEPTH - 1.0f) / 2.0f };
-        glm::vec3 block_size = glm::vec3(1.0f, 1.0f, 1.0f);
-        
-        this->world = world;
-        this->position = position;
-        this->first_block_position = position - offset * block_size;
+        this->render_data.current_vertex_pointer = this->render_data.vertices;
+        this->render_data.face_count = 0;
+        this->render_data.pending = true;
 
+        glm::vec3 offset = { (MC_CHUNK_WIDTH - 1.0f) / 2.0f, (MC_CHUNK_HEIGHT - 1.0f) / 2.0f,  (MC_CHUNK_DEPTH - 1.0f) / 2.0f };
+        
+        this->world_coords = world_coords; 
+        this->position = { world_coords.x * MC_CHUNK_WIDTH, MC_CHUNK_HEIGHT / 2.0f, world_coords.y * MC_CHUNK_DEPTH };
+        this->first_block_position = this->position - offset;
+
+        return true;
+    }
+
+    void Chunk::generate(u32 seed)
+    {
         for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
         {
             for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
@@ -18,222 +29,106 @@ namespace minecraft {
                 for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
                 {
                     glm::ivec3 block_coords = { x, y, z };
-
-                    Block &block = this->blocks[y][z][x];
-                    glm::vec3 position = get_block_position(block_coords);
                     
-                    if (position.y >= 22.0f) {
+                    u32 block_index = this->get_block_index(block_coords);
+                    glm::vec3 position = this->get_block_position(block_coords);
+                    Block &block = this->blocks[block_index];
+
+                    f32 simplexX = seed + (x + world_coords.x * 16);
+                    f32 simplexY = seed + (z + world_coords.y * 16);
+                    f32 height = glm::simplex(glm::vec2(simplexX / 1000.0f, simplexY / 1000.0f));
+                    u32 maxHeight = (u32)(((height + 1.0f) / 2.0f) * 255.0f);
+
+                    if (y >= maxHeight)
+                    {
+                        block.id = BlockId_Air;
+                    }
+                    else if (y == maxHeight - 1)
+                    {
                         block.id = BlockId_Grass;
-                    } else if (position.y >= 0) {
-                        block.id = BlockId_Dirt;
-                    } else {
+                    } 
+                    else if (y <= 50)
+                    {
                         block.id = BlockId_Stone;
+                    }
+                    else
+                    {
+                        block.id = BlockId_Dirt;
                     }
                 }
             }
         }
-
-        return true;
     }
+
 
     Block* Chunk::get_neighbour_block_from_right(const glm::ivec3& block_coords)
     {
         if (block_coords.x + 1 >= MC_CHUNK_WIDTH)
         {
-            Chunk *right_chunk = world->get_neighbour_chunk_from_right(this->coords);
-            
-            if (right_chunk == nullptr) 
-            {
-                return &World::null_block;
-            }
-            
-            return &(right_chunk->blocks[block_coords.y][block_coords.z][0]);
+            return &World::null_block;   
         }
 
-        return &(this->blocks[block_coords.y][block_coords.z][block_coords.x + 1]);
+        return this->get_block({ block_coords.x + 1, block_coords.y, block_coords.z });
     }
 
     Block* Chunk::get_neighbour_block_from_left(const glm::ivec3& block_coords)
     {
         if (block_coords.x - 1 < 0)
         {
-            Chunk *left_chunk = world->get_neighbour_chunk_from_left(this->coords);
-            
-            if (left_chunk == nullptr) 
-            {
-                return &World::null_block;
-            }
-
-            return &(left_chunk->blocks[block_coords.y][block_coords.z][MC_CHUNK_WIDTH - 1]);
+            return &World::null_block;
         }
 
-        return &(this->blocks[block_coords.y][block_coords.z][block_coords.x - 1]);
+        return this->get_block({ block_coords.x - 1, block_coords.y, block_coords.z });
     }
 
     Block* Chunk::get_neighbour_block_from_top(const glm::ivec3& block_coords)
     {
         if (block_coords.y + 1 >= MC_CHUNK_HEIGHT)
         {
-            Chunk *top_chunk = world->get_neighbour_chunk_from_top(this->coords);
-            
-            if (top_chunk == nullptr) 
-            {
-                return &World::null_block;
-            }
-
-            return &(top_chunk->blocks[0][block_coords.z][block_coords.x]);
+            return &World::null_block;
         }
 
-        return &(this->blocks[block_coords.y + 1][block_coords.z][block_coords.x]);
+        return this->get_block({ block_coords.x, block_coords.y + 1, block_coords.z });
     }
 
     Block* Chunk::get_neighbour_block_from_bottom(const glm::ivec3& block_coords)
     {
         if (block_coords.y - 1 < 0)
         {
-            Chunk *bottom_chunk = world->get_neighbour_chunk_from_bottom(this->coords);
-
-            if (bottom_chunk == nullptr)
-            {
-                return &World::null_block;
-            }
-
-            return &(bottom_chunk->blocks[MC_CHUNK_HEIGHT - 1][block_coords.z][block_coords.x]);
+            return &World::null_block;
         }
 
-        return &(this->blocks[block_coords.y - 1][block_coords.z][block_coords.x]);
+        return this->get_block({ block_coords.x, block_coords.y - 1, block_coords.z });
     }
 
     Block* Chunk::get_neighbour_block_from_front(const glm::ivec3& block_coords)
     {
         if (block_coords.z - 1 < 0)
         {
-            Chunk *front_chunk = world->get_neighbour_chunk_from_front(this->coords);
-            
-            if (front_chunk == nullptr) 
-            {
-                return &World::null_block;
-            }
-
-            return &(front_chunk->blocks[block_coords.y][MC_CHUNK_DEPTH - 1][block_coords.x]);
+            return &World::null_block;
         }
-
-        return &(this->blocks[block_coords.y][block_coords.z - 1][block_coords.x]);
+        return this->get_block({ block_coords.x, block_coords.y, block_coords.z - 1 });
     }
 
     Block* Chunk::get_neighbour_block_from_back(const glm::ivec3& block_coords)
     {
         if (block_coords.z + 1 >= MC_CHUNK_DEPTH)
         {
-            Chunk* back_chunk = world->get_neighbour_chunk_from_back(this->coords);
-
-            if (back_chunk == nullptr)
-            {
-                return &World::null_block;
-            }
-
-            return &(back_chunk->blocks[block_coords.y][0][block_coords.x]);
+            return &World::null_block;
         }
 
-        return &(this->blocks[block_coords.y][block_coords.z + 1][block_coords.x]);
+        return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
-    bool World::initialize(const glm::vec3& position)
-    {
-
-        glm::vec3 offset = { (MC_WORLD_WIDTH - 1) / 2.0f, (MC_WORLD_HEIGHT - 1) / 2.0f, (MC_WORLD_DEPTH - 1) / 2.0f };
-        glm::vec3 chunk_size = glm::vec3(MC_CHUNK_WIDTH, MC_CHUNK_HEIGHT, MC_CHUNK_DEPTH);
-
-        this->position = position;
-        this->first_chunk_position = position - offset * chunk_size;
-
-        for (u32 y = 0; y < MC_WORLD_HEIGHT; ++y)
-        {
-            for (u32 z = 0; z < MC_WORLD_DEPTH; ++z)
-            {
-                for (u32 x = 0; x < MC_WORLD_WIDTH; ++x)
-                {
-                    Chunk& chunk = this->chunks[y][z][x];
-                    chunk.coords = { x, y, z };
-                    
-                    glm::vec3 chunk_position = 
-                        this->first_chunk_position + glm::vec3((f32)x, (f32)y, (f32)z) * chunk_size;
-
-                    chunk.initialize(this, chunk_position);
-                }
-            }
-        }
-
-        return true;
-    }
-
-    Chunk* World::get_neighbour_chunk_from_right(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.x + 1 >= MC_WORLD_WIDTH)
-        {
-            return nullptr;
-        }
-
-        return &(this->chunks[chunk_coords.y][chunk_coords.z][chunk_coords.x + 1]);
-    }
-    
-    Chunk* World::get_neighbour_chunk_from_left(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.x - 1 < 0)
-        {
-            return nullptr;
-        }
-
-        return &(this->chunks[chunk_coords.y][chunk_coords.z][chunk_coords.x - 1]);
-    } 
-    
-    Chunk* World::get_neighbour_chunk_from_top(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.y + 1 >= MC_WORLD_HEIGHT)
-        {
-            return nullptr;
-        }
-
-        return &(this->chunks[chunk_coords.y + 1][chunk_coords.z][chunk_coords.x]);
-    }
-
-    Chunk* World::get_neighbour_chunk_from_bottom(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.y - 1 < 0)
-        {
-            return nullptr;
-        }
-
-        return &(this->chunks[chunk_coords.y - 1][chunk_coords.z][chunk_coords.x]);
-    }
-
-    Chunk* World::get_neighbour_chunk_from_front(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.z - 1 < 0)
-        {
-            return nullptr;
-        }
-        
-        return &(this->chunks[chunk_coords.y][chunk_coords.z - 1][chunk_coords.x]);
-    }
-    
-    Chunk* World::get_neighbour_chunk_from_back(const glm::ivec3& chunk_coords)
-    {
-        if (chunk_coords.z + 1 >= MC_WORLD_DEPTH)
-        {
-            return nullptr;
-        }
-
-        return &(this->chunks[chunk_coords.y][chunk_coords.z + 1][chunk_coords.x]);
-    }
+    std::unordered_map< i64, Chunk* > World::loaded_chunks;
 
     const Block_Info World::block_infos[BlockId_Count] =
     {
         // Air
         {
-            -1,
-            -1,
-            -1,
+            0,
+            0,
+            0,
             BlockFlags_Is_Transparent
         },
         // Grass

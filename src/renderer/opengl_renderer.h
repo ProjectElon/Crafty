@@ -30,16 +30,6 @@ namespace minecraft {
         glm::vec3 normal;
     };
 
-    struct Block_Vertex
-    {
-        glm::vec3 position;
-        glm::vec2 uv;
-
-        // todo(harlequin): pack integer attributes
-        u32 face;
-        u32 should_color_top_by_biome;
-    };
-
     struct Opengl_Renderer_Stats
     {
         u32 draw_count  = 0;
@@ -51,15 +41,15 @@ namespace minecraft {
     {
         Platform *platform;
 
-        u32 max_block_count_per_patch;
-        u32 current_block_face_count;
+        u32 max_face_count_per_patch;
+        u32 current_face_count;
         
-        Block_Vertex *base_block_vertex_pointer;
-        Block_Vertex *current_block_vertex_pointer;
+        Block_Vertex *base_vertex_pointer;
+        Block_Vertex *current_vertex_pointer;
 
-        u32 block_vao;
-        u32 block_vbo;
-        u32 block_ebo;
+        u32 vao;
+        u32 vbo;
+        u32 ebo;
 
         Opengl_Texture block_sprite_sheet;
 
@@ -91,10 +81,11 @@ namespace minecraft {
             }
         };
 
-        // developer
+#ifndef MC_DIST
         Opengl_Renderer_Stats stats;
         bool should_trace_debug_messsage = false;
         bool should_print_stats = false;
+#endif
     };
 
     struct Opengl_Renderer
@@ -120,6 +111,7 @@ namespace minecraft {
             const glm::vec3& p3,
             const UV_Rect& uv_rect,
             BlockFaceId face,
+            Chunk *chunk,
             Block* block,
             Block* block_facing_normal);
 

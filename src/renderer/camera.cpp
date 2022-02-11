@@ -6,8 +6,8 @@ namespace minecraft {
     void Camera::initialize(const glm::vec3& position, f32 fov, f32 aspect_ratio, f32 near, f32 far)
     {
         this->position = position;
-        this->walk_speed = 5.0f;
-        this->run_speed = 10.0f;
+        this->walk_speed = 15.0f;
+        this->run_speed = 25.0f;
         this->movment_speed = this->walk_speed;
         this->rotation_speed = 90.0f;
         this->sensetivity = 0.5f;
@@ -17,6 +17,7 @@ namespace minecraft {
         this->aspect_ratio = aspect_ratio;
         this->near = near;
         this->far = far;
+        
         update_view();
         update_projection();
     }
@@ -71,6 +72,7 @@ namespace minecraft {
         this->pitch += mouse_delta.y * this->rotation_speed * this->sensetivity * delta_time;
         if (this->pitch >= 360.0f) this->pitch -= 360.0f;
         if (this->pitch <= -360.0f) this->pitch += 360.0f;
+        this->pitch = glm::clamp(this->pitch, -89.0f, 89.0f);
 
         update_view();
         update_projection();

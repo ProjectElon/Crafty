@@ -1,5 +1,5 @@
 #pragma once
-#include <cstdint>
+#include <stdint.h>
 #include <glm/glm.hpp>
 #define MC_PACKED_TEXTURE_COUNT 698
 namespace minecraft {
@@ -11,6 +11,7 @@ struct Texture_Rect
     uint32_t width;
     uint32_t height;
 };
+
 struct UV_Rect
 {
     glm::vec2 bottom_right;
@@ -18,7 +19,8 @@ struct UV_Rect
     glm::vec2 top_left;
     glm::vec2 top_right;
 };
-enum Texture_Id
+
+enum Texture_Id : uint16_t
 {
 	Texture_Id_acacia_door_bottom = 0,
 	Texture_Id_acacia_door_top = 1,
