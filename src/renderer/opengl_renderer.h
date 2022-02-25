@@ -25,6 +25,14 @@ namespace minecraft {
         BlockFaceId_Count  = 6
     };
 
+    enum BlockFaceCornerId : u32
+    {
+        BlockFaceCornerId_BottomRight  = 0,
+        BlockFaceCornerId_BottomLeft   = 1,
+        BlockFaceCornerId_TopLeft      = 2,
+        BlockFaceCornerId_TopRight     = 3
+    };
+
     struct Block_Face_Info
     {
         glm::vec3 normal;
@@ -40,50 +48,15 @@ namespace minecraft {
     struct Opengl_Renderer_Data
     {
         Platform *platform;
-
-        u32 max_face_count_per_patch;
-        u32 current_face_count;
-        
-        Block_Vertex *base_vertex_pointer;
-        Block_Vertex *current_vertex_pointer;
-
-        u32 vao;
-        u32 vbo;
-        u32 ebo;
+        u32 chunk_index_buffer_id;
 
         Opengl_Texture block_sprite_sheet;
-
-        Block_Face_Info block_face_infos[BlockFaceId_Count] = 
-        {
-            // Top
-            {
-                { 0.0f, 1.0f, 0.0f }
-            },
-            // Bottom
-            {
-                { 0.0f, -1.0f, 0.0f }
-            },
-            // Left
-            {
-                { -1.0f, 0.0f, 0.0f }
-            },
-            // Right
-            {
-                { 1.0f, 0.0f, 0.0f }
-            },
-            // Front
-            {
-                { 0.0f, 0.0f, -1.0f }
-            },
-            // Back
-            {
-                { 0.0f, 0.0f, 1.0f }
-            }
-        };
+        u32 uv_buffer_id;
+        u32 uv_texture_id;
 
 #ifndef MC_DIST
         Opengl_Renderer_Stats stats;
-        bool should_trace_debug_messsage = false;
+        bool should_trace_debug_messsage = true;
         bool should_print_stats = false;
 #endif
     };
@@ -99,29 +72,28 @@ namespace minecraft {
 
         static bool on_resize(const Event* event, void *sender);
 
+        static u32 compress_vertex(const glm::ivec3& block_coords,
+            u32 local_position_id,
+            u32 face_id,
+            u32 face_corner_id,
+            u32 flags);
+
+        static void extract_vertex(u32 vertex,
+            glm::ivec3& block_coords,
+            u32& out_local_position_id,
+            u32& out_face_id,
+            u32& out_face_corner_id,
+            u32& out_flags);
+
+        static void free_chunk(Chunk* chunk);
+        static void upload_chunk_to_gpu(Chunk *chunk);
+
         static void begin(
             const glm::vec4& clear_color,
             Camera *camera,
             Opengl_Shader *shader);
-        
-        static void submit_block_face(
-            const glm::vec3& p0,
-            const glm::vec3& p1,
-            const glm::vec3& p2,
-            const glm::vec3& p3,
-            const UV_Rect& uv_rect,
-            BlockFaceId face,
-            Chunk *chunk,
-            Block* block,
-            Block* block_facing_normal);
 
-        static void submit_block( 
-            Chunk *chunk,
-            Block *block,
-            const glm::ivec3& block_coords);
-
-        static void submit_chunk(Chunk *chunk);
-        static void flush_patch();
+        static void render_chunk(Chunk *chunk, Opengl_Shader *shader);
         
         static void end();
     };

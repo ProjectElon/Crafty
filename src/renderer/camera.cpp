@@ -9,7 +9,7 @@ namespace minecraft {
         this->walk_speed = 15.0f;
         this->run_speed = 25.0f;
         this->movment_speed = this->walk_speed;
-        this->rotation_speed = 90.0f;
+        this->rotation_speed = 180.0f;
         this->sensetivity = 0.5f;
         this->yaw = 0.0f;
         this->pitch = 0.0f;
@@ -66,12 +66,15 @@ namespace minecraft {
         glm::vec2 mouse_delta = Input::get_mouse_delta();
 
         this->yaw += mouse_delta.x * this->rotation_speed * this->sensetivity * delta_time;
+        
         if (this->yaw >= 360.0f) this->yaw -= 360.0f;
         if (this->yaw <= -360.0f) this->yaw += 360.0f;
 
         this->pitch += mouse_delta.y * this->rotation_speed * this->sensetivity * delta_time;
+        
         if (this->pitch >= 360.0f) this->pitch -= 360.0f;
         if (this->pitch <= -360.0f) this->pitch += 360.0f;
+
         this->pitch = glm::clamp(this->pitch, -89.0f, 89.0f);
 
         update_view();

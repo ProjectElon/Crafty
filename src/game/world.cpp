@@ -1,27 +1,43 @@
 #include "world.h"
-
 #include <glm/gtc/noise.hpp>
-#include <time.h>
 
 namespace minecraft {
 
     bool Chunk::initialize(const glm::ivec2& world_coords)
     {
-        this->render_data.current_vertex_pointer = this->render_data.vertices;
+        this->world_coords = world_coords;
+        this->position = { world_coords.x * MC_CHUNK_WIDTH, 0.0f, world_coords.y * MC_CHUNK_DEPTH };
+        this->render_data.vertex_count = 0;
         this->render_data.face_count = 0;
-        this->render_data.pending = true;
-
-        glm::vec3 offset = { (MC_CHUNK_WIDTH - 1.0f) / 2.0f, (MC_CHUNK_HEIGHT - 1.0f) / 2.0f,  (MC_CHUNK_DEPTH - 1.0f) / 2.0f };
-        
-        this->world_coords = world_coords; 
-        this->position = { world_coords.x * MC_CHUNK_WIDTH, MC_CHUNK_HEIGHT / 2.0f, world_coords.y * MC_CHUNK_DEPTH };
-        this->first_block_position = this->position - offset;
+        this->render_data.vertex_array_id = 0;
+        this->render_data.vertex_buffer_id = 0;
 
         return true;
     }
 
-    void Chunk::generate(u32 seed)
+    void Chunk::generate(i32 seed)
     {
+        f32 noise[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
+
+        i32 min_biome_height = 150;
+        i32 max_biome_height = 250;
+        i32 water_level = 170;
+
+        for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+        {
+            for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+            {
+                f32 simplexX = seed + world_coords.x * MC_CHUNK_WIDTH + x + 0.5f;
+                f32 simplexZ = seed + world_coords.y * MC_CHUNK_DEPTH + z + 0.5f;
+                f32 noise_value = glm::perlin(glm::vec2(simplexX / 256.0f, simplexZ / 256.0f));
+                noise[z][x] = (noise_value + 1.0f) / 2.0f;
+                i32 height = glm::trunc(min_biome_height + ((max_biome_height - min_biome_height) * noise[z][x]));
+                height_map[z][x] = height;
+                assert(noise[z][x] >= 0 && noise[z][x] <= 1.0f);
+                assert(height >= min_biome_height && height <= max_biome_height);
+            }
+        }
+
         for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
         {
             for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
@@ -29,43 +45,50 @@ namespace minecraft {
                 for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
                 {
                     glm::ivec3 block_coords = { x, y, z };
-                    
-                    u32 block_index = this->get_block_index(block_coords);
-                    glm::vec3 position = this->get_block_position(block_coords);
-                    Block &block = this->blocks[block_index];
+                    Block *block = this->get_block(block_coords);
 
-                    f32 simplexX = seed + (x + world_coords.x * 16);
-                    f32 simplexY = seed + (z + world_coords.y * 16);
-                    f32 height = glm::simplex(glm::vec2(simplexX / 1000.0f, simplexY / 1000.0f));
-                    u32 maxHeight = (u32)(((height + 1.0f) / 2.0f) * 255.0f);
+                    i32 height = height_map[z][x];
 
-                    if (y >= maxHeight)
+                    if (y > height && y < water_level)
                     {
-                        block.id = BlockId_Air;
+                        block->id = BlockId_Water;
                     }
-                    else if (y == maxHeight - 1)
+                    else if (y > height)
                     {
-                        block.id = BlockId_Grass;
-                    } 
-                    else if (y <= 50)
+                        block->id = BlockId_Air;
+                    }
+                    else if (y == height)
                     {
-                        block.id = BlockId_Stone;
+                        block->id = BlockId_Grass;
+                    }
+                    else if (y < height - 20)
+                    {
+                        block->id = BlockId_Stone;
                     }
                     else
                     {
-                        block.id = BlockId_Dirt;
+                        block->id = BlockId_Dirt;
                     }
                 }
             }
         }
     }
 
+    Block* Chunk::get_block(const glm::ivec3& block_coords)
+    {
+        i32 block_index = get_block_index(block_coords);
+        if (block_index >= 0 && block_index < MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT)
+        {
+            return this->blocks + block_index;
+        }
+        return &World::null_block;
+    }
 
     Block* Chunk::get_neighbour_block_from_right(const glm::ivec3& block_coords)
     {
-        if (block_coords.x + 1 >= MC_CHUNK_WIDTH)
+        if (block_coords.x == MC_CHUNK_WIDTH - 1)
         {
-            return &World::null_block;   
+            return &World::null_block;
         }
 
         return this->get_block({ block_coords.x + 1, block_coords.y, block_coords.z });
@@ -73,7 +96,7 @@ namespace minecraft {
 
     Block* Chunk::get_neighbour_block_from_left(const glm::ivec3& block_coords)
     {
-        if (block_coords.x - 1 < 0)
+        if (block_coords.x == 0)
         {
             return &World::null_block;
         }
@@ -83,7 +106,7 @@ namespace minecraft {
 
     Block* Chunk::get_neighbour_block_from_top(const glm::ivec3& block_coords)
     {
-        if (block_coords.y + 1 >= MC_CHUNK_HEIGHT)
+        if (block_coords.y == MC_CHUNK_HEIGHT - 1)
         {
             return &World::null_block;
         }
@@ -93,17 +116,16 @@ namespace minecraft {
 
     Block* Chunk::get_neighbour_block_from_bottom(const glm::ivec3& block_coords)
     {
-        if (block_coords.y - 1 < 0)
+        if (block_coords.y == 0)
         {
             return &World::null_block;
         }
-
         return this->get_block({ block_coords.x, block_coords.y - 1, block_coords.z });
     }
 
     Block* Chunk::get_neighbour_block_from_front(const glm::ivec3& block_coords)
     {
-        if (block_coords.z - 1 < 0)
+        if (block_coords.z == 0)
         {
             return &World::null_block;
         }
@@ -112,7 +134,7 @@ namespace minecraft {
 
     Block* Chunk::get_neighbour_block_from_back(const glm::ivec3& block_coords)
     {
-        if (block_coords.z + 1 >= MC_CHUNK_DEPTH)
+        if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
             return &World::null_block;
         }
@@ -120,7 +142,6 @@ namespace minecraft {
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
-    std::unordered_map< i64, Chunk* > World::loaded_chunks;
 
     const Block_Info World::block_infos[BlockId_Count] =
     {
@@ -171,7 +192,7 @@ namespace minecraft {
             Texture_Id_bedrock,
             Texture_Id_bedrock,
             Texture_Id_bedrock,
-            BlockFlags_Is_Solid,  
+            BlockFlags_Is_Solid,
         },
         // Oak Log
         {
@@ -185,8 +206,8 @@ namespace minecraft {
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
-            BlockFlags_Is_Solid | 
-            BlockFlags_Is_Transparent | 
+            BlockFlags_Is_Solid |
+            BlockFlags_Is_Transparent |
             BlockFlags_Should_Color_Top_By_Biome |
             BlockFlags_Should_Color_Side_By_Biome |
             BlockFlags_Should_Color_Bottom_By_Biome
@@ -224,14 +245,14 @@ namespace minecraft {
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
-            BlockFlags_Is_Solid  
+            BlockFlags_Is_Solid
         },
         // Glass
         {
             Texture_Id_glass,
             Texture_Id_glass,
             Texture_Id_glass,
-            BlockFlags_Is_Solid | BlockFlags_Is_Transparent  
+            BlockFlags_Is_Solid | BlockFlags_Is_Transparent
         },
         // Sea Lantern
         {
@@ -332,6 +353,7 @@ namespace minecraft {
             BlockFlags_Is_Solid
         }
     };
-    
+
     Block World::null_block = { BlockId_Air };
+    std::unordered_map< std::pair<i32, i32>, Chunk*, Pair_Hash > World::loaded_chunks;
 }

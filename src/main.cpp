@@ -10,6 +10,7 @@
 
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_renderer.h"
+#include "renderer/opengl_debug_renderer.h"
 #include "renderer/camera.h"
 #include "renderer/opengl_texture.h"
 
@@ -22,7 +23,6 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <time.h>
-#include <thread>
 
 namespace minecraft {
 
@@ -156,6 +156,12 @@ int main()
         return -1;
     }
 
+    if (!Opengl_Debug_Renderer::initialize())
+    {
+        fprintf(stderr, "[ERROR]: failed to initialize debug render system\n");
+        return -1;
+    }
+
     Event_System::register_event(EventType_Quit, on_quit, &game);
     Event_System::register_event(EventType_KeyPress, on_key_press, &game);
     Event_System::register_event(EventType_Char, on_char, &game);
@@ -166,9 +172,12 @@ int main()
 
     f32 current_time = platform.get_current_time();
     f32 last_time = current_time;
-    
-    Opengl_Shader block_shader;
-    block_shader.load_from_file("../assets/shaders/block.glsl");
+
+    Opengl_Shader chunk_shader;
+    chunk_shader.load_from_file("../assets/shaders/chunk.glsl");
+
+    Opengl_Shader line_shader;
+    line_shader.load_from_file("../assets/shaders/line.glsl");
 
 #if 0
     {
@@ -189,31 +198,34 @@ int main()
     Event_System::register_event(EventType_Resize, on_resize, &camera);
 
     srand(time(nullptr));
-    u32 seed = rand();
+    i32 seed = rand();
 
+    i32 chunk_radius = 12;
+    i32 half_chunk_radius = chunk_radius / 2;
     auto& loaded_chunks = World::loaded_chunks;
 
-    glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-    
-    glm::ivec2 start = player_chunk_coords - glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));
-    glm::ivec2 end   = player_chunk_coords + glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));           
-
-    for (i32 z = start.y - 1; z <= end.y + 1; ++z)
+    for (i32 z = -half_chunk_radius; z <= half_chunk_radius; ++z)
     {
-        for (i32 x = start.x - 1; x <= end.x + 1; ++x)
+        for (i32 x = -half_chunk_radius; x <= half_chunk_radius; ++x)
         {
             glm::ivec2 chunk_coords = { x, z };
-            i64 chunk_hash = z * MC_CHUNK_WIDTH + x;
-            auto it = loaded_chunks.find(chunk_hash);
+            auto it = loaded_chunks.find({ x, z });
 
-            if (it == loaded_chunks.end()) 
+            if (it == loaded_chunks.end())
             {
                 Chunk* chunk = new Chunk;
                 chunk->initialize(chunk_coords);
                 chunk->generate(seed);
-                loaded_chunks.emplace(chunk_hash, chunk);
+                loaded_chunks.emplace(std::make_pair(x, z), chunk);
             }
         }
+    }
+
+
+    for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
+    {
+        Chunk* chunk = it->second;
+        Opengl_Renderer::upload_chunk_to_gpu(chunk);
     }
 
     f32 frame_timer = 0;
@@ -227,10 +239,10 @@ int main()
 
         frame_timer += delta_time;
 
-        if (frame_timer >= 1.0f) 
+        if (frame_timer >= 1.0f)
         {
             frame_timer -= 1.0f;
-            fprintf(stderr, "FPS: %d\n", frames_per_second);
+            // fprintf(stderr, "FPS: %d\n", frames_per_second);
             frames_per_second = 0;
         }
 
@@ -242,57 +254,39 @@ int main()
             camera.update(delta_time);
         }
 
-        glm::vec4 clear_color(0.1f, 0.1f, 0.1f, 1.0f);
+        glm::ivec2 coords = World::world_position_to_chunk_coords(camera.position);
+        Chunk* chunk = World::get_chunk(coords);
+        fprintf(stderr, "<%f, %f, %f> player at chunk<%d, %d>\n", camera.position.x, camera.position.y, camera.position.z, coords.x, coords.y);
 
-        auto& loaded_chunks = World::loaded_chunks;
+        f32 color_factor = 1.0f / 255.0f;
+        glm::vec3 sky_color = { 135, 206, 235 };
+        sky_color *= color_factor;
+        glm::vec4 clear_color(sky_color.r, sky_color.g, sky_color.b, 1.0f);
 
-        glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        
-        glm::ivec2 start = player_chunk_coords - glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));
-        glm::ivec2 end   = player_chunk_coords + glm::ivec2((MC_WORLD_WIDTH / 2), (MC_WORLD_DEPTH / 2));    
-
-        Opengl_Renderer::begin(clear_color, &camera, &block_shader);
-
-        for (i32 z = start.y - 1; z <= end.y + 1; ++z)
-        {
-            for (i32 x = start.x - 1; x <= end.x + 1; ++x)
-            {
-                glm::ivec2 chunk_coords = { x, z };
-                Chunk* chunk = nullptr;
-
-                i64 chunk_hash = z * MC_CHUNK_WIDTH + x;
-                auto it = loaded_chunks.find(chunk_hash);
-
-                if (it == loaded_chunks.end()) 
-                {
-                    chunk = new Chunk;
-                    chunk->initialize(chunk_coords);
-                    chunk->generate(seed);
-                    loaded_chunks.emplace(chunk_hash, chunk);
-                }
-                else
-                {
-                    chunk = it->second;
-                }
-            }
-        }
+        Opengl_Renderer::begin(clear_color, &camera, &chunk_shader);
 
         for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
         {
             Chunk* chunk = it->second;
+            Opengl_Renderer::render_chunk(chunk, &chunk_shader);
+        }
 
-            if (chunk->world_coords.x < (start.x - 1) || chunk->world_coords.x > (end.x + 1) ||
-                chunk->world_coords.y < (start.y - 1) || chunk->world_coords.y > (end.y + 1))
+        if (chunk)
+        {
+            for (u32 z = 0; z < MC_CHUNK_DEPTH; ++z)
             {
-                delete chunk;
-                it = loaded_chunks.erase(it);
-            }
-            else if (chunk->world_coords.x >= start.x && chunk->world_coords.x <= end.x && 
-                     chunk->world_coords.y >= start.y && chunk->world_coords.y <= end.y)
-            {
-                Opengl_Renderer::submit_chunk(chunk);
+                for (u32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+                {
+                    u32 height = chunk->height_map[z][x];
+                    Block* block = chunk->get_block({ x, height, z});
+                    glm::vec3 position = chunk->get_block_position({ x, height, z });
+                    Opengl_Debug_Renderer::draw_cube(position, { 0.5f, 0.5f, 0.5f });
+                }
             }
         }
+
+        Opengl_Debug_Renderer::begin(&camera, &line_shader);
+        Opengl_Debug_Renderer::end();
 
         Opengl_Renderer::end();
 

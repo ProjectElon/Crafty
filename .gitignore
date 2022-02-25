@@ -1,5 +1,6 @@
 **/bin/
 bin-int/
+obj/
 .vs/
 **.sln
 **.vcxproj

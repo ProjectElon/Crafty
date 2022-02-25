@@ -46,10 +46,10 @@ namespace minecraft {
         f32 one_over_height = 1.0f / height;
 
         f32 new_y = height - (f32)rect->y;
+        result.bottom_right = { ((f32)rect->x + rect->width) * one_over_width, (new_y - rect->height) * one_over_height };
         result.bottom_left = { (f32)rect->x * one_over_width, (new_y - rect->height) * one_over_height };
         result.top_left = { (f32)rect->x * one_over_width, (f32)new_y * one_over_height };
         result.top_right = { ((f32)rect->x + rect->width) * one_over_width, (f32)new_y * one_over_height };
-        result.bottom_right = { ((f32)rect->x + rect->width) * one_over_width, (new_y - rect->height) * one_over_height };
 
         return result;
     }

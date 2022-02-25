@@ -2,6 +2,7 @@
 #include "core/platform.h"
 #include "camera.h"
 #include "opengl_shader.h"
+#include "opengl_debug_renderer.h"
 
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -10,10 +11,12 @@
 
 namespace minecraft {
 
-    #define MC_BLOCK_COUNT_PER_CHUNK MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
-    #define MC_MAX_BLOCK_COUNT_PER_PATCH MC_BLOCK_COUNT_PER_CHUNK * 8 * 8
-    #define MC_VERTEX_SIZE_PER_PATCH MC_MAX_BLOCK_COUNT_PER_PATCH * sizeof(Block_Vertex) * 24
-    #define MC_INDEX_SIZE_PER_PATCH MC_MAX_BLOCK_COUNT_PER_PATCH * sizeof(u32) * 36
+#define BLOCK_X_MASK 15 // 4 bits
+#define BLOCK_Y_MASK 255 // 8 bits
+#define BLOCK_Z_MASK 15 // 4 bits
+#define LOCAL_POSITION_ID_MASK 7 // 3 bits
+#define FACE_ID_MASK 7 // 3 bits
+#define FACE_CORNER_ID_MASK 3 // 2 bits
 
     static void APIENTRY gl_debug_output(GLenum source,
                                          GLenum type,
@@ -47,7 +50,7 @@ namespace minecraft {
 
         // alpha blending
         glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         // multisampling
         glEnable(GL_MULTISAMPLE);
@@ -57,76 +60,10 @@ namespace minecraft {
         glCullFace(GL_BACK);
         glFrontFace(GL_CCW);
 
+        // fireframe mode
+        // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+
         internal_data.platform = platform;
-        internal_data.max_face_count_per_patch = MC_MAX_BLOCK_COUNT_PER_PATCH * 6;
-        internal_data.current_face_count = 0;
-
-        // todo(harlequin): memory system
-        internal_data.base_vertex_pointer = new Block_Vertex[MC_MAX_BLOCK_COUNT_PER_PATCH * 24]; // 6 faces each has 4 verties
-        internal_data.current_vertex_pointer = internal_data.base_vertex_pointer;
-
-        // todo(harlequin): memory system
-        u32 *indicies = new u32[MC_MAX_BLOCK_COUNT_PER_PATCH * 36]; // 6 faces each face has 2 triangles
-        
-        defer
-        {
-            delete[] indicies;
-        };
-
-        u32 element_index = 0;
-        u32 vertex_index = 0;
-        
-        for (u32 i = 0; i < MC_MAX_BLOCK_COUNT_PER_PATCH * 6; i++)
-        {
-            indicies[element_index + 0] = vertex_index + 3;
-            indicies[element_index + 1] = vertex_index + 1;
-            indicies[element_index + 2] = vertex_index + 0;
-            
-            indicies[element_index + 3] = vertex_index + 3;
-            indicies[element_index + 4] = vertex_index + 2;
-            indicies[element_index + 5] = vertex_index + 1;
-
-            element_index += 6;
-            vertex_index += 4;
-        }
-
-        glGenVertexArrays(1, &internal_data.vao);
-        glBindVertexArray(internal_data.vao);
-
-        glGenBuffers(1, &internal_data.vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, internal_data.vbo);
-        glBufferData(GL_ARRAY_BUFFER, MC_VERTEX_SIZE_PER_PATCH, nullptr, GL_DYNAMIC_DRAW);
-
-        glGenBuffers(1, &internal_data.ebo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.ebo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, MC_INDEX_SIZE_PER_PATCH, indicies, GL_STATIC_DRAW);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(
-            0, 
-            3,
-            GL_FLOAT,
-            GL_FALSE,
-            sizeof(Block_Vertex),
-            (const void*)offsetof(Block_Vertex, position));
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(
-            1,
-            2,
-            GL_FLOAT,
-            GL_FALSE,
-            sizeof(Block_Vertex),
-            (const void*)offsetof(Block_Vertex, uv));
-
-        glEnableVertexAttribArray(2);
-        glVertexAttribIPointer(
-            2,
-            1,
-            GL_UNSIGNED_INT,
-            sizeof(Block_Vertex),
-            (const void*)offsetof(Block_Vertex, flags));
-        
         const char *block_sprite_sheet_path = "../assets/textures/spritesheet.png"; // todo(Harlequin): rename spritesheet to block_spritesheet
         bool success = internal_data.block_sprite_sheet.load_from_file(block_sprite_sheet_path);
 
@@ -136,6 +73,49 @@ namespace minecraft {
             return false;
         }
 
+        glGenBuffers(1, &internal_data.uv_buffer_id);
+        glBindBuffer(GL_TEXTURE_BUFFER, internal_data.uv_buffer_id);
+        glBufferData(GL_TEXTURE_BUFFER, MC_PACKED_TEXTURE_COUNT * 8 * sizeof(f32), texture_uv_rects, GL_STATIC_DRAW);
+
+        glGenTextures(1, &internal_data.uv_texture_id);
+        glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
+        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, internal_data.uv_buffer_id);
+
+        glBindBuffer(GL_TEXTURE_BUFFER, 0);
+        glBindTexture(GL_TEXTURE_BUFFER, 0);
+
+        // todo(harlequin): memory system
+        u32 *chunk_indicies = new u32[MC_INDEX_COUNT_PER_CHUNK];
+        defer { delete[] chunk_indicies; };
+
+        u32 element_index = 0;
+        u32 vertex_index = 0;
+        
+        for (u32 i = 0; i < MC_BLOCK_COUNT_PER_CHUNK * 6; i++)
+        {
+            chunk_indicies[element_index + 0] = vertex_index + 3;
+            chunk_indicies[element_index + 1] = vertex_index + 1;
+            chunk_indicies[element_index + 2] = vertex_index + 0;
+            
+            chunk_indicies[element_index + 3] = vertex_index + 3;
+            chunk_indicies[element_index + 4] = vertex_index + 2;
+            chunk_indicies[element_index + 5] = vertex_index + 1;
+
+            element_index += 6;
+            vertex_index += 4;
+        }
+
+        glGenBuffers(1, &internal_data.chunk_index_buffer_id);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
+
+        glBufferData(
+            GL_ELEMENT_ARRAY_BUFFER,
+            MC_INDEX_COUNT_PER_CHUNK * sizeof(u32),
+            chunk_indicies,
+            GL_STATIC_DRAW);
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        
         return true;
     }
 
@@ -152,83 +132,89 @@ namespace minecraft {
         return false;
     }
 
-    void Opengl_Renderer::begin(
-        const glm::vec4& clear_color,
-        Camera *camera,
-        Opengl_Shader *shader)
+    u32 Opengl_Renderer::compress_vertex(const glm::ivec3& block_coords,
+                               u32 local_position_id,
+                               u32 face_id,
+                               u32 face_corner_id,
+                               u32 flags)
     {
-        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        u32 result = 0;
 
-        shader->use();
-        shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
-        shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
-        
-        // color from link: https://www.pngkit.com/view/u2r5y3e6w7y3a9w7_biome-minecraft-biome-color-chart/
-        f32 rgba_color_factor = 1.0f / 255.0f;
-        glm::vec4 forest_color = { 0.0f, 152.0f, 33, 255 };
-        glm::vec4 grass_color = { 130, 203, 67, 255 };
-        forest_color *= rgba_color_factor;
-        grass_color *= rgba_color_factor;
+        result |= block_coords.x;
+        result |= ((u32)block_coords.y << 4);
+        result |= ((u32)block_coords.z << 12);
+        result |= ((u32)local_position_id << 16);
+        result |= ((u32)face_id << 19);
+        result |= ((u32)face_corner_id << 22);
+        result |= ((u32)flags << 24);
 
-        shader->set_uniform_vec4(
-            "u_biome_color",
-            grass_color.r,
-            grass_color.g,
-            grass_color.b,
-            grass_color.a);
-        
-        shader->set_uniform_i32("u_block_sprite_sheet", 0);
-        internal_data.block_sprite_sheet.bind(0);
-
-        glBindVertexArray(internal_data.vao);
+        return result;
     }
 
-    void Opengl_Renderer::submit_block_face(
-        const glm::vec3& p0,
-        const glm::vec3& p1,
-        const glm::vec3& p2,
-        const glm::vec3& p3,
-        const UV_Rect& uv_rect, 
+    void Opengl_Renderer::extract_vertex(u32 vertex,
+        glm::ivec3& block_coords,
+        u32 &out_local_position_id,
+        u32 &out_face_id,
+        u32 &out_face_corner_id,
+        u32 &out_flags)
+    {
+        block_coords.x = vertex & BLOCK_X_MASK;
+        block_coords.y = (vertex >> 4) & BLOCK_Y_MASK;
+        block_coords.z = (vertex >> 12) & BLOCK_Z_MASK;
+        out_local_position_id = (vertex >> 16) & LOCAL_POSITION_ID_MASK;
+        out_face_id = (vertex >> 19) & FACE_ID_MASK;
+        out_face_corner_id = (vertex >> 22) & FACE_CORNER_ID_MASK;
+        out_flags = (vertex >> 24);
+    }
+
+    static void submit_block_face(
+        const glm::ivec3& block_coords,
+        u32 uv_rect_id,
         BlockFaceId face,
+        u32 p0,
+        u32 p1,
+        u32 p2,
+        u32 p3,
         Chunk *chunk,
         Block* block,
         Block* block_facing_normal)
     {
-        const Block_Info& block_info = World::block_infos[block->id];
-        const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];  
-        u32 block_flags = block_info.flags | (face << 4);
+        const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];
 
         if (!block_facing_normal_info.is_solid() || block_facing_normal_info.is_transparent())
         {
+            const Block_Info& block_info = World::block_infos[block->id];
+            const u32& block_flags = block_info.flags;
+
             Chunk_Render_Data& chunk_render_data = chunk->render_data;
+            Vertex *vertices = chunk_render_data.vertices;
+            u32 vertex_index = chunk_render_data.vertex_count;
 
-            *chunk_render_data.current_vertex_pointer = { p0, uv_rect.bottom_right, block_flags };
-            chunk_render_data.current_vertex_pointer++;
+            u32 data00 = Opengl_Renderer::compress_vertex(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
+            u32 data01 = Opengl_Renderer::compress_vertex(block_coords, p1, face, BlockFaceCornerId_BottomLeft,  block_flags);
+            u32 data02 = Opengl_Renderer::compress_vertex(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
+            u32 data03 = Opengl_Renderer::compress_vertex(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            *chunk_render_data.current_vertex_pointer = { p1, uv_rect.bottom_left, block_flags };
-            chunk_render_data.current_vertex_pointer++;
+            vertices[vertex_index + 0] = { data00, uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
+            vertices[vertex_index + 1] = { data01, uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
+            vertices[vertex_index + 2] = { data02, uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
+            vertices[vertex_index + 3] = { data03, uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
 
-            *chunk_render_data.current_vertex_pointer = { p2, uv_rect.top_left, block_flags };
-            chunk_render_data.current_vertex_pointer++;
-
-            *chunk_render_data.current_vertex_pointer = { p3, uv_rect.top_right, block_flags };
-            chunk_render_data.current_vertex_pointer++;
-
+            chunk_render_data.vertex_count += 4;
             chunk_render_data.face_count++;
         }
     }
 
-    void Opengl_Renderer::submit_block(
+    static void submit_block(
         Chunk *chunk,
+        Chunk *left_chunk,
+        Chunk *right_chunk,
+        Chunk *front_chunk,
+        Chunk *back_chunk,
         Block *block,
         const glm::ivec3 &block_coords)
     {
         const Block_Info& block_info = World::block_infos[block->id];
-
-        UV_Rect& top_face_uv    = texture_uv_rects[block_info.top_texture_id];
-        UV_Rect& bottom_face_uv = texture_uv_rects[block_info.bottom_texture_id];
-        UV_Rect& side_face_uv   = texture_uv_rects[block_info.side_texture_id];
 
          /*
           1----------2
@@ -239,16 +225,6 @@ namespace minecraft {
            \|         \|
             4----------7
         */
-        glm::vec3 position = chunk->get_block_position(block_coords);
-                    
-        glm::vec3 p0 = position + glm::vec3( 0.5f,  0.5f,  0.5f);
-        glm::vec3 p1 = position + glm::vec3(-0.5f,  0.5f,  0.5f);
-        glm::vec3 p2 = position + glm::vec3(-0.5f,  0.5f, -0.5f);
-        glm::vec3 p3 = position + glm::vec3( 0.5f,  0.5f, -0.5f);
-        glm::vec3 p4 = position + glm::vec3( 0.5f, -0.5f,  0.5f);
-        glm::vec3 p5 = position + glm::vec3(-0.5f, -0.5f,  0.5f);
-        glm::vec3 p6 = position + glm::vec3(-0.5f, -0.5f, -0.5f);
-        glm::vec3 p7 = position + glm::vec3( 0.5f, -0.5f, -0.5f);
         
         /*
             top face
@@ -262,9 +238,8 @@ namespace minecraft {
             (1)  1 ----- 0 (0)
         */
 
-        Block* top_block = World::get_neighbour_block_from_top(chunk, block_coords); // chunk->get_neighbour_block_from_top(block_coords);
-        submit_block_face(p0, p1, p2, p3, top_face_uv, BlockFaceId_Top, chunk, block, top_block);
-
+        Block* top_block = chunk->get_neighbour_block_from_top(block_coords);
+        submit_block_face(block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3, chunk, block, top_block);
         /*
             bottom face
 
@@ -277,8 +252,8 @@ namespace minecraft {
             (5)  4 ----- 5 (4)
         */
         
-        Block* bottom_block = World::get_neighbour_block_from_bottom(chunk, block_coords); // chunk->get_neighbour_block_from_bottom(block_coords);
-        submit_block_face(p5, p4, p7, p6, bottom_face_uv, BlockFaceId_Bottom, chunk, block, bottom_block);
+        Block* bottom_block = chunk->get_neighbour_block_from_bottom(block_coords);
+        submit_block_face(block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6, chunk, block, bottom_block);
 
         /*
             left face
@@ -291,9 +266,18 @@ namespace minecraft {
                 |  /      |
             (9)  6 ----- 5 (8)
         */
+        Block* left_block = nullptr;
 
-        Block* left_block = World::get_neighbour_block_from_left(chunk, block_coords); // chunk->get_neighbour_block_from_left(block_coords);
-        submit_block_face(p5, p6, p2, p1, side_face_uv, BlockFaceId_Left, chunk, block, left_block);
+        if (left_chunk && block_coords.x == 0)
+        {
+            left_block = left_chunk->get_block({ MC_CHUNK_WIDTH - 1, block_coords.y, block_coords.z });
+        }
+        else
+        {
+            left_block = chunk->get_neighbour_block_from_left(block_coords);
+        }
+
+        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1, chunk, block, left_block);
 
         /*
             right face
@@ -306,9 +290,19 @@ namespace minecraft {
                 |  /      |
             (13) 4 ----- 7 (12)
         */
-        
-        Block* right_block = World::get_neighbour_block_from_right(chunk, block_coords); // chunk->get_neighbour_block_from_right(block_coords);
-        submit_block_face(p7, p4, p0, p3, side_face_uv, BlockFaceId_Right, chunk, block, right_block);
+
+        Block* right_block = nullptr;
+
+        if (right_chunk && block_coords.x == MC_CHUNK_WIDTH - 1)
+        {
+            right_block = right_chunk->get_block({ 0, block_coords.y, block_coords.z });
+        }
+        else
+        {
+            right_block = chunk->get_neighbour_block_from_right(block_coords);
+        }
+
+        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3, chunk, block, right_block);
 
         /*
             front face
@@ -322,8 +316,17 @@ namespace minecraft {
             (17) 7 ----- 6 (16)
         */
 
-        Block* front_block = World::get_neighbour_block_from_front(chunk, block_coords); // chunk->get_neighbour_block_from_front(block_coords);
-        submit_block_face(p6, p7, p3, p2, side_face_uv, BlockFaceId_Front, chunk, block, front_block);
+        Block* front_block = nullptr;
+
+        if (front_chunk && block_coords.z == 0)
+        {
+            front_block = front_chunk->get_block({ block_coords.x, block_coords.y, MC_CHUNK_DEPTH - 1 });
+        }
+        else
+        {
+            front_block = chunk->get_neighbour_block_from_front(block_coords);
+        }
+        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2, chunk, block, front_block);
 
         /*
             back face
@@ -337,77 +340,140 @@ namespace minecraft {
             (21) 5 ----- 4 (20)
         */
         
-        Block* back_block = World::get_neighbour_block_from_back(chunk, block_coords); // chunk->get_neighbour_block_from_back(block_coords);
-        submit_block_face(p4, p5, p1, p0, side_face_uv, BlockFaceId_Back, chunk, block, back_block);
-    }
+        Block* back_block = nullptr;
 
-    void Opengl_Renderer::flush_patch()
-    {    
-        glBufferSubData(GL_ARRAY_BUFFER,
-                        0,
-                        internal_data.current_face_count * sizeof(Block_Vertex) * 4,
-                        internal_data.base_vertex_pointer);
-
-        glDrawElements(GL_TRIANGLES,
-                       internal_data.current_face_count * 6,
-                       GL_UNSIGNED_INT,
-                       (const void*)0);
-
-#ifndef MC_DIST
-        internal_data.stats.draw_count++;
-        internal_data.stats.block_face_count += internal_data.current_face_count;
-#endif
-        internal_data.current_vertex_pointer = internal_data.base_vertex_pointer;
-        internal_data.current_face_count = 0;
-    }
-
-    void Opengl_Renderer::submit_chunk(Chunk *chunk)
-    {
-        Chunk_Render_Data& chunk_render_data = chunk->render_data;
-        
-        if (chunk_render_data.pending) 
+        if (back_chunk && block_coords.z == MC_CHUNK_DEPTH - 1)
         {
-            chunk_render_data.current_vertex_pointer = chunk_render_data.vertices;
-            chunk_render_data.face_count = 0;
-
-            for (u32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
-            {
-                for (u32 z = 0; z < MC_CHUNK_DEPTH; ++z)
-                {
-                    for (u32 x = 0; x < MC_CHUNK_WIDTH; ++x)
-                    {
-                        glm::ivec3 block_coords = { x, y, z };
-                        Block *block = chunk->get_block(block_coords);
-                        
-                        if (block->id == BlockId_Air)
-                        { 
-                            continue;
-                        }
-                        
-                        submit_block(chunk, block, block_coords);
-                    }
-                }
-            }
-
-            chunk_render_data.pending = false;
+            back_block = back_chunk->get_block({ block_coords.x, block_coords.y, 0 });
+        }
+        else
+        {
+            back_block = chunk->get_neighbour_block_from_back(block_coords);
         }
 
-        memcpy(
-            internal_data.current_vertex_pointer,
-            chunk_render_data.vertices,
-            chunk_render_data.face_count * 4 * sizeof(Block_Vertex));
+        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0, chunk, block, back_block);
+    }
 
-        internal_data.current_vertex_pointer += chunk_render_data.face_count * 4;
-        internal_data.current_face_count += chunk_render_data.face_count;
+    void Opengl_Renderer::free_chunk(Chunk* chunk)
+    {
+        Chunk_Render_Data& render_data = chunk->render_data;
+        
+        if (render_data.vertex_array_id)
+        {
+            glDeleteBuffers(1, &render_data.vertex_buffer_id);
+            glDeleteVertexArrays(1, &render_data.vertex_buffer_id);
+            render_data.vertex_buffer_id = 0;
+            render_data.vertex_buffer_id = 0;
+        }
+    }
 
-#ifndef MC_DIST
-        internal_data.stats.block_count += MC_BLOCK_COUNT_PER_CHUNK;
-#endif
+    void Opengl_Renderer::upload_chunk_to_gpu(Chunk *chunk)
+    {
+        Chunk_Render_Data& render_data = chunk->render_data;
+
+        Chunk *left_chunk  = World::get_chunk({ chunk->world_coords.x - 1, chunk->world_coords.y });
+        Chunk *right_chunk = World::get_chunk({ chunk->world_coords.x + 1, chunk->world_coords.y });
+        Chunk *front_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y - 1 });
+        Chunk *back_chunk  = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
+
+        /*fprintf(stderr, "uploading chunk<%d, %d> to gpu at position <%f, %f, %f> \n", chunk->world_coords.x, chunk->world_coords.y, chunk->position.x, chunk->position.y, chunk->position.z);*/
+
+        for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
+        {
+            for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+            {
+                for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+                {
+                    glm::ivec3 block_coords = { x, y, z };
+                    Block* block = chunk->get_block(block_coords);
+
+                    if (block->id == BlockId_Air)
+                    {
+                        continue;
+                    }
+
+                    submit_block(chunk, left_chunk, right_chunk, front_chunk, back_chunk, block, block_coords);
+                }
+            }
+        }
+
+        glGenVertexArrays(1, &render_data.vertex_array_id);
+        glBindVertexArray(render_data.vertex_array_id);
+
+        glGenBuffers(1, &render_data.vertex_buffer_id);
+        glBindBuffer(GL_ARRAY_BUFFER, render_data.vertex_buffer_id);
+        u32 vertex_count = render_data.vertex_count;
+        glBufferData(GL_ARRAY_BUFFER,
+                     vertex_count * sizeof(Vertex),
+                     render_data.vertices,
+                     GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribIPointer(0,
+                               1,
+                               GL_UNSIGNED_INT,
+                               sizeof(Vertex),
+                               (const void*)offsetof(Vertex, data0));
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribIPointer(1,
+                              1,
+                              GL_UNSIGNED_INT,
+                              sizeof(Vertex),
+                              (const void*)offsetof(Vertex, data1));
+
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+    }
+
+    void Opengl_Renderer::render_chunk(Chunk *chunk, Opengl_Shader *shader)
+    {
+        shader->use();
+        shader->set_uniform_vec3("u_chunk_position",
+                                 chunk->position.x,
+                                 chunk->position.y,
+                                 chunk->position.z);
+
+        Chunk_Render_Data& render_data = chunk->render_data;
+
+        glBindVertexArray(render_data.vertex_array_id);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
+        glDrawElements(GL_TRIANGLES, render_data.face_count * 6, GL_UNSIGNED_INT, (const void*)0);
+    }
+
+    void Opengl_Renderer::begin(
+        const glm::vec4& clear_color,
+        Camera *camera,
+        Opengl_Shader *shader)
+    {
+        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        shader->use();
+        shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
+        shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+
+        f32 rgba_color_factor = 1.0f / 255.0f;
+        glm::vec4 grass_color  = { 109.0f, 184.0f, 79.0f, 255.0f };
+        grass_color *= rgba_color_factor;
+
+        shader->set_uniform_vec4(
+            "u_biome_color",
+            grass_color.r,
+            grass_color.g,
+            grass_color.b,
+            grass_color.a);
+
+        shader->set_uniform_i32("u_block_sprite_sheet", 0);
+        internal_data.block_sprite_sheet.bind(0);
+
+        shader->set_uniform_i32("u_uvs", 1);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
     }
 
     void Opengl_Renderer::end()
     {
-        flush_patch();
         internal_data.platform->opengl_swap_buffers();
 
 #ifndef MC_DIST

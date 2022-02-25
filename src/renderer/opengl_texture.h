@@ -16,7 +16,6 @@ namespace minecraft {
         u32 width;
         u32 height;
         TextureFormat format;
-
         bool load_from_file(const char *file_path);
         void bind(u32 texture_slot);
     };
