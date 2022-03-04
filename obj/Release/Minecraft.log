@@ -1,3 +1,11 @@
-﻿  main.cpp
-C:\dev\cpp\Crafty\src\main.cpp(200,15): warning C4244: 'argument': conversion from 'time_t' to 'unsigned int', possible loss of data
+﻿  world.cpp
+  main.cpp
+  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\game\world.cpp(39,21): warning C4018: '>': signed/unsigned mismatch
+C:\dev\cpp\Crafty\src\game\world.cpp(73,59): warning C4244: '=': conversion from 'f32' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\game\world.cpp(82,61): warning C4244: '=': conversion from 'f32' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\game\world.cpp(90,64): warning C4244: '=': conversion from 'f32' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\game\world.cpp(98,62): warning C4244: '=': conversion from 'f32' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\game\world.cpp(106,63): warning C4244: '=': conversion from 'f32' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\main.cpp(203,15): warning C4244: 'argument': conversion from 'time_t' to 'unsigned int', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

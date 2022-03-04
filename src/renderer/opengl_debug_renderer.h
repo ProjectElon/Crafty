@@ -39,11 +39,6 @@ namespace minecraft {
                               const glm::vec3& end,
                               const glm::vec4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
 
-        static void draw_rect(const glm::vec3& position,
-                              const glm::vec2& half_extends,
-                              const glm::vec3& normal,
-                              const glm::vec4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
-
         static void draw_rect(const glm::vec3& p0,
                               const glm::vec3& p1,
                               const glm::vec3& p2,

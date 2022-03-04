@@ -85,8 +85,9 @@ namespace minecraft {
             u32& out_face_corner_id,
             u32& out_flags);
 
-        static void free_chunk(Chunk* chunk);
+        static void prepare_chunk_for_rendering(Chunk *chunk);
         static void upload_chunk_to_gpu(Chunk *chunk);
+        static void free_chunk(Chunk* chunk);
 
         static void begin(
             const glm::vec4& clear_color,

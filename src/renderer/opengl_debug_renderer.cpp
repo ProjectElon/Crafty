@@ -60,6 +60,7 @@ namespace minecraft {
         shader->use();
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
         shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+
         glLineWidth(line_thickness);
     }
 
@@ -72,23 +73,6 @@ namespace minecraft {
         Line_Vertex v1 = { end, color };
         line_vertices.emplace_back(v0);
         line_vertices.emplace_back(v1);
-    }
-
-
-    void Opengl_Debug_Renderer::draw_rect(const glm::vec3& position,
-                                          const glm::vec2& half_extends,
-                                          const glm::vec3& normal,
-                                          const glm::vec4& color)
-    {
-        /*
-            2 ------- 3
-            |      /  |
-            |     /   |
-            |    /    |
-            |   /     |
-            |  /      |
-            1 ------- 0
-        */
     }
 
     void Opengl_Debug_Renderer::draw_rect(const glm::vec3& p0,
@@ -128,12 +112,20 @@ namespace minecraft {
         glm::vec3 p6 = position + glm::vec3(-half_extends.x, -half_extends.y, -half_extends.z);
         glm::vec3 p7 = position + glm::vec3(half_extends.x, -half_extends.y, -half_extends.z);
 
-        draw_rect(p0, p1, p2, p3); // top
-        draw_rect(p5, p4, p7, p6); // bottom
-        draw_rect(p5, p6, p2, p1); // left
-        draw_rect(p7, p4, p0, p3); // right
-        draw_rect(p6, p7, p3, p2); // front
-        draw_rect(p4, p5, p1, p0); // back
+        draw_line(p0, p1, color);
+        draw_line(p1, p2, color);
+        draw_line(p2, p3, color);
+        draw_line(p3, p0, color);
+
+        draw_line(p4, p5, color);
+        draw_line(p5, p6, color);
+        draw_line(p6, p7, color);
+        draw_line(p7, p4, color);
+
+        draw_line(p0, p4, color);
+        draw_line(p1, p5, color);
+        draw_line(p2, p6, color);
+        draw_line(p3, p7, color);
     }
 
     void Opengl_Debug_Renderer::end()

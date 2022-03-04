@@ -11,31 +11,99 @@ namespace minecraft {
         this->render_data.face_count = 0;
         this->render_data.vertex_array_id = 0;
         this->render_data.vertex_buffer_id = 0;
-
+        this->loaded = false;
+        this->ready_for_rendering = false;
         return true;
+    }
+
+    inline static glm::vec2 get_sample(i32 seed, const glm::ivec2& chunk_coords, const glm::ivec2& block_xz_coords)
+    {
+        return {
+            seed + chunk_coords.x * MC_CHUNK_WIDTH + block_xz_coords.x + 0.5f,
+            seed + chunk_coords.y * MC_CHUNK_DEPTH + block_xz_coords.y + 0.5f };
+    }
+
+    inline static f32 get_noise01(const glm::vec2& sample, f32 one_over_noise_scale)
+    {
+        f32 noise = glm::simplex(sample * one_over_noise_scale);
+        return (noise + 1.0f) / 2.0f;
+    }
+
+    inline static f32 get_height_from_noise01(i32 min_height, i32 max_height, f32 noise)
+    {
+        return glm::trunc(min_height + ((max_height - min_height) * noise));
+    }
+
+    inline static void set_block_id_based_on_height(Block *block, i32 block_y, u32 height)
+    {
+        if (block_y > height)
+        {
+            block->id = BlockId_Air;
+        }
+        else if (block_y == height)
+        {
+            block->id = BlockId_Grass;
+        }
+        else
+        {
+            block->id = BlockId_Dirt;
+        }
     }
 
     void Chunk::generate(i32 seed)
     {
-        f32 noise[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
-
         i32 min_biome_height = 150;
-        i32 max_biome_height = 250;
-        i32 water_level = 170;
+        i32 max_biome_height = 240;
+
+        const f32 noise_scale = 256.0f;
+        const f32 one_over_nosie_scale = 1.0f / noise_scale;
+
+        const glm::ivec2 front_chunk_coords = { world_coords.x + 0, world_coords.y - 1 };
+        const glm::ivec2 back_chunk_coords  = { world_coords.x + 0, world_coords.y + 1 };
+        const glm::ivec2 left_chunk_coords  = { world_coords.x - 1, world_coords.y + 0 };
+        const glm::ivec2 right_chunk_coords = { world_coords.x + 1, world_coords.y + 0 };
 
         for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
         {
             for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
             {
-                f32 simplexX = seed + world_coords.x * MC_CHUNK_WIDTH + x + 0.5f;
-                f32 simplexZ = seed + world_coords.y * MC_CHUNK_DEPTH + z + 0.5f;
-                f32 noise_value = glm::perlin(glm::vec2(simplexX / 256.0f, simplexZ / 256.0f));
-                noise[z][x] = (noise_value + 1.0f) / 2.0f;
-                i32 height = glm::trunc(min_biome_height + ((max_biome_height - min_biome_height) * noise[z][x]));
-                height_map[z][x] = height;
-                assert(noise[z][x] >= 0 && noise[z][x] <= 1.0f);
-                assert(height >= min_biome_height && height <= max_biome_height);
+                glm::ivec2 block_xz_coords = { x, z };
+                glm::vec2 sample = get_sample(seed, world_coords, block_xz_coords);
+                f32 noise = get_noise01(sample, one_over_nosie_scale);
+                height_map[z][x] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
             }
+        }
+
+        for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+        {
+            glm::ivec2 block_xz_coords = { x, MC_CHUNK_DEPTH - 1 };
+            glm::vec2 sample = get_sample(seed, front_chunk_coords, block_xz_coords);
+            f32 noise = get_noise01(sample, one_over_nosie_scale);
+            top_edge_height_map[x] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
+        }
+
+        for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+        {
+            glm::ivec2 block_xz_coords = { x, 0 };
+            glm::vec2 sample = get_sample(seed, back_chunk_coords, block_xz_coords);
+            f32 noise = get_noise01(sample, one_over_nosie_scale);
+            bottom_edge_height_map[x] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
+        }
+
+        for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+        {
+            glm::ivec2 block_xz_coords = { MC_CHUNK_WIDTH - 1, z };
+            glm::vec2 sample = get_sample(seed, left_chunk_coords, block_xz_coords);
+            f32 noise = get_noise01(sample, one_over_nosie_scale);
+            left_edge_height_map[z] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
+        }
+
+        for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+        {
+            glm::ivec2 block_xz_coords = { 0, z };
+            glm::vec2 sample = get_sample(seed, right_chunk_coords, block_xz_coords);
+            f32 noise = get_noise01(sample, one_over_nosie_scale);
+            right_edge_height_map[z] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
         }
 
         for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
@@ -46,42 +114,45 @@ namespace minecraft {
                 {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = this->get_block(block_coords);
-
-                    i32 height = height_map[z][x];
-
-                    if (y > height && y < water_level)
-                    {
-                        block->id = BlockId_Water;
-                    }
-                    else if (y > height)
-                    {
-                        block->id = BlockId_Air;
-                    }
-                    else if (y == height)
-                    {
-                        block->id = BlockId_Grass;
-                    }
-                    else if (y < height - 20)
-                    {
-                        block->id = BlockId_Stone;
-                    }
-                    else
-                    {
-                        block->id = BlockId_Dirt;
-                    }
+                    const i32& height = height_map[z][x];
+                    set_block_id_based_on_height(block, y, height);
                 }
+            }
+        }
+
+        for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
+        {
+            for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+            {
+                const i32& top_edge_height = top_edge_height_map[x];
+                Block *top_edge_block = &top_edge_blocks[y * MC_CHUNK_WIDTH + x];
+                set_block_id_based_on_height(top_edge_block, y, top_edge_height);
+
+                const i32& bottom_edge_height = bottom_edge_height_map[x];
+                Block *bottom_edge_block = &bottom_edge_blocks[y * MC_CHUNK_WIDTH + x];
+                set_block_id_based_on_height(bottom_edge_block, y, bottom_edge_height);
+            }
+
+            for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+            {
+                const i32& left_edge_height = left_edge_height_map[z];
+                Block *left_edge_block = &left_edge_blocks[y * MC_CHUNK_DEPTH + z];
+                set_block_id_based_on_height(left_edge_block, y, left_edge_height);
+
+                const i32& right_edge_height = right_edge_height_map[z];
+                Block *right_edge_block = &right_edge_blocks[y * MC_CHUNK_DEPTH + z];
+                set_block_id_based_on_height(right_edge_block, y, right_edge_height);
             }
         }
     }
 
     Block* Chunk::get_block(const glm::ivec3& block_coords)
     {
+        assert(block_coords.x >= 0 && block_coords.x < MC_CHUNK_WIDTH &&
+               block_coords.y >= 0 && block_coords.y < MC_CHUNK_HEIGHT &&
+               block_coords.z >= 0 && block_coords.z < MC_CHUNK_DEPTH);
         i32 block_index = get_block_index(block_coords);
-        if (block_index >= 0 && block_index < MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT)
-        {
-            return this->blocks + block_index;
-        }
-        return &World::null_block;
+        return this->blocks + block_index;
     }
 
     Block* Chunk::get_neighbour_block_from_right(const glm::ivec3& block_coords)
@@ -355,5 +426,5 @@ namespace minecraft {
     };
 
     Block World::null_block = { BlockId_Air };
-    std::unordered_map< std::pair<i32, i32>, Chunk*, Pair_Hash > World::loaded_chunks;
+    std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
 }

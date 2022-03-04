@@ -116,14 +116,28 @@ namespace minecraft {
         u32 vertex_buffer_id;
     };
 
-    // todo(harlequin): block_coords comperssion inside chunk
     struct Chunk
     {
         glm::ivec2 world_coords;
         glm::vec3 position;
 
+        bool loaded = false;
+        bool ready_for_rendering = false;
+
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
-        u32 height_map[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
+
+        Block top_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+        Block bottom_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+        Block left_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+        Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+
+        i32 height_map[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
+
+        i32 top_edge_height_map[MC_CHUNK_WIDTH]; // we store the top first then the bottom
+        i32 bottom_edge_height_map[MC_CHUNK_WIDTH]; // we store the front first the the back
+        i32 left_edge_height_map[MC_CHUNK_DEPTH];
+        i32 right_edge_height_map[MC_CHUNK_DEPTH];
+
         Chunk_Render_Data render_data;
 
         bool initialize(const glm::ivec2 &world_coords);
@@ -149,15 +163,19 @@ namespace minecraft {
         Block* Chunk::get_neighbour_block_from_back(const glm::ivec3& block_coords);
     };
 
-    struct Pair_Hash
+    struct Chunk_Hash
     {
-        template <typename T1, typename T2>
-        std::size_t operator () (const std::pair<T1, T2>& p) const
+        std::size_t operator ()(const glm::ivec2& coord) const
         {
-            auto h1 = std::hash<T1>{}(p.first);
-            auto h2 = std::hash<T2>{}(p.second);
-            return (size_t)h1 | ((size_t)h2 << (size_t)32);
+            return (size_t)coord.x | ((size_t)coord.y << (size_t)32);
         }
+    };
+
+    struct Block_Query_Result
+    {
+        glm::ivec3 block_coords;
+        Block *block;
+        Chunk *chunk;
     };
 
     struct World
@@ -165,12 +183,19 @@ namespace minecraft {
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
         static Block null_block;
         
-        static std::unordered_map< std::pair<i32, i32>, Chunk*, Pair_Hash > loaded_chunks;
+        static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
         
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
         {
             const f32 one_over_16 = 1.0f / 16.0f;
             return { glm::floor(position.x * one_over_16), glm::floor(position.z * one_over_16) };
+        }
+
+        static inline glm::ivec3 world_position_to_block_coords(const glm::vec3& position)
+        {
+            glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
+            glm::vec3 offset = position - glm::vec3(chunk_coords.x * 16.0f, position.y, chunk_coords.y * 16.0f);
+            return { (i32)glm::floor(offset.x), (i32)glm::floor(position.y), (i32)glm::floor(offset.z)};
         }
 
         static inline Chunk* get_chunk(const glm::ivec2& chunk_coords)
@@ -182,6 +207,34 @@ namespace minecraft {
                 chunk = it->second;
             }
             return chunk;
+        }
+
+        static inline Block* get_block(const glm::vec3& position)
+        {
+           glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
+           Chunk* chunk = get_chunk(chunk_coords);
+           if (chunk)
+           {
+                glm::ivec3 block_coords = world_position_to_block_coords(position);
+                return chunk->get_block(block_coords);
+           }
+           return &World::null_block;
+        }
+
+        static inline Block_Query_Result query_block(const glm::vec3& position)
+        {
+            glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
+            Chunk* chunk = get_chunk(chunk_coords);
+            glm::ivec3 block_coords = world_position_to_block_coords(position);
+            if (chunk)
+            {
+                if (block_coords.y < 0 || block_coords.y >= MC_CHUNK_HEIGHT)
+                {
+                    return { block_coords, &World::null_block, chunk };
+                }
+                return { block_coords, chunk->get_block(block_coords), chunk };
+            }
+            return { block_coords, &World::null_block, nullptr };
         }
     };
 }

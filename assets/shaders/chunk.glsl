@@ -112,7 +112,7 @@ in vec4 a_biome_color;
 
 uniform sampler2D u_block_sprite_sheet;
 
-vec3 light_dir = normalize(vec3(-0.27f, 0.57f, -0.57f));
+vec3 light_dir = normalize(vec3(0.0f, 1.0f, 0.0f));
 vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
 
 #define BLOCK_X_MASK 15
@@ -137,7 +137,7 @@ vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
 
 vec3 face_normal[6] = vec3[](
     vec3( 0.0f,  1.0f,  0.0f), // top
-    vec3( 0.0f, -1.0f,  0.0f), // bottom,
+    vec3( 0.0f, -1.0f,  0.0f), // bottom
     vec3(-1.0f,  0.0f,  0.0f), // left
     vec3( 1.0f,  0.0f,  0.0f), // right
     vec3( 0.0f,  0.0f, -1.0f), // font
@@ -146,11 +146,20 @@ vec3 face_normal[6] = vec3[](
 
 void main()
 {
-    // uint face_id = (a_data0 >> 19) & FACE_ID_MASK;
+    uint face_id = (a_data0 >> 19) & FACE_ID_MASK;
     // uint face_corner_id = (a_data0 >> 22) & FACE_CORNER_ID_MASK;
     // uint flags = a_data0 >> 24;
-    // vec3 normal = face_normal[face_id];
+
+    vec3 normal = face_normal[face_id];
 
     vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color;
-    out_color = color;
+
+    float ambient_amount = 0.2f;
+    vec3 ambient = light_color * ambient_amount;
+
+    float diffuse_amount = max(dot(normal, light_dir), 0.0f);
+    vec3 diffuse = light_color * diffuse_amount;
+
+    out_color = vec4(ambient + diffuse, 1.0f) * color;
+    // out_color = color;
 }
