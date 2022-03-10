@@ -14,6 +14,7 @@ namespace minecraft {
         auto& [line_vao_id, line_vbo_id, line_vertices] = internal_data;
 
         glEnable(GL_LINE_SMOOTH);
+        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
         glGenVertexArrays(1, &line_vao_id);
         glBindVertexArray(line_vao_id);

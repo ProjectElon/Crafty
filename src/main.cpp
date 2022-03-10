@@ -7,6 +7,7 @@
 #include "core/file_system.h"
 #include "game/game.h"
 #include "game/world.h"
+#include "game/math_utils.h"
 
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_renderer.h"
@@ -25,7 +26,6 @@
 #include <time.h>
 #include <thread>
 #include <mutex>
-#include <atomic>
 
 namespace minecraft {
 
@@ -53,6 +53,7 @@ namespace minecraft {
             Input::toggle_cursor();
             game->config.update_camera = !game->config.update_camera;
         }
+        // just looks sexier you feel me
 
 #ifndef MC_DIST
         if (key == MC_KEY_L)
@@ -201,15 +202,15 @@ int main()
     Event_System::register_event(EventType_Resize, on_resize, &camera);
 
     srand(time(nullptr));
-    i32 seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 10000.0f);
+    i32 seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000.0f);
 
-    i32 chunk_radius = 8;
+    i32 chunk_radius = 12;
 
     glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
     glm::ivec2 start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
     glm::ivec2 end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
 
-    const u32 thread_count = 4;
+    const u32 thread_count = 6;
     std::thread thread_pool[thread_count];
 
     struct Chunk_Work
@@ -233,16 +234,23 @@ int main()
                 if (work_queue.size())
                 {
                     work_queue_mutex.lock();
-
-                    for (auto& chunk_work : work_queue)
-                    {
-                        Chunk *chunk = chunk_work.chunk;
-                        chunk->generate(chunk_work.seed);
-                        Opengl_Renderer::prepare_chunk_for_rendering(chunk);
-                    }
-
+                    auto work_queue_copy = work_queue;
                     work_queue.resize(0);
                     work_queue_mutex.unlock();
+
+                    for (auto& chunk_work : work_queue_copy)
+                    {
+                        Chunk *chunk = chunk_work.chunk;
+                        chunk->pending = true;
+
+                        chunk->generate(chunk_work.seed);
+                        for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+                        {
+                            Opengl_Renderer::prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
+                        }
+
+                        chunk->pending = false;
+                    }
                 }
             }
         };
@@ -258,6 +266,8 @@ int main()
 
     while (game.is_running)
     {
+        std::vector<Chunk_Work> chunk_work_per_thread[thread_count];
+
         f32 delta_time = current_time - last_time;
         last_time = current_time;
         current_time = platform.get_current_time();
@@ -279,21 +289,89 @@ int main()
             camera.update(delta_time);
         }
 
-        const u32 max_block_select_dist_in_cube_units = 15;
+        const u32 max_block_select_dist_in_cube_units = 10;
         glm::vec3 query_position = camera.position;
 
-        for (u32 i = 0; i < max_block_select_dist_in_cube_units * 2; i++)
+        Chunk* selected_chunk = nullptr;
+        glm::ivec3 selected_block_coords = { -1, -1, -1 };
+        Block* selected_block = nullptr;
+        glm::vec3 selected_block_position;
+
+        for (u32 i = 0; i < max_block_select_dist_in_cube_units * 10; i++)
         {
             Block_Query_Result query_result = World::query_block(query_position);
 
             if (query_result.chunk && query_result.block->id != BlockId_Air)
             {
+                selected_chunk = query_result.chunk;
+                selected_block_coords = query_result.block_coords;
+                selected_block = query_result.block;
                 glm::vec3 block_position = query_result.chunk->get_block_position(query_result.block_coords);
-                Opengl_Debug_Renderer::draw_cube(block_position, { 0.501f, 0.501f, 0.501f }, glm::vec4(0.0f, 0.0f, 0.0f, 0.0f));
+                selected_block_position = block_position;
                 break;
             }
+            query_position += camera.forward * 0.1f;
+        }
 
-            query_position += camera.forward * 0.5f;
+        if (selected_block)
+        {
+            Opengl_Debug_Renderer::draw_cube(selected_block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+
+            Ray ray   = { camera.position, camera.forward };
+            AABB aabb = { selected_block_position - glm::vec3(0.5f, 0.5f, 0.5f), selected_block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
+            Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb);
+            Block_Query_Result block_facing_normal_query_result;
+
+            if (ray_cast_result.hit)
+            {
+                glm::vec3 p = selected_block_position;
+                Opengl_Debug_Renderer::draw_cube(ray_cast_result.point, { 0.05f, 0.05f, 0.05f }, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+
+                if (glm::epsilonEqual(ray_cast_result.point.y, selected_block_position.y + 0.5f, glm::epsilon<f32>())) // top face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_top(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.5f, 0.0f), p + glm::vec3(0.0f, 1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+                }
+                else if (glm::epsilonEqual(ray_cast_result.point.y, selected_block_position.y - 0.5f, glm::epsilon<f32>())) // bottom face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_bottom(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, -0.5f, 0.0f), p + glm::vec3(0.0f, -1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+                }
+                else if (glm::epsilonEqual(ray_cast_result.point.x, selected_block_position.x + 0.5f, glm::epsilon<f32>())) // right face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_right(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.5f, 0.0f, 0.0f), p + glm::vec3(1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+                }
+                else if (glm::epsilonEqual(ray_cast_result.point.x, selected_block_position.x - 0.5f, glm::epsilon<f32>())) // left face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_left(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(-0.5f, 0.0f, 0.0f), p + glm::vec3(-1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+                }
+                else if (glm::epsilonEqual(ray_cast_result.point.z, selected_block_position.z - 0.5f, glm::epsilon<f32>())) // front face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_front(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.0f, -0.5f), p + glm::vec3(0.0f, 0.0f, -1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+                }
+                else if (glm::epsilonEqual(ray_cast_result.point.z, selected_block_position.z + 0.5f, glm::epsilon<f32>())) // back face
+                {
+                    block_facing_normal_query_result = World::get_neighbour_block_from_back(selected_chunk, selected_block_coords);
+                    Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.0f, 0.5f), p + glm::vec3(0.0f, 0.0f, 1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+                }
+            }
+
+            Chunk *block_to_place_chunk = block_facing_normal_query_result.chunk;
+            Block *block_to_place = block_facing_normal_query_result.block;
+            const glm::ivec3& block_to_place_coords = block_facing_normal_query_result.block_coords;
+
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && ray_cast_result.hit && block_to_place->id == BlockId_Air)
+            {
+                World::set_block_id(block_to_place_chunk, block_to_place_coords, BlockId_Sand);
+            }
+
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            {
+                World::set_block_id(selected_chunk, selected_block_coords, BlockId_Air);
+            }
         }
 
         player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
@@ -311,8 +389,6 @@ int main()
         */
         start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
         end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
-
-        std::vector<Chunk_Work> chunk_work_per_thread[thread_count];
 
         for (i32 z = start.y; z <= end.y; ++z)
         {
@@ -343,10 +419,9 @@ int main()
 
             auto& work_queue = chunk_work_queue[thread_index];
             auto& work_per_thread = chunk_work_per_thread[thread_index];
-
-            for (u32 work_index = 0; work_index < work_per_thread.size(); work_index++)
+            for (i32 i = 0; i < work_per_thread.size(); i++)
             {
-                work_queue.push_back(work_per_thread[work_index]);
+                work_queue.push_back(work_per_thread[i]);
             }
 
             work_queue_mutex.unlock();
@@ -368,12 +443,23 @@ int main()
 
                 if (chunk->loaded)
                 {
-                    if (!chunk->ready_for_rendering)
+                    for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
                     {
-                        Opengl_Renderer::upload_chunk_to_gpu(chunk);
-                    }
+                        Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-                    Opengl_Renderer::render_chunk(chunk, &chunk_shader);
+                        if (render_data.ready_for_upload)
+                        {
+                            if (!render_data.uploaded_to_gpu)
+                            {
+                                Opengl_Renderer::upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
+                            }
+
+                            if (render_data.vertex_count > 0)
+                            {
+                                Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -394,7 +480,7 @@ int main()
         }
         */
 
-        f32 line_thickness = 3.0f;
+        f32 line_thickness = 3.5f;
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
 
@@ -408,13 +494,18 @@ int main()
             {
                 Chunk *chunk = it->second;
 
-                if (chunk->ready_for_rendering)
+                if (!chunk->pending)
                 {
-                    Opengl_Renderer::free_chunk(chunk);
-                }
+                    for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+                    {
+                        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-                if (chunk->loaded)
-                {
+                        if (render_data.uploaded_to_gpu)
+                        {
+                            Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
+                        }
+                    }
+
                     it = loaded_chunks.erase(it);
                     delete chunk;
                 }

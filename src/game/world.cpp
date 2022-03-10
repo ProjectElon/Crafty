@@ -1,5 +1,6 @@
 #include "world.h"
 #include <glm/gtc/noise.hpp>
+#include "renderer/opengl_renderer.h"
 
 namespace minecraft {
 
@@ -7,12 +8,17 @@ namespace minecraft {
     {
         this->world_coords = world_coords;
         this->position = { world_coords.x * MC_CHUNK_WIDTH, 0.0f, world_coords.y * MC_CHUNK_DEPTH };
-        this->render_data.vertex_count = 0;
-        this->render_data.face_count = 0;
-        this->render_data.vertex_array_id = 0;
-        this->render_data.vertex_buffer_id = 0;
+
+        for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+        {
+            Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
+            render_data.vertex_count = 0;
+            render_data.face_count = 0;
+            render_data.vertex_array_id = 0;
+            render_data.vertex_buffer_id = 0;
+        }
+
         this->loaded = false;
-        this->ready_for_rendering = false;
         return true;
     }
 
@@ -29,12 +35,12 @@ namespace minecraft {
         return (noise + 1.0f) / 2.0f;
     }
 
-    inline static f32 get_height_from_noise01(i32 min_height, i32 max_height, f32 noise)
+    inline static i32 get_height_from_noise01(i32 min_height, i32 max_height, f32 noise)
     {
-        return glm::trunc(min_height + ((max_height - min_height) * noise));
+        return (i32)glm::trunc(min_height + ((max_height - min_height) * noise));
     }
 
-    inline static void set_block_id_based_on_height(Block *block, i32 block_y, u32 height)
+    inline static void set_block_id_based_on_height(Block *block, i32 block_y, i32 height)
     {
         if (block_y > height)
         {
@@ -125,11 +131,11 @@ namespace minecraft {
             for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
             {
                 const i32& top_edge_height = top_edge_height_map[x];
-                Block *top_edge_block = &top_edge_blocks[y * MC_CHUNK_WIDTH + x];
+                Block *top_edge_block = &(front_edge_blocks[y * MC_CHUNK_WIDTH + x]);
                 set_block_id_based_on_height(top_edge_block, y, top_edge_height);
 
                 const i32& bottom_edge_height = bottom_edge_height_map[x];
-                Block *bottom_edge_block = &bottom_edge_blocks[y * MC_CHUNK_WIDTH + x];
+                Block *bottom_edge_block = &(back_edge_blocks[y * MC_CHUNK_WIDTH + x]);
                 set_block_id_based_on_height(bottom_edge_block, y, bottom_edge_height);
             }
 
@@ -140,10 +146,12 @@ namespace minecraft {
                 set_block_id_based_on_height(left_edge_block, y, left_edge_height);
 
                 const i32& right_edge_height = right_edge_height_map[z];
-                Block *right_edge_block = &right_edge_blocks[y * MC_CHUNK_DEPTH + z];
+                Block *right_edge_block = &(right_edge_blocks[y * MC_CHUNK_DEPTH + z]);
                 set_block_id_based_on_height(right_edge_block, y, right_edge_height);
             }
         }
+
+        this->loaded = true;
     }
 
     Block* Chunk::get_block(const glm::ivec3& block_coords)
@@ -159,7 +167,7 @@ namespace minecraft {
     {
         if (block_coords.x == MC_CHUNK_WIDTH - 1)
         {
-            return &World::null_block;
+            return &(right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z]);
         }
 
         return this->get_block({ block_coords.x + 1, block_coords.y, block_coords.z });
@@ -169,7 +177,7 @@ namespace minecraft {
     {
         if (block_coords.x == 0)
         {
-            return &World::null_block;
+            return &(left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z]);
         }
 
         return this->get_block({ block_coords.x - 1, block_coords.y, block_coords.z });
@@ -198,7 +206,7 @@ namespace minecraft {
     {
         if (block_coords.z == 0)
         {
-            return &World::null_block;
+            return &(front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
         }
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z - 1 });
     }
@@ -207,12 +215,155 @@ namespace minecraft {
     {
         if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
-            return &World::null_block;
+            return &(back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
         }
 
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
+    void World::set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id)
+    {
+        Block *block = chunk->get_block(block_coords);
+        block->id = block_id;
+
+        u32 sub_chunk_index = block_coords.y / 16;
+        Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
+
+        if (block_coords.x == 0)
+        {
+            Chunk *left_chunk = World::get_chunk({ chunk->world_coords.x - 1, chunk->world_coords.y });
+            assert(left_chunk);
+            left_chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].id = block_id;
+            Opengl_Renderer::update_sub_chunk(left_chunk, sub_chunk_index);
+        }
+        else if (block_coords.x == MC_CHUNK_WIDTH - 1)
+        {
+            Chunk *right_chunk = World::get_chunk({ chunk->world_coords.x + 1, chunk->world_coords.y });
+            assert(right_chunk);
+            right_chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].id = block_id;
+            Opengl_Renderer::update_sub_chunk(right_chunk, sub_chunk_index);
+        }
+
+        if (block_coords.z == 0)
+        {
+            Chunk *front_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y - 1 });
+            assert(front_chunk);
+            front_chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].id = block_id;
+            Opengl_Renderer::update_sub_chunk(front_chunk, sub_chunk_index);
+        }
+        else if (block_coords.z == MC_CHUNK_DEPTH - 1)
+        {
+            Chunk *back_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
+            assert(back_chunk);
+            back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].id = block_id;
+            Opengl_Renderer::update_sub_chunk(back_chunk, sub_chunk_index);
+        }
+
+        i32 sub_chunk_start_y = sub_chunk_index * 16;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * 16 - 1;
+
+        if (block_coords.y == sub_chunk_end_y && block_coords.y != 255)
+        {
+            Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index + 1);
+        }
+        else if (block_coords.y == sub_chunk_start_y && block_coords.y != 0)
+        {
+            Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index - 1);
+        }
+    }
+
+
+    Block_Query_Result World::get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+        result.block_coords = { block_coords.x, block_coords.y + 1, block_coords.z };
+        result.chunk = chunk;
+        result.block = chunk->get_neighbour_block_from_top(block_coords);
+        return result;
+    }
+
+    Block_Query_Result World::get_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+        result.block_coords = { block_coords.x, block_coords.y - 1, block_coords.z };
+        result.chunk = chunk;
+        result.block = chunk->get_neighbour_block_from_bottom(block_coords);
+        return result;
+    }
+
+    Block_Query_Result World::get_neighbour_block_from_left(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+
+        if (block_coords.x == 0)
+        {
+            result.chunk = World::get_chunk({ chunk->world_coords.x - 1, chunk->world_coords.y });
+            result.block_coords = { MC_CHUNK_WIDTH - 1, block_coords.y, block_coords.z };
+        }
+        else
+        {
+            result.chunk = chunk;
+            result.block_coords = { block_coords.x - 1, block_coords.y, block_coords.z };
+        }
+
+        result.block = result.chunk->get_block(result.block_coords);
+        return result;
+    }
+
+    Block_Query_Result World::get_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+
+        if (block_coords.x == MC_CHUNK_WIDTH - 1)
+        {
+            result.chunk = World::get_chunk({ chunk->world_coords.x + 1, chunk->world_coords.y });
+            result.block_coords = { 0, block_coords.y, block_coords.z };
+        }
+        else
+        {
+            result.chunk = chunk;
+            result.block_coords = { block_coords.x + 1, block_coords.y, block_coords.z };
+        }
+
+        result.block = result.chunk->get_block(result.block_coords);
+        return result;
+    }
+
+    Block_Query_Result World::get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+
+        if (block_coords.z == 0)
+        {
+            result.chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y - 1 });
+            result.block_coords = { block_coords.x, block_coords.y, MC_CHUNK_DEPTH - 1 };
+        }
+        else
+        {
+            result.chunk = chunk;
+            result.block_coords = { block_coords.x, block_coords.y, block_coords.z - 1 };
+        }
+
+        result.block = result.chunk->get_block(result.block_coords);
+        return result;
+    }
+
+    Block_Query_Result World::get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        Block_Query_Result result;
+        if (block_coords.z == MC_CHUNK_DEPTH - 1)
+        {
+            result.chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
+            result.block_coords = { block_coords.x, block_coords.y, 0 };
+        }
+        else
+        {
+            result.chunk = chunk;
+            result.block_coords = { block_coords.x, block_coords.y, block_coords.z + 1 };
+        }
+        result.block = result.chunk->get_block(result.block_coords);
+        return result;
+    }
 
     const Block_Info World::block_infos[BlockId_Count] =
     {

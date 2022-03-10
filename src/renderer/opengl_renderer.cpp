@@ -167,17 +167,37 @@ namespace minecraft {
         out_flags = (vertex >> 24);
     }
 
-    static void submit_block_face(
-        const glm::ivec3& block_coords,
-        u32 uv_rect_id,
-        BlockFaceId face,
-        u32 p0,
-        u32 p1,
-        u32 p2,
-        u32 p3,
-        Chunk *chunk,
-        Block* block,
-        Block* block_facing_normal)
+    void Opengl_Renderer::free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
+    {
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        if (render_data.vertex_array_id)
+        {
+            glDeleteBuffers(1, &render_data.vertex_buffer_id);
+            glDeleteVertexArrays(1, &render_data.vertex_array_id);
+            render_data.vertex_array_id = 0;
+            render_data.vertex_buffer_id = 0;
+            render_data.vertex_count = 0;
+            render_data.face_count = 0;
+            render_data.uploaded_to_gpu = false;
+        }
+    }
+
+    void Opengl_Renderer::update_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
+    {
+        free_sub_chunk(chunk, sub_chunk_index);
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        render_data.ready_for_upload = false;
+        prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
+    }
+
+    static void submit_block_face_to_sub_chunk_render_data(Chunk *chunk,
+                                                           u32 sub_chunk_index,
+                                                           Block *block,
+                                                           Block *block_facing_normal,
+                                                           const glm::ivec3& block_coords,
+                                                           u16 texture_uv_rect_id,
+                                                           u16 face,
+                                                           u32 p0, u32 p1, u32 p2, u32 p3)
     {
         const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];
 
@@ -186,29 +206,26 @@ namespace minecraft {
             const Block_Info& block_info = World::block_infos[block->id];
             const u32& block_flags = block_info.flags;
 
-            Chunk_Render_Data& chunk_render_data = chunk->render_data;
-            Vertex *vertices = chunk_render_data.vertices;
-            u32 vertex_index = chunk_render_data.vertex_count;
+            Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+            Vertex *vertices = sub_chunk_render_data.vertices;
+            u32 vertex_index = sub_chunk_render_data.vertex_count;
 
             u32 data00 = Opengl_Renderer::compress_vertex(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
             u32 data01 = Opengl_Renderer::compress_vertex(block_coords, p1, face, BlockFaceCornerId_BottomLeft,  block_flags);
             u32 data02 = Opengl_Renderer::compress_vertex(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
             u32 data03 = Opengl_Renderer::compress_vertex(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            vertices[vertex_index + 0] = { data00, uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
-            vertices[vertex_index + 1] = { data01, uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
-            vertices[vertex_index + 2] = { data02, uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
-            vertices[vertex_index + 3] = { data03, uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
+            vertices[vertex_index + 0] = { data00, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
+            vertices[vertex_index + 1] = { data01, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
+            vertices[vertex_index + 2] = { data02, texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
+            vertices[vertex_index + 3] = { data03, texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
 
-            chunk_render_data.vertex_count += 4;
-            chunk_render_data.face_count++;
+            sub_chunk_render_data.vertex_count += 4;
+            sub_chunk_render_data.face_count++;
         }
     }
 
-    static void submit_block(
-        Chunk *chunk,
-        Block *block,
-        const glm::ivec3 &block_coords)
+    void submit_block_to_sub_chunk_render_data(Chunk *chunk, u32 sub_chunk_index, Block *block, const glm::ivec3& block_coords)
     {
         const Block_Info& block_info = World::block_infos[block->id];
 
@@ -235,7 +252,7 @@ namespace minecraft {
         */
 
         Block* top_block = chunk->get_neighbour_block_from_top(block_coords);
-        submit_block_face(block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3, chunk, block, top_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, top_block, block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3);
         /*
             bottom face
 
@@ -249,7 +266,7 @@ namespace minecraft {
         */
 
         Block* bottom_block = chunk->get_neighbour_block_from_bottom(block_coords);
-        submit_block_face(block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6, chunk, block, bottom_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, bottom_block, block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6);
 
         /*
             left face
@@ -272,7 +289,7 @@ namespace minecraft {
         {
             left_block = chunk->get_neighbour_block_from_left(block_coords);
         }
-        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1, chunk, block, left_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, left_block, block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1);
 
         /*
             right face
@@ -296,7 +313,7 @@ namespace minecraft {
         {
             right_block = chunk->get_neighbour_block_from_right(block_coords);
         }
-        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3, chunk, block, right_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, right_block, block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3);
 
         /*
             front face
@@ -313,13 +330,13 @@ namespace minecraft {
 
         if (block_coords.z == 0)
         {
-            front_block = &(chunk->top_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
+            front_block = &(chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
         }
         else
         {
             front_block = chunk->get_neighbour_block_from_front(block_coords);
         }
-        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2, chunk, block, front_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
 
         /*
             back face
@@ -337,58 +354,44 @@ namespace minecraft {
 
         if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
-            back_block = &(chunk->bottom_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
+            back_block = &(chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
         }
         else
         {
             back_block = chunk->get_neighbour_block_from_back(block_coords);
         }
 
-        submit_block_face(block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0, chunk, block, back_block);
+        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, back_block, block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0);
     }
 
-    void Opengl_Renderer::free_chunk(Chunk* chunk)
+    void Opengl_Renderer::prepare_sub_chunk_for_rendering(Chunk *chunk, u32 sub_chunk_index)
     {
-        Chunk_Render_Data& render_data = chunk->render_data;
+        i32 sub_chunk_start_y = sub_chunk_index * 16;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * 16;
 
-        if (render_data.vertex_array_id)
-        {
-            glDeleteBuffers(1, &render_data.vertex_buffer_id);
-            glDeleteVertexArrays(1, &render_data.vertex_array_id);
-            render_data.vertex_array_id = 0;
-            render_data.vertex_buffer_id = 0;
-        }
-    }
-
-    void Opengl_Renderer::prepare_chunk_for_rendering(Chunk *chunk)
-    {
-        for (i32 y = 0; y < MC_CHUNK_HEIGHT; ++y)
+        for (i32 y = sub_chunk_start_y; y < sub_chunk_end_y; ++y)
         {
             for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
             {
                 for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
                 {
                     glm::ivec3 block_coords = { x, y, z };
-                    Block* block = chunk->get_block(block_coords);
-
-                    if (block->id == BlockId_Air)
+                    Block *block = chunk->get_block(block_coords);
+                    if (block->id != BlockId_Air)
                     {
-                        continue;
+                        submit_block_to_sub_chunk_render_data(chunk, sub_chunk_index, block, block_coords);
                     }
-
-                    submit_block(chunk, block, block_coords);
                 }
             }
         }
 
-        chunk->loaded = true;
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        render_data.ready_for_upload = true;
     }
 
-    void Opengl_Renderer::upload_chunk_to_gpu(Chunk *chunk)
+    void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
     {
-        assert(chunk->loaded && !chunk->ready_for_rendering);
-
-        Chunk_Render_Data& render_data = chunk->render_data;
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         glGenVertexArrays(1, &render_data.vertex_array_id);
         glBindVertexArray(render_data.vertex_array_id);
@@ -418,18 +421,17 @@ namespace minecraft {
         glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-        chunk->ready_for_rendering = true;
+        render_data.uploaded_to_gpu = true;
     }
 
-    void Opengl_Renderer::render_chunk(Chunk *chunk, Opengl_Shader *shader)
+    void Opengl_Renderer::render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader)
     {
-        shader->use();
         shader->set_uniform_vec3("u_chunk_position",
                                  chunk->position.x,
                                  chunk->position.y,
                                  chunk->position.z);
 
-        Chunk_Render_Data& render_data = chunk->render_data;
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         glBindVertexArray(render_data.vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);

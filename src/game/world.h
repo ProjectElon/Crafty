@@ -106,14 +106,17 @@ namespace minecraft {
         u32 data1;
     };
 
-    struct Chunk_Render_Data
+    struct Sub_Chunk_Render_Data
     {
-        Vertex vertices[MC_VERTEX_COUNT_PER_CHUNK];
+        Vertex vertices[MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * 16];
         u32 vertex_count;
         u32 face_count;
 
         u32 vertex_array_id;
         u32 vertex_buffer_id;
+
+        bool ready_for_upload = false;
+        bool uploaded_to_gpu  = false;
     };
 
     struct Chunk
@@ -121,13 +124,13 @@ namespace minecraft {
         glm::ivec2 world_coords;
         glm::vec3 position;
 
-        bool loaded = false;
-        bool ready_for_rendering = false;
+        bool pending = false;
+        bool loaded  = false;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
 
-        Block top_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
-        Block bottom_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+        Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+        Block back_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
         Block left_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
         Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
 
@@ -138,7 +141,7 @@ namespace minecraft {
         i32 left_edge_height_map[MC_CHUNK_DEPTH];
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
-        Chunk_Render_Data render_data;
+        Sub_Chunk_Render_Data sub_chunks_render_data[16];
 
         bool initialize(const glm::ivec2 &world_coords);
         void generate(i32 seed);
@@ -146,6 +149,12 @@ namespace minecraft {
         inline i32 get_block_index(const glm::ivec3& block_coords) const
         {
             return block_coords.y * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH + block_coords.z * MC_CHUNK_WIDTH + block_coords.x;
+        }
+
+        inline i32 set_block_id(const glm::ivec3& block_coords, BlockId id)
+        {
+            Block *block = get_block(block_coords);
+            block->id = id;
         }
 
         inline glm::vec3 get_block_position(const glm::ivec3& block_coords) const
@@ -236,5 +245,21 @@ namespace minecraft {
             }
             return { block_coords, &World::null_block, nullptr };
         }
+
+        static inline u32 get_sub_chunk_index(glm::ivec3& block_coords)
+        {
+            return block_coords.y / 16;
+        }
+
+        static Block_Query_Result get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords);
+        static Block_Query_Result get_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords);
+
+        static Block_Query_Result get_neighbour_block_from_left(Chunk *chunk, const glm::ivec3& block_coords);
+        static Block_Query_Result get_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords);
+
+        static Block_Query_Result get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords);
+        static Block_Query_Result get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords);
+
+        static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
     };
 }
