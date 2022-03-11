@@ -115,8 +115,8 @@ namespace minecraft {
         u32 vertex_array_id;
         u32 vertex_buffer_id;
 
-        bool ready_for_upload = false;
-        bool uploaded_to_gpu  = false;
+        bool ready_for_upload;
+        bool uploaded_to_gpu;
     };
 
     struct Chunk
@@ -128,23 +128,19 @@ namespace minecraft {
         bool loaded  = false;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
-
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
-        Block back_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
-        Block left_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+        Block back_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
+        Block left_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
         Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
-
-        i32 height_map[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
-
-        i32 top_edge_height_map[MC_CHUNK_WIDTH]; // we store the top first then the bottom
-        i32 bottom_edge_height_map[MC_CHUNK_WIDTH]; // we store the front first the the back
-        i32 left_edge_height_map[MC_CHUNK_DEPTH];
-        i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
         Sub_Chunk_Render_Data sub_chunks_render_data[16];
 
         bool initialize(const glm::ivec2 &world_coords);
+
         void generate(i32 seed);
+
+        void serialize();
+        void deserialize();
 
         inline i32 get_block_index(const glm::ivec3& block_coords) const
         {
@@ -193,6 +189,7 @@ namespace minecraft {
         static Block null_block;
         
         static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
+        static std::string path;
         
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
         {
@@ -261,5 +258,7 @@ namespace minecraft {
         static Block_Query_Result get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
+
+        static std::string get_chunk_path(Chunk *chunk);
     };
 }

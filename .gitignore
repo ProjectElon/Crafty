@@ -1,5 +1,4 @@
-**/bin/
-bin-int/
+bin/
 obj/
 .vs/
 **.sln

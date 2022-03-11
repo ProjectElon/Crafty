@@ -26,6 +26,9 @@
 #include <time.h>
 #include <thread>
 #include <mutex>
+#include <sstream>
+#include <filesystem>
+#include <queue>
 
 namespace minecraft {
 
@@ -201,11 +204,36 @@ int main()
     camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f));
     Event_System::register_event(EventType_Resize, on_resize, &camera);
 
+    std::string world_name = "harlequin";
+    std::string world_path = "../assets/worlds/" + world_name;
+
+    if (!std::filesystem::exists(std::filesystem::path(world_path)))
+    {
+        std::filesystem::create_directories(std::filesystem::path(world_path));
+    }
+
+    World::path = world_path;
+
+    std::string meta_file_path = world_path + "/meta";
+    FILE* meta_file = fopen(meta_file_path.c_str(), "rb");
+
     srand(time(nullptr));
-    i32 seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000.0f);
+    i32 seed;
+
+    if (meta_file)
+    {
+        fscanf(meta_file, "%d", &seed);
+    }
+    else
+    {
+        seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000000.0f);
+        meta_file = fopen(meta_file_path.c_str(), "wb");
+        fprintf(meta_file, "%d", seed);
+    }
+
+    fclose(meta_file);
 
     i32 chunk_radius = 12;
-
     glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
     glm::ivec2 start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
     glm::ivec2 end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
@@ -231,7 +259,7 @@ int main()
 
             while (game.is_running)
             {
-                if (work_queue.size())
+                if (work_queue.size() > 0)
                 {
                     work_queue_mutex.lock();
                     auto work_queue_copy = work_queue;
@@ -240,10 +268,19 @@ int main()
 
                     for (auto& chunk_work : work_queue_copy)
                     {
-                        Chunk *chunk = chunk_work.chunk;
-                        chunk->pending = true;
+                        Chunk* chunk = chunk_work.chunk;
 
-                        chunk->generate(chunk_work.seed);
+                        std::string chunk_path = World::get_chunk_path(chunk);
+
+                        if (!std::filesystem::exists(std::filesystem::path(chunk_path)))
+                        {
+                            chunk->generate(chunk_work.seed);
+                        }
+                        else
+                        {
+                            chunk->deserialize();
+                        }
+
                         for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
                         {
                             Opengl_Renderer::prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
@@ -266,8 +303,6 @@ int main()
 
     while (game.is_running)
     {
-        std::vector<Chunk_Work> chunk_work_per_thread[thread_count];
-
         f32 delta_time = current_time - last_time;
         last_time = current_time;
         current_time = platform.get_current_time();
@@ -289,6 +324,53 @@ int main()
             camera.update(delta_time);
         }
 
+        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+        start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
+        end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
+
+        std::vector<Chunk_Work> chunk_work_per_thread[thread_count];
+
+        for (i32 z = start.y; z <= end.y; ++z)
+        {
+            for (i32 x = start.x; x <= end.x; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                if (it == loaded_chunks.end())
+                {
+                    Chunk* chunk = new Chunk;
+                    chunk->initialize(chunk_coords);
+                    loaded_chunks.emplace(chunk_coords, chunk);
+
+                    Chunk_Work chunk_work;
+                    chunk_work.chunk = chunk;
+                    chunk_work.seed  = seed;
+
+                    chunk_work_per_thread[work_queue_index].push_back(chunk_work);
+                    ++work_queue_index;
+                    if (work_queue_index == thread_count) work_queue_index = 0;
+                }
+            }
+        }
+
+        for (u32 thread_index = 0; thread_index < thread_count; thread_index++)
+        {
+            auto& work_per_thread = chunk_work_per_thread[thread_index];
+
+            if (work_per_thread.size())
+            {
+                auto& work_queue_mutex = chunk_work_queue_mutex[thread_index];
+                work_queue_mutex.lock();
+                auto& work_queue = chunk_work_queue[thread_index];
+
+                for (auto thread_work : work_per_thread)
+                {
+                    work_queue.push_back(thread_work);
+                }
+                work_queue_mutex.unlock();
+            }
+        }
+
         const u32 max_block_select_dist_in_cube_units = 10;
         glm::vec3 query_position = camera.position;
 
@@ -300,8 +382,7 @@ int main()
         for (u32 i = 0; i < max_block_select_dist_in_cube_units * 10; i++)
         {
             Block_Query_Result query_result = World::query_block(query_position);
-
-            if (query_result.chunk && query_result.block->id != BlockId_Air)
+            if (query_result.chunk && query_result.block && query_result.block->id != BlockId_Air)
             {
                 selected_chunk = query_result.chunk;
                 selected_block_coords = query_result.block_coords;
@@ -320,7 +401,7 @@ int main()
             Ray ray   = { camera.position, camera.forward };
             AABB aabb = { selected_block_position - glm::vec3(0.5f, 0.5f, 0.5f), selected_block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
             Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb);
-            Block_Query_Result block_facing_normal_query_result;
+            Block_Query_Result block_facing_normal_query_result = {};
 
             if (ray_cast_result.hit)
             {
@@ -357,15 +438,15 @@ int main()
                     block_facing_normal_query_result = World::get_neighbour_block_from_back(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.0f, 0.5f), p + glm::vec3(0.0f, 0.0f, 1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
                 }
-            }
 
-            Chunk *block_to_place_chunk = block_facing_normal_query_result.chunk;
-            Block *block_to_place = block_facing_normal_query_result.block;
-            const glm::ivec3& block_to_place_coords = block_facing_normal_query_result.block_coords;
+                Chunk* block_to_place_chunk = block_facing_normal_query_result.chunk;
+                Block* block_to_place = block_facing_normal_query_result.block;
+                const glm::ivec3& block_to_place_coords = block_facing_normal_query_result.block_coords;
 
-            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && ray_cast_result.hit && block_to_place->id == BlockId_Air)
-            {
-                World::set_block_id(block_to_place_chunk, block_to_place_coords, BlockId_Sand);
+                if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && block_to_place->id == BlockId_Air)
+                {
+                    World::set_block_id(block_to_place_chunk, block_to_place_coords, BlockId_Sand);
+                }
             }
 
             if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
@@ -374,58 +455,6 @@ int main()
             }
         }
 
-        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        Chunk *player_chunk = World::get_chunk(player_chunk_coords);
-
-        /*
-        fprintf(
-            stderr,
-            "<%f, %f, %f> player at chunk<%d, %d>\n",
-            camera.position.x,
-            camera.position.y,
-            camera.position.z,
-            player_chunk_coords.x,
-            player_chunk_coords.y);
-        */
-        start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
-        end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
-
-        for (i32 z = start.y; z <= end.y; ++z)
-        {
-            for (i32 x = start.x; x <= end.x; ++x)
-            {
-                glm::ivec2 chunk_coords = { x, z };
-                auto it = loaded_chunks.find({ x, z });
-                if (it == loaded_chunks.end())
-                {
-                    Chunk* chunk = new Chunk;
-                    chunk->initialize(chunk_coords);
-                    loaded_chunks.emplace(chunk_coords, chunk);
-
-                    Chunk_Work chunk_work;
-                    chunk_work.chunk = chunk;
-                    chunk_work.seed  = seed;
-                    chunk_work_per_thread[work_queue_index].push_back(chunk_work);
-                    ++work_queue_index;
-                    if (work_queue_index == thread_count) work_queue_index = 0;
-                }
-            }
-        }
-
-        for (u32 thread_index = 0; thread_index < thread_count; thread_index++)
-        {
-            auto& work_queue_mutex = chunk_work_queue_mutex[thread_index];
-            work_queue_mutex.lock();
-
-            auto& work_queue = chunk_work_queue[thread_index];
-            auto& work_per_thread = chunk_work_per_thread[thread_index];
-            for (i32 i = 0; i < work_per_thread.size(); i++)
-            {
-                work_queue.push_back(work_per_thread[i]);
-            }
-
-            work_queue_mutex.unlock();
-        }
 
         f32 color_factor = 1.0f / 255.0f;
         glm::vec3 sky_color = { 135, 206, 235 };
@@ -438,10 +467,12 @@ int main()
         {
             for (i32 x = start.x; x <= end.x; ++x)
             {
-                auto it = loaded_chunks.find({ x, z });
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                assert(it != loaded_chunks.end());
                 Chunk* chunk = it->second;
 
-                if (chunk->loaded)
+                if (!chunk->pending && chunk->loaded)
                 {
                     for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
                     {
@@ -464,22 +495,6 @@ int main()
             }
         }
 
-        /*
-        if (player_chunk)
-        {
-            for (u32 z = 0; z < MC_CHUNK_DEPTH; ++z)
-            {
-                for (u32 x = 0; x < MC_CHUNK_WIDTH; ++x)
-                {
-                    u32 height = player_chunk->height_map[z][x];
-                    Block* block = player_chunk->get_block({ x, height, z});
-                    glm::vec3 position = player_chunk->get_block_position({ x, height, z });
-                    Opengl_Debug_Renderer::draw_cube(position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-                }
-            }
-        }
-        */
-
         f32 line_thickness = 3.5f;
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
@@ -489,26 +504,27 @@ int main()
         for (auto it = loaded_chunks.begin(); it != loaded_chunks.end();)
         {
             auto chunk_coords = it->first;
-            if (chunk_coords.x < start.x || chunk_coords.x > end.x ||
-                chunk_coords.y < start.y || chunk_coords.y > end.y)
+            Chunk* chunk = it->second;
+
+            bool outside_range = chunk_coords.x < start.x || chunk_coords.x > end.x ||
+                chunk_coords.y < start.y || chunk_coords.y > end.y;
+
+            if (!(chunk->pending) && chunk->loaded && outside_range)
             {
-                Chunk *chunk = it->second;
+                chunk->serialize();
 
-                if (!chunk->pending)
+                for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
                 {
-                    for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+                    Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+                    if (render_data.uploaded_to_gpu)
                     {
-                        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-
-                        if (render_data.uploaded_to_gpu)
-                        {
-                            Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
-                        }
+                        Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
                     }
-
-                    it = loaded_chunks.erase(it);
-                    delete chunk;
                 }
+
+                it = loaded_chunks.erase(it);
+                delete chunk;
             }
             else
             {
@@ -522,6 +538,12 @@ int main()
     for (u32 thread_index = 0; thread_index < thread_count; ++thread_index)
     {
         thread_pool[thread_index].join();
+    }
+
+    for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
+    {
+        Chunk *chunk = it->second;
+        chunk->serialize();
     }
 
     Opengl_Renderer::shutdown();

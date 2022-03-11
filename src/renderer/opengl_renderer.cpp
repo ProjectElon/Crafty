@@ -50,7 +50,7 @@ namespace minecraft {
 
         // alpha blending
         // glEnable(GL_BLEND);
-	// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         // multisampling
         glEnable(GL_MULTISAMPLE);
@@ -170,10 +170,12 @@ namespace minecraft {
     void Opengl_Renderer::free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
         if (render_data.vertex_array_id)
         {
-            glDeleteBuffers(1, &render_data.vertex_buffer_id);
             glDeleteVertexArrays(1, &render_data.vertex_array_id);
+            glDeleteBuffers(1, &render_data.vertex_buffer_id);
+
             render_data.vertex_array_id = 0;
             render_data.vertex_buffer_id = 0;
             render_data.vertex_count = 0;
@@ -184,8 +186,8 @@ namespace minecraft {
 
     void Opengl_Renderer::update_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
-        free_sub_chunk(chunk, sub_chunk_index);
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        free_sub_chunk(chunk, sub_chunk_index);
         render_data.ready_for_upload = false;
         prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
     }
@@ -366,6 +368,8 @@ namespace minecraft {
 
     void Opengl_Renderer::prepare_sub_chunk_for_rendering(Chunk *chunk, u32 sub_chunk_index)
     {
+        assert(chunk->loaded);
+
         i32 sub_chunk_start_y = sub_chunk_index * 16;
         i32 sub_chunk_end_y = (sub_chunk_index + 1) * 16;
 
@@ -377,10 +381,11 @@ namespace minecraft {
                 {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = chunk->get_block(block_coords);
-                    if (block->id != BlockId_Air)
+                    if (block->id == BlockId_Air)
                     {
-                        submit_block_to_sub_chunk_render_data(chunk, sub_chunk_index, block, block_coords);
+                        continue;
                     }
+                    submit_block_to_sub_chunk_render_data(chunk, sub_chunk_index, block, block_coords);
                 }
             }
         }
@@ -392,6 +397,7 @@ namespace minecraft {
     void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        assert(chunk->loaded && render_data.ready_for_upload);
 
         glGenVertexArrays(1, &render_data.vertex_array_id);
         glBindVertexArray(render_data.vertex_array_id);

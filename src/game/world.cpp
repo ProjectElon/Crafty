@@ -1,6 +1,7 @@
 #include "world.h"
-#include <glm/gtc/noise.hpp>
 #include "renderer/opengl_renderer.h"
+#include <glm/gtc/noise.hpp>
+#include <sstream>
 
 namespace minecraft {
 
@@ -12,13 +13,19 @@ namespace minecraft {
         for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
         {
             Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
+
             render_data.vertex_count = 0;
-            render_data.face_count = 0;
-            render_data.vertex_array_id = 0;
+            render_data.face_count   = 0;
+            render_data.vertex_array_id  = 0;
             render_data.vertex_buffer_id = 0;
+
+            render_data.ready_for_upload = false;
+            render_data.uploaded_to_gpu  = false;
         }
 
         this->loaded = false;
+        this->pending = true;
+
         return true;
     }
 
@@ -58,6 +65,13 @@ namespace minecraft {
 
     void Chunk::generate(i32 seed)
     {
+        i32 height_map[MC_CHUNK_DEPTH][MC_CHUNK_WIDTH];
+
+        i32 top_edge_height_map[MC_CHUNK_WIDTH];
+        i32 bottom_edge_height_map[MC_CHUNK_WIDTH];
+        i32 left_edge_height_map[MC_CHUNK_DEPTH];
+        i32 right_edge_height_map[MC_CHUNK_DEPTH];
+
         i32 min_biome_height = 150;
         i32 max_biome_height = 240;
 
@@ -142,7 +156,7 @@ namespace minecraft {
             for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
             {
                 const i32& left_edge_height = left_edge_height_map[z];
-                Block *left_edge_block = &left_edge_blocks[y * MC_CHUNK_DEPTH + z];
+                Block *left_edge_block = &(left_edge_blocks[y * MC_CHUNK_DEPTH + z]);
                 set_block_id_based_on_height(left_edge_block, y, left_edge_height);
 
                 const i32& right_edge_height = right_edge_height_map[z];
@@ -151,6 +165,33 @@ namespace minecraft {
             }
         }
 
+        this->loaded = true;
+    }
+
+    void Chunk::serialize()
+    {
+        std::string path = World::get_chunk_path(this);
+        FILE *file = fopen(path.c_str(), "wb");
+        assert(file);
+        fwrite(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fwrite(front_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
+        fwrite(back_edge_blocks,  sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
+        fwrite(left_edge_blocks,  sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fwrite(right_edge_blocks, sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fclose(file);
+    }
+
+    void Chunk::deserialize()
+    {
+        std::string path = World::get_chunk_path(this);
+        FILE *file = fopen(path.c_str(), "rb");
+        assert(file);
+        fread(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fread(front_edge_blocks, sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fread(back_edge_blocks,  sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+        fread(left_edge_blocks,  sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
+        fread(right_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
+        fclose(file);
         this->loaded = true;
     }
 
@@ -219,6 +260,15 @@ namespace minecraft {
         }
 
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
+    }
+
+
+    std::string World::get_chunk_path(Chunk *chunk)
+    {
+        std::stringstream ss;
+        ss << World::path << "/" << chunk->world_coords.x << " - " << chunk->world_coords.y;
+        std::string s = ss.str();
+        return s;
     }
 
     void World::set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id)
@@ -578,4 +628,5 @@ namespace minecraft {
 
     Block World::null_block = { BlockId_Air };
     std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
+    std::string World::path;
 }
