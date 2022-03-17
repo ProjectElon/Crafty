@@ -23,7 +23,7 @@ namespace minecraft {
             render_data.uploaded_to_gpu  = false;
         }
 
-        this->loaded = false;
+        this->loaded  = false;
         this->pending = true;
 
         return true;

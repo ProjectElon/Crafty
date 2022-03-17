@@ -124,8 +124,8 @@ namespace minecraft {
         glm::ivec2 world_coords;
         glm::vec3 position;
 
-        bool pending = false;
-        bool loaded  = false;
+        bool pending;
+        bool loaded;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
