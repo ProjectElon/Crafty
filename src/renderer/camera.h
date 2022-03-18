@@ -9,6 +9,7 @@
 #include <glm/gtx/quaternion.hpp>
 
 namespace minecraft {
+
     struct Camera
     {
         glm::vec3 position;

@@ -34,6 +34,8 @@ namespace minecraft {
             return false;
         }
 
+#define OPENGL_DEBUGGING 0
+#if OPENGL_DEBUGGING
 #ifndef MC_DIST
         i32 flags;
         glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
@@ -44,6 +46,7 @@ namespace minecraft {
             glDebugMessageCallback(gl_debug_output, &internal_data);
             glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
         }
+#endif
 #endif
         // depth testing
         glEnable(GL_DEPTH_TEST);
@@ -115,6 +118,10 @@ namespace minecraft {
             GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+        u32 width = platform->game->config.window_width;
+        u32 height = platform->game->config.window_height;
+        glViewport(0, 0, width, height);
 
         return true;
     }
@@ -402,6 +409,9 @@ namespace minecraft {
         glGenVertexArrays(1, &render_data.vertex_array_id);
         glBindVertexArray(render_data.vertex_array_id);
 
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
+
         glGenBuffers(1, &render_data.vertex_buffer_id);
         glBindBuffer(GL_ARRAY_BUFFER, render_data.vertex_buffer_id);
         u32 vertex_count = render_data.vertex_count;
@@ -410,22 +420,20 @@ namespace minecraft {
                      render_data.vertices,
                      GL_STATIC_DRAW);
 
-        glEnableVertexAttribArray(0);
         glVertexAttribIPointer(0,
                                1,
                                GL_UNSIGNED_INT,
                                sizeof(Vertex),
                                (const void*)offsetof(Vertex, data0));
 
-        glEnableVertexAttribArray(1);
         glVertexAttribIPointer(1,
-                              1,
-                              GL_UNSIGNED_INT,
-                              sizeof(Vertex),
-                              (const void*)offsetof(Vertex, data1));
+                               1,
+                               GL_UNSIGNED_INT,
+                               sizeof(Vertex),
+                               (const void*)offsetof(Vertex, data1));
 
-        glBindVertexArray(0);
         glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
 
         render_data.uploaded_to_gpu = true;
     }
@@ -453,6 +461,8 @@ namespace minecraft {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->use();
+        shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
+        shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
         shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
 
@@ -478,19 +488,6 @@ namespace minecraft {
     void Opengl_Renderer::end()
     {
         internal_data.platform->opengl_swap_buffers();
-
-#ifndef MC_DIST
-        if (internal_data.should_print_stats)
-        {
-            fprintf(
-                stderr,
-                "Opengl Renderer Stats\nBlock Count: %u\nFace Count: %u\nDraw Calls: %u\n---------------\n",
-                internal_data.stats.block_count,
-                internal_data.stats.block_face_count,
-                internal_data.stats.draw_count);
-            memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
-        }
-#endif
     }
 
     void APIENTRY gl_debug_output(GLenum source,

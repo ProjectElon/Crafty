@@ -148,7 +148,10 @@ namespace minecraft {
         WindowMode desired_window_mode = game->config.window_mode;
         game->config.window_mode = WindowMode_Windowed;
         switch_to_window_mode(desired_window_mode);
-        center_window();
+        if (desired_window_mode == WindowMode_Windowed)
+        {
+            center_window();
+        }
 
         glfwSetWindowUserPointer(window_handle, game);
 

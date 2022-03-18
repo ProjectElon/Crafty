@@ -1,4 +1,2 @@
-﻿  job_system.cpp
-  main.cpp
-C:\dev\cpp\Crafty\src\main.cpp(298,19): warning C4244: 'argument': conversion from 'time_t' to 'unsigned int', possible loss of data
+﻿  opengl_renderer.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

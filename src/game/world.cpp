@@ -38,7 +38,7 @@ namespace minecraft {
 
     inline static f32 get_noise01(const glm::vec2& sample, f32 one_over_noise_scale)
     {
-        f32 noise = glm::simplex(sample * one_over_noise_scale);
+        f32 noise = glm::perlin(sample * one_over_noise_scale);
         return (noise + 1.0f) / 2.0f;
     }
 
@@ -73,9 +73,9 @@ namespace minecraft {
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
         i32 min_biome_height = 150;
-        i32 max_biome_height = 240;
+        i32 max_biome_height = 200;
 
-        const f32 noise_scale = 256.0f;
+        const f32 noise_scale = 69.0f;
         const f32 one_over_nosie_scale = 1.0f / noise_scale;
 
         const glm::ivec2 front_chunk_coords = { world_coords.x + 0, world_coords.y - 1 };
@@ -629,4 +629,5 @@ namespace minecraft {
     Block World::null_block = { BlockId_Air };
     std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
     std::string World::path;
+    i32 World::seed;
 }

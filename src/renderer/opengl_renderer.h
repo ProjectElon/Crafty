@@ -38,13 +38,6 @@ namespace minecraft {
         glm::vec3 normal;
     };
 
-    struct Opengl_Renderer_Stats
-    {
-        u32 draw_count  = 0;
-        u32 block_count = 0;
-        u32 block_face_count = 0;
-    };
-
     struct Opengl_Renderer_Data
     {
         Platform *platform;
@@ -54,11 +47,7 @@ namespace minecraft {
         u32 uv_buffer_id;
         u32 uv_texture_id;
 
-#ifndef MC_DIST
-        Opengl_Renderer_Stats stats;
         bool should_trace_debug_messsage = true;
-        bool should_print_stats = false;
-#endif
     };
 
     struct Opengl_Renderer

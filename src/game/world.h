@@ -190,6 +190,7 @@ namespace minecraft {
         
         static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
         static std::string path;
+        static i32 seed;
         
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
         {

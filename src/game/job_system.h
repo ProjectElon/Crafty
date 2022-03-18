@@ -1,7 +1,10 @@
 #pragma once
 
 #include "core/common.h"
+
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 namespace minecraft {
 

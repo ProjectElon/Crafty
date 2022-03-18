@@ -12,9 +12,12 @@
 
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_renderer.h"
+#include "renderer/opengl_2d_renderer.h"
 #include "renderer/opengl_debug_renderer.h"
 #include "renderer/camera.h"
 #include "renderer/opengl_texture.h"
+
+#include "memory/free_list.h"
 
 #include "assets/texture_packer.h"
 
@@ -25,11 +28,9 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <time.h>
-#include <thread>
-#include <mutex>
 #include <sstream>
 #include <filesystem>
-#include <queue>
+#include <new>
 
 namespace minecraft {
 
@@ -57,14 +58,6 @@ namespace minecraft {
             Input::toggle_cursor();
             game->config.update_camera = !game->config.update_camera;
         }
-        // just looks sexier you feel me
-
-#ifndef MC_DIST
-        if (key == MC_KEY_L)
-        {
-            Opengl_Renderer::internal_data.should_print_stats = !Opengl_Renderer::internal_data.should_print_stats;
-        }
-#endif
 
         return false;
     }
@@ -117,71 +110,71 @@ namespace minecraft {
         Event_System::parse_char(event, &code_point);
         return false;
     }
+
+    static const i32 chunk_radius = 12;
+    static const i32 chunk_capacity = 4 * (2 + chunk_radius) * (2 + chunk_radius);
+    static minecraft::Free_List<minecraft::Chunk, chunk_capacity> chunk_pool;
+    static std::mutex chunk_pool_mutex;
+
+    struct Load_Chunk_Job alignas(std::hardware_constructive_interference_size)
+    {
+        Chunk *chunk;
+
+        static void execute(void* job_data)
+        {
+            Load_Chunk_Job* data = (Load_Chunk_Job*)job_data;
+            Chunk* chunk = data->chunk;
+
+            std::string chunk_path = World::get_chunk_path(chunk);
+
+            if (!std::filesystem::exists(std::filesystem::path(chunk_path)))
+            {
+                chunk->generate(World::seed);
+            }
+            else
+            {
+                chunk->deserialize();
+            }
+
+            for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+            {
+                Opengl_Renderer::prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
+            }
+
+            chunk->pending = false;
+        }
+    };
+
+    struct Serialize_Chunk_Job alignas(std::hardware_constructive_interference_size)
+    {
+        Chunk *chunk;
+
+        static void execute(void* job_data)
+        {
+            Serialize_Chunk_Job* data = (Serialize_Chunk_Job*)job_data;
+            Chunk* chunk = data->chunk;
+            chunk->serialize();
+            chunk->pending = false;
+        }
+    };
+
+    struct Serialize_And_Free_Chunk_Job alignas(std::hardware_constructive_interference_size)
+    {
+        Chunk *chunk;
+
+        static void execute(void* job_data)
+        {
+            Serialize_And_Free_Chunk_Job* data = (Serialize_And_Free_Chunk_Job*)job_data;
+            Chunk* chunk = data->chunk;
+            chunk->serialize();
+            chunk->pending = false;
+
+            chunk_pool_mutex.lock();
+            chunk_pool.reclame(chunk);
+            chunk_pool_mutex.unlock();
+        }
+    };
 }
-
-struct Load_Chunk_Job
-{
-    i32 seed;
-    minecraft::Chunk *chunk;
-
-    static void execute(void* job_data)
-    {
-        using namespace minecraft;
-
-        Load_Chunk_Job* data = (Load_Chunk_Job*)job_data;
-        i32 seed = data->seed;
-        Chunk* chunk = data->chunk;
-
-        std::string chunk_path = World::get_chunk_path(chunk);
-
-        if (!std::filesystem::exists(std::filesystem::path(chunk_path)))
-        {
-            chunk->generate(seed);
-        }
-        else
-        {
-            chunk->deserialize();
-        }
-
-        for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
-        {
-            Opengl_Renderer::prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
-        }
-
-        chunk->pending = false;
-    }
-};
-
-struct Serialize_And_Free_Chunk_Job
-{
-    minecraft::Chunk *chunk;
-
-    static void execute(void* job_data)
-    {
-        using namespace minecraft;
-
-        Serialize_And_Free_Chunk_Job* data = (Serialize_And_Free_Chunk_Job*)job_data;
-        Chunk* chunk = data->chunk;
-        chunk->serialize();
-        chunk->pending = false;
-        delete chunk;
-    }
-};
-
-struct Serialize_Chunk_Job
-{
-    minecraft::Chunk *chunk;
-
-    static void execute(void* job_data)
-    {
-        using namespace minecraft;
-
-        Serialize_Chunk_Job* data = (Serialize_Chunk_Job*)job_data;
-        Chunk* chunk = data->chunk;
-        chunk->serialize();
-        chunk->pending = false;
-    }
-};
 
 int main()
 {
@@ -198,7 +191,7 @@ int main()
 
     Platform platform = {};
     u32 opengl_major_version = 4;
-    u32 opengl_minor_version = 6;
+    u32 opengl_minor_version = 3;
 
     if (!platform.initialize(&game, opengl_major_version, opengl_minor_version))
     {
@@ -225,6 +218,12 @@ int main()
     if (!Opengl_Renderer::initialize(&platform))
     {
         fprintf(stderr, "[ERROR]: failed to initialize render system\n");
+        return -1;
+    }
+
+    if (!Opengl_2D_Renderer::initialize())
+    {
+        fprintf(stderr, "[ERROR]: failed to initialize 2d renderer system\n");
         return -1;
     }
 
@@ -257,6 +256,9 @@ int main()
     Opengl_Shader line_shader;
     line_shader.load_from_file("../assets/shaders/line.glsl");
 
+    Opengl_Shader ui_shader;
+    ui_shader.load_from_file("../assets/shaders/quad.glsl");
+
 #if 0
     {
         std::vector<std::string> texture_extensions = { ".png" };
@@ -287,30 +289,24 @@ int main()
     std::string meta_file_path = world_path + "/meta";
     FILE* meta_file = fopen(meta_file_path.c_str(), "rb");
 
-    i32 seed;
-
     if (meta_file)
     {
-        fscanf(meta_file, "%d", &seed);
+        fscanf(meta_file, "%d", &World::seed);
     }
     else
     {
-        srand(time(nullptr));
-        seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000000.0f);
+        srand((u32)time(nullptr));
+        World::seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 10000000.0f);
         meta_file = fopen(meta_file_path.c_str(), "wb");
-        fprintf(meta_file, "%d", seed);
+        fprintf(meta_file, "%d", World::seed);
     }
 
     fclose(meta_file);
 
-    i32 chunk_radius = 12;
-    glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-    glm::ivec2 start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
-    glm::ivec2 end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
-
     auto& loaded_chunks = World::loaded_chunks;
+    loaded_chunks.reserve(chunk_capacity);
+    chunk_pool.initialize();
 
-    u32 work_queue_index = 0;
     f32 frame_timer = 0;
     u32 frames_per_second = 0;
 
@@ -337,24 +333,23 @@ int main()
             camera.update(delta_time);
         }
 
-        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        start = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
-        end = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
+        glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+        glm::ivec2 region_min_coords = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
+        glm::ivec2 region_max_coords = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
 
-        for (i32 z = start.y; z <= end.y; ++z)
+        for (i32 z = region_min_coords.y; z <= region_max_coords.y; ++z)
         {
-            for (i32 x = start.x; x <= end.x; ++x)
+            for (i32 x = region_min_coords.x; x <= region_max_coords.x; ++x)
             {
                 glm::ivec2 chunk_coords = { x, z };
                 auto it = loaded_chunks.find(chunk_coords);
                 if (it == loaded_chunks.end())
                 {
-                    Chunk* chunk = new Chunk;
+                    Chunk* chunk = chunk_pool.allocate();
                     chunk->initialize(chunk_coords);
                     loaded_chunks.emplace(chunk_coords, chunk);
 
                     Load_Chunk_Job load_chunk_job;
-                    load_chunk_job.seed  = seed;
                     load_chunk_job.chunk = chunk;
                     Job_System::schedule(load_chunk_job);
                 }
@@ -372,6 +367,7 @@ int main()
         for (u32 i = 0; i < max_block_select_dist_in_cube_units * 10; i++)
         {
             Block_Query_Result query_result = World::query_block(query_position);
+
             if (query_result.chunk && query_result.block && query_result.block->id != BlockId_Air)
             {
                 selected_chunk = query_result.chunk;
@@ -381,12 +377,13 @@ int main()
                 selected_block_position = block_position;
                 break;
             }
+
             query_position += camera.forward * 0.1f;
         }
 
         if (selected_block)
         {
-            Opengl_Debug_Renderer::draw_cube(selected_block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+            Opengl_Debug_Renderer::draw_cube(selected_block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
             Ray ray   = { camera.position, camera.forward };
             AABB aabb = { selected_block_position - glm::vec3(0.5f, 0.5f, 0.5f), selected_block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
@@ -432,8 +429,12 @@ int main()
                 Chunk* block_to_place_chunk = block_facing_normal_query_result.chunk;
                 Block* block_to_place = block_facing_normal_query_result.block;
                 const glm::ivec3& block_to_place_coords = block_facing_normal_query_result.block_coords;
-
-                if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && block_to_place->id == BlockId_Air)
+                bool is_valid_block_to_place = block_to_place_chunk != nullptr &&
+                                               block_to_place != nullptr &&
+                                               block_to_place_coords.y >= 0 &&
+                                               block_to_place_coords.y < MC_CHUNK_HEIGHT &&
+                                               block_to_place->id == BlockId_Air;
+                if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
                 {
                     World::set_block_id(block_to_place_chunk, block_to_place_coords, BlockId_Sand);
                 }
@@ -452,9 +453,9 @@ int main()
 
         Opengl_Renderer::begin(clear_color, &camera, &chunk_shader);
 
-        for (i32 z = start.y; z <= end.y; ++z)
+        for (i32 z = region_min_coords.y; z <= region_max_coords.y; ++z)
         {
-            for (i32 x = start.x; x <= end.x; ++x)
+            for (i32 x = region_min_coords.x; x <= region_max_coords.x; ++x)
             {
                 glm::ivec2 chunk_coords = { x, z };
                 auto it = loaded_chunks.find(chunk_coords);
@@ -488,6 +489,11 @@ int main()
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
 
+        f32 ortho_size = 10.0f;
+        Opengl_2D_Renderer::begin(ortho_size, camera.aspect_ratio, &ui_shader);
+        Opengl_2D_Renderer::draw_rect({ 0.0f, 0.0f }, { 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f, 1.0f });
+        Opengl_2D_Renderer::end();
+
         Opengl_Renderer::end();
 
         for (auto it = loaded_chunks.begin(); it != loaded_chunks.end();)
@@ -495,10 +501,10 @@ int main()
             auto chunk_coords = it->first;
             Chunk* chunk = it->second;
 
-            bool outside_range = chunk_coords.x < start.x - 1 ||
-                                 chunk_coords.x > end.x + 1   ||
-                                 chunk_coords.y < start.y - 1 ||
-                                 chunk_coords.y > end.y + 1;
+            bool outside_range = chunk_coords.x < region_min_coords.x - 1 ||
+                                 chunk_coords.x > region_max_coords.x + 1 ||
+                                 chunk_coords.y < region_min_coords.y - 1 ||
+                                 chunk_coords.y > region_max_coords.y + 1;
 
             if (!chunk->pending && chunk->loaded && outside_range)
             {
@@ -513,6 +519,7 @@ int main()
                 }
 
                 chunk->pending = true;
+
                 Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
                 serialize_and_free_chunk_job.chunk = chunk;
                 Job_System::schedule(serialize_and_free_chunk_job);
@@ -531,8 +538,11 @@ int main()
     for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
     {
         Chunk *chunk = it->second;
+        chunk->pending = true;
+
         Serialize_Chunk_Job serialize_chunk_job;
         serialize_chunk_job.chunk = chunk;
+
         Job_System::schedule(serialize_chunk_job);
     }
 
