@@ -3,10 +3,12 @@
 #include "core/common.h"
 #include "core/event.h"
 
-#include <glm/glm.hpp>
-
 #include "opengl_texture.h"
 #include "game/world.h"
+
+#include <glm/glm.hpp>
+#include <vector>
+#include <mutex>
 
 namespace minecraft {
 
@@ -38,14 +40,37 @@ namespace minecraft {
         glm::vec3 normal;
     };
 
+    struct Draw_Elements_Indirect_Command
+    {
+        u32 count;
+        u32 instanceCount;
+        u32 firstIndex;
+        u32 baseVertex;
+        u32 baseInstance;
+    };
+
     struct Opengl_Renderer_Data
     {
         Platform *platform;
+
+        u32 chunk_vertex_array_id;
+        u32 chunk_vertex_buffer_id;
+        u32 chunk_instance_buffer_id;
         u32 chunk_index_buffer_id;
+
+        Sub_Chunk_Vertex *base_vertex;
+        Sub_Chunk_Instance *base_instance;
+
+        std::mutex free_sub_chunks_mutex;
+        std::vector<u32> free_sub_chunks;
 
         Opengl_Texture block_sprite_sheet;
         u32 uv_buffer_id;
         u32 uv_texture_id;
+
+        u32 command_count;
+        Draw_Elements_Indirect_Command command_buffer[World::sub_chunk_capacity];
+        u32 command_buffer_id;
 
         bool should_trace_debug_messsage = true;
     };
@@ -76,9 +101,7 @@ namespace minecraft {
 
         static void free_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
 
-        static void prepare_sub_chunk_for_rendering(Chunk *chunk, u32 sub_chunk_index);
         static void upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index);
-
         static void update_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
 
         static void begin(
@@ -89,5 +112,7 @@ namespace minecraft {
         static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader);
         
         static void end();
+
+        static void swap_buffers();
     };
 }

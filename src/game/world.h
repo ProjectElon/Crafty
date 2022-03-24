@@ -3,9 +3,11 @@
 #include "core/common.h"
 
 #include "meta/spritesheet_meta.h"
+#include "memory/free_list.h"
 
 #include <glm/glm.hpp>
 
+#include <mutex>
 #include <algorithm>
 #include <unordered_map> // todo(harlequin): containers
 
@@ -13,9 +15,15 @@
 #define MC_CHUNK_DEPTH  16
 #define MC_CHUNK_WIDTH  16
 
-#define MC_BLOCK_COUNT_PER_CHUNK  MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
-#define MC_VERTEX_COUNT_PER_CHUNK MC_BLOCK_COUNT_PER_CHUNK * 24
-#define MC_INDEX_COUNT_PER_CHUNK  MC_BLOCK_COUNT_PER_CHUNK * 36
+#define MC_BLOCK_COUNT_PER_CHUNK MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
+#define MC_INDEX_COUNT_PER_CHUNK MC_BLOCK_COUNT_PER_CHUNK * 36
+
+#define MC_SUB_CHUNK_HEIGHT 8
+#define MC_BLOCK_COUNT_PER_SUB_CHUNK  MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_SUB_CHUNK_HEIGHT
+#define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
+#define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
+
+#define MC_SUB_CHUNK_VERTEX_COUNT 2048
 
 namespace minecraft {
 
@@ -100,22 +108,28 @@ namespace minecraft {
         u16 id;
     };
 
-    struct Vertex
+    struct Sub_Chunk_Vertex
     {
         u32 data0;
         u32 data1;
     };
 
+    struct Sub_Chunk_Instance
+    {
+        glm::ivec2 chunk_coords;
+    };
+
     struct Sub_Chunk_Render_Data
     {
-        Vertex vertices[MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * 16];
-        u32 vertex_count;
-        u32 face_count;
+        Sub_Chunk_Vertex vertices[MC_SUB_CHUNK_VERTEX_COUNT];
 
-        u32 vertex_array_id;
-        u32 vertex_buffer_id;
+        i32 vertex_count;
+        i32 face_count;
 
-        bool ready_for_upload;
+        i32 id;
+        Sub_Chunk_Vertex   *base_vertex;
+        Sub_Chunk_Instance *base_instance;
+
         bool uploaded_to_gpu;
     };
 
@@ -133,7 +147,7 @@ namespace minecraft {
         Block left_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
         Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
 
-        Sub_Chunk_Render_Data sub_chunks_render_data[16];
+        Sub_Chunk_Render_Data sub_chunks_render_data[MC_CHUNK_HEIGHT / MC_SUB_CHUNK_HEIGHT];
 
         bool initialize(const glm::ivec2 &world_coords);
 
@@ -145,12 +159,6 @@ namespace minecraft {
         inline i32 get_block_index(const glm::ivec3& block_coords) const
         {
             return block_coords.y * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH + block_coords.z * MC_CHUNK_WIDTH + block_coords.x;
-        }
-
-        inline i32 set_block_id(const glm::ivec3& block_coords, BlockId id)
-        {
-            Block *block = get_block(block_coords);
-            block->id = id;
         }
 
         inline glm::vec3 get_block_position(const glm::ivec3& block_coords) const
@@ -191,7 +199,20 @@ namespace minecraft {
         static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
         static std::string path;
         static i32 seed;
-        
+
+        static constexpr i64 sub_chunk_height = MC_SUB_CHUNK_HEIGHT;
+        static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
+
+        static constexpr i64 chunk_radius = 12;
+        static constexpr i64 chunk_capacity = 4 * (chunk_radius + 2) * (chunk_radius + 2);
+
+        static constexpr i64 sub_chunk_capacity = sub_chunk_count_per_chunk * chunk_capacity;
+        static constexpr i64 max_vertex_count_per_sub_chunk = MC_SUB_CHUNK_VERTEX_COUNT;
+        static constexpr i64 sub_chunk_size = sizeof(Sub_Chunk_Vertex) * max_vertex_count_per_sub_chunk;
+
+        static std::mutex chunk_pool_mutex;
+        static minecraft::Free_List<minecraft::Chunk, chunk_capacity> chunk_pool;
+
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
         {
             const f32 one_over_16 = 1.0f / 16.0f;
@@ -244,9 +265,9 @@ namespace minecraft {
             return { block_coords, &World::null_block, nullptr };
         }
 
-        static inline u32 get_sub_chunk_index(glm::ivec3& block_coords)
+        static inline i32 get_sub_chunk_index(const glm::ivec3& block_coords)
         {
-            return block_coords.y / 16;
+            return block_coords.y / sub_chunk_height;
         }
 
         static Block_Query_Result get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords);

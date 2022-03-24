@@ -63,5 +63,14 @@ namespace minecraft {
         if (internal_data.job_queue_index == internal_data.thread_count) internal_data.job_queue_index = 0;
     }
 
+    void Job_System::wait_for_jobs_to_finish()
+    {
+        for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
+        {
+            Job_Queue &queue = internal_data.queues[queue_index];
+            while (queue.job_index != queue.tail_job_index);
+        }
+    }
+
     Job_System_Data Job_System::internal_data;
 }

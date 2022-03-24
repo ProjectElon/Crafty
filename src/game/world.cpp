@@ -10,16 +10,19 @@ namespace minecraft {
         this->world_coords = world_coords;
         this->position = { world_coords.x * MC_CHUNK_WIDTH, 0.0f, world_coords.y * MC_CHUNK_DEPTH };
 
-        for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+        for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
         {
             Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
 
+            render_data.id = -1;
+            memset(render_data.vertices, 0, sizeof(Sub_Chunk_Vertex) * MC_SUB_CHUNK_VERTEX_COUNT);
+
             render_data.vertex_count = 0;
             render_data.face_count   = 0;
-            render_data.vertex_array_id  = 0;
-            render_data.vertex_buffer_id = 0;
 
-            render_data.ready_for_upload = false;
+            render_data.base_vertex   = NULL;
+            render_data.base_instance = NULL;
+
             render_data.uploaded_to_gpu  = false;
         }
 
@@ -172,6 +175,9 @@ namespace minecraft {
     {
         std::string path = World::get_chunk_path(this);
         FILE *file = fopen(path.c_str(), "wb");
+        while (file == 0) {
+            file = fopen(path.c_str(), "wb");
+        }
         assert(file);
         fwrite(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
         fwrite(front_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
@@ -276,7 +282,7 @@ namespace minecraft {
         Block *block = chunk->get_block(block_coords);
         block->id = block_id;
 
-        u32 sub_chunk_index = block_coords.y / 16;
+        u32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
         Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
 
         if (block_coords.x == 0)
@@ -309,8 +315,8 @@ namespace minecraft {
             Opengl_Renderer::update_sub_chunk(back_chunk, sub_chunk_index);
         }
 
-        i32 sub_chunk_start_y = sub_chunk_index * 16;
-        i32 sub_chunk_end_y = (sub_chunk_index + 1) * 16 - 1;
+        i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_count_per_chunk;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_count_per_chunk - 1;
 
         if (block_coords.y == sub_chunk_end_y && block_coords.y != 255)
         {
@@ -321,7 +327,6 @@ namespace minecraft {
             Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index - 1);
         }
     }
-
 
     Block_Query_Result World::get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords)
     {
@@ -630,4 +635,7 @@ namespace minecraft {
     std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
     std::string World::path;
     i32 World::seed;
+
+    std::mutex World::chunk_pool_mutex;
+    minecraft::Free_List<minecraft::Chunk, World::chunk_capacity> World::chunk_pool;
 }

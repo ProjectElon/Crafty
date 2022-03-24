@@ -17,8 +17,6 @@
 #include "renderer/camera.h"
 #include "renderer/opengl_texture.h"
 
-#include "memory/free_list.h"
-
 #include "assets/texture_packer.h"
 
 #include "containers/string.h"
@@ -111,11 +109,6 @@ namespace minecraft {
         return false;
     }
 
-    static const i32 chunk_radius = 12;
-    static const i32 chunk_capacity = 4 * (2 + chunk_radius) * (2 + chunk_radius);
-    static minecraft::Free_List<minecraft::Chunk, chunk_capacity> chunk_pool;
-    static std::mutex chunk_pool_mutex;
-
     struct Load_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk *chunk;
@@ -136,9 +129,9 @@ namespace minecraft {
                 chunk->deserialize();
             }
 
-            for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+            for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
             {
-                Opengl_Renderer::prepare_sub_chunk_for_rendering(chunk, sub_chunk_index);
+                Opengl_Renderer::upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
             }
 
             chunk->pending = false;
@@ -169,9 +162,9 @@ namespace minecraft {
             chunk->serialize();
             chunk->pending = false;
 
-            chunk_pool_mutex.lock();
-            chunk_pool.reclame(chunk);
-            chunk_pool_mutex.unlock();
+            World::chunk_pool_mutex.lock();
+            World::chunk_pool.reclame(chunk);
+            World::chunk_pool_mutex.unlock();
         }
     };
 }
@@ -191,7 +184,7 @@ int main()
 
     Platform platform = {};
     u32 opengl_major_version = 4;
-    u32 opengl_minor_version = 3;
+    u32 opengl_minor_version = 4;
 
     if (!platform.initialize(&game, opengl_major_version, opengl_minor_version))
     {
@@ -239,6 +232,10 @@ int main()
         return -1;
     }
 
+    // setting the max number of open files using fopen
+    i32 new_max = _setmaxstdio(8192);
+    assert(new_max == 8192);
+
     Event_System::register_event(EventType_Quit, on_quit, &game);
     Event_System::register_event(EventType_KeyPress, on_key_press, &game);
     Event_System::register_event(EventType_Char, on_char, &game);
@@ -258,6 +255,12 @@ int main()
 
     Opengl_Shader ui_shader;
     ui_shader.load_from_file("../assets/shaders/quad.glsl");
+
+    Opengl_Texture crosshair001_texture;
+    crosshair001_texture.load_from_file("../assets/textures/crosshair/crosshair001.png");
+
+    Opengl_Texture crosshair022_texture;
+    crosshair022_texture.load_from_file("../assets/textures/crosshair/crosshair022.png");
 
 #if 0
     {
@@ -296,7 +299,7 @@ int main()
     else
     {
         srand((u32)time(nullptr));
-        World::seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 10000000.0f);
+        World::seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 10000.0f);
         meta_file = fopen(meta_file_path.c_str(), "wb");
         fprintf(meta_file, "%d", World::seed);
     }
@@ -304,8 +307,9 @@ int main()
     fclose(meta_file);
 
     auto& loaded_chunks = World::loaded_chunks;
-    loaded_chunks.reserve(chunk_capacity);
-    chunk_pool.initialize();
+    loaded_chunks.reserve(World::chunk_capacity);
+
+    World::chunk_pool.initialize();
 
     f32 frame_timer = 0;
     u32 frames_per_second = 0;
@@ -334,8 +338,8 @@ int main()
         }
 
         glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        glm::ivec2 region_min_coords = player_chunk_coords - glm::ivec2(chunk_radius, chunk_radius);
-        glm::ivec2 region_max_coords = player_chunk_coords + glm::ivec2(chunk_radius, chunk_radius);
+        glm::ivec2 region_min_coords = player_chunk_coords - glm::ivec2(World::chunk_radius, World::chunk_radius);
+        glm::ivec2 region_max_coords = player_chunk_coords + glm::ivec2(World::chunk_radius, World::chunk_radius);
 
         for (i32 z = region_min_coords.y; z <= region_max_coords.y; ++z)
         {
@@ -345,7 +349,10 @@ int main()
                 auto it = loaded_chunks.find(chunk_coords);
                 if (it == loaded_chunks.end())
                 {
-                    Chunk* chunk = chunk_pool.allocate();
+                    World::chunk_pool_mutex.lock();
+                    Chunk* chunk = World::chunk_pool.allocate();
+                    World::chunk_pool_mutex.unlock();
+
                     chunk->initialize(chunk_coords);
                     loaded_chunks.emplace(chunk_coords, chunk);
 
@@ -393,38 +400,46 @@ int main()
             if (ray_cast_result.hit)
             {
                 glm::vec3 p = selected_block_position;
-                Opengl_Debug_Renderer::draw_cube(ray_cast_result.point, { 0.05f, 0.05f, 0.05f }, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+                glm::vec4 debug_cube_color;
 
                 if (glm::epsilonEqual(ray_cast_result.point.y, selected_block_position.y + 0.5f, glm::epsilon<f32>())) // top face
                 {
+                    debug_cube_color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_top(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.5f, 0.0f), p + glm::vec3(0.0f, 1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
                 }
                 else if (glm::epsilonEqual(ray_cast_result.point.y, selected_block_position.y - 0.5f, glm::epsilon<f32>())) // bottom face
                 {
+                    debug_cube_color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_bottom(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, -0.5f, 0.0f), p + glm::vec3(0.0f, -1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
                 }
                 else if (glm::epsilonEqual(ray_cast_result.point.x, selected_block_position.x + 0.5f, glm::epsilon<f32>())) // right face
                 {
+                    debug_cube_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_right(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.5f, 0.0f, 0.0f), p + glm::vec3(1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
                 }
                 else if (glm::epsilonEqual(ray_cast_result.point.x, selected_block_position.x - 0.5f, glm::epsilon<f32>())) // left face
                 {
+                    debug_cube_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_left(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(-0.5f, 0.0f, 0.0f), p + glm::vec3(-1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
                 }
                 else if (glm::epsilonEqual(ray_cast_result.point.z, selected_block_position.z - 0.5f, glm::epsilon<f32>())) // front face
                 {
+                    debug_cube_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_front(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.0f, -0.5f), p + glm::vec3(0.0f, 0.0f, -1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
                 }
                 else if (glm::epsilonEqual(ray_cast_result.point.z, selected_block_position.z + 0.5f, glm::epsilon<f32>())) // back face
                 {
+                    debug_cube_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
                     block_facing_normal_query_result = World::get_neighbour_block_from_back(selected_chunk, selected_block_coords);
                     Opengl_Debug_Renderer::draw_line(p + glm::vec3(0.0f, 0.0f, 0.5f), p + glm::vec3(0.0f, 0.0f, 1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
                 }
+
+                Opengl_Debug_Renderer::draw_cube(ray_cast_result.point, { 0.05f, 0.05f, 0.05f }, debug_cube_color);
 
                 Chunk* block_to_place_chunk = block_facing_normal_query_result.chunk;
                 Block* block_to_place = block_facing_normal_query_result.block;
@@ -448,6 +463,7 @@ int main()
 
         f32 color_factor = 1.0f / 255.0f;
         glm::vec3 sky_color = { 135, 206, 235 };
+
         sky_color *= color_factor;
         glm::vec4 clear_color(sky_color.r, sky_color.g, sky_color.b, 1.0f);
 
@@ -464,19 +480,14 @@ int main()
 
                 if (!chunk->pending && chunk->loaded)
                 {
-                    for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+                    for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                     {
                         Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-                        if (render_data.ready_for_upload)
+                        if (render_data.uploaded_to_gpu)
                         {
                             if (render_data.vertex_count > 0)
                             {
-                                if (!render_data.uploaded_to_gpu)
-                                {
-                                    Opengl_Renderer::upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
-                                }
-
                                 Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
                             }
                         }
@@ -485,16 +496,18 @@ int main()
             }
         }
 
+        Opengl_Renderer::end();
+
         f32 line_thickness = 3.5f;
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
 
         f32 ortho_size = 10.0f;
         Opengl_2D_Renderer::begin(ortho_size, camera.aspect_ratio, &ui_shader);
-        Opengl_2D_Renderer::draw_rect({ 0.0f, 0.0f }, { 0.1f, 0.1f }, { 0.0f, 0.0f, 0.0f, 1.0f });
+        Opengl_2D_Renderer::draw_rect({ 0.0f, 0.0f }, { 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, &crosshair022_texture);
         Opengl_2D_Renderer::end();
 
-        Opengl_Renderer::end();
+        Opengl_Renderer::swap_buffers();
 
         for (auto it = loaded_chunks.begin(); it != loaded_chunks.end();)
         {
@@ -508,7 +521,7 @@ int main()
 
             if (!chunk->pending && chunk->loaded && outside_range)
             {
-                for (i32 sub_chunk_index = 0; sub_chunk_index < 16; ++sub_chunk_index)
+                for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                 {
                     Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 

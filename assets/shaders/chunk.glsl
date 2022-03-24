@@ -5,6 +5,8 @@
 layout (location = 0) in uint in_data0;
 layout (location = 1) in uint in_data1;
 
+layout (location = 2) in ivec2 instance_chunk_coords;
+
 out vec2 a_uv;
 out flat uint a_data0;
 out vec4 a_biome_color;
@@ -14,7 +16,6 @@ uniform mat4 u_view;
 uniform mat4 u_projection;
 
 uniform vec3 u_camera_position;
-uniform vec3 u_chunk_position;
 
 #define BLOCK_X_MASK 15
 #define BLOCK_Y_MASK 255
@@ -50,6 +51,9 @@ uniform samplerBuffer u_uvs;
 #define BlockFlags_Should_Color_Side_By_Biome 8
 #define BlockFlags_Should_Color_Bottom_By_Biome 16
 
+#define CHUNK_WIDTH 16
+#define CHUNK_DEPTH 16
+
 const float fog_density = 0.007f;
 const float fog_gradient = 0.9f;
 
@@ -64,7 +68,7 @@ void main()
     // uint face_corner_id = (in_data0 >> 22) & FACE_CORNER_ID_MASK;
     uint flags = in_data0 >> 24;
 
-    vec3 position = u_chunk_position + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
+    vec3 position = vec3(instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
     gl_Position = u_projection * u_view * vec4(position, 1.0f);
 
     float distance_relative_to_camera = length(u_camera_position - position);

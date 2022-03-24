@@ -1,2 +1,7 @@
-﻿  main.cpp
+﻿  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(138,68): warning C4244: '=': conversion from 'i64' to '_Ty', possible loss of data
+          with
+          [
+              _Ty=u32
+          ]
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

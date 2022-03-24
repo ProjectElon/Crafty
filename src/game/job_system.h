@@ -9,7 +9,7 @@
 namespace minecraft {
 
     #define MC_MAX_THREAD_COUNT 64
-    #define MC_MAX_JOB_COUNT_PER_PATCH 512
+    #define MC_MAX_JOB_COUNT_PER_PATCH 4096
 
     struct Job
     {
@@ -60,5 +60,7 @@ namespace minecraft {
             job_data_index++;
             if (job_data_index == MC_MAX_THREAD_COUNT * MC_MAX_JOB_COUNT_PER_PATCH) job_data_index = 0;
         }
+
+        static void wait_for_jobs_to_finish();
     };
 }

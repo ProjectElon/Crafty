@@ -10,6 +10,7 @@ namespace minecraft {
     struct Quad_Vertex
     {
         glm::vec2 position;
+        glm::vec2 texture_coords;
     };
 
     struct Quad_Instance
@@ -17,6 +18,9 @@ namespace minecraft {
         glm::vec2 position;
         glm::vec2 scale;
         glm::vec4 color;
+        i32 texture_index;
+        glm::vec2 uv_scale;
+        glm::vec2 uv_offset;
     };
 
     struct Opengl_2D_Renderer_Data
@@ -31,11 +35,15 @@ namespace minecraft {
         Quad_Vertex quad_vertices[4];
         u16 quad_indicies[6];
 
+        i32 samplers[32];
+        i32 texture_slots[32];
+
         u32 instance_count_per_patch = 65536;
         std::vector<Quad_Instance> quad_instances;
     };
 
     struct Opengl_Shader;
+    struct Opengl_Texture;
 
     struct Opengl_2D_Renderer
     {
@@ -45,7 +53,14 @@ namespace minecraft {
         static void shutdown();
 
         static void begin(f32 ortho_size, f32 aspect_radio, Opengl_Shader *shader);
-        static void draw_rect(const glm::vec2& position, const glm::vec2& scale, const glm::vec4& color);
+
+        static void draw_rect(const glm::vec2& position,
+                              const glm::vec2& scale,
+                              const glm::vec4& color,
+                              Opengl_Texture *texture,
+                              const glm::vec2& uv_scale = { 1.0f, 1.0f },
+                              const glm::vec2& uv_offset = { 0.0f, 0.0f });
+
         static void end();
     };
 }

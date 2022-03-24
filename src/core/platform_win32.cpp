@@ -129,7 +129,7 @@ namespace minecraft {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        glfwWindowHint(GLFW_SAMPLES, 16);
+        glfwWindowHint(GLFW_SAMPLES, 16); // msaa
 
         window_handle = glfwCreateWindow(game->config.window_width,
                                          game->config.window_height,

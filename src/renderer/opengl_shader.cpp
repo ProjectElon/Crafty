@@ -118,6 +118,12 @@ namespace minecraft {
         glUniform1i(location, value);
     }
 
+    void Opengl_Shader::set_uniform_i32_array(const char *uniform_name, i32* values, u32 count)
+    {
+        i32 location = get_uniform_location(uniform_name);
+        glUniform1iv(location, count, values);
+    }
+
     void Opengl_Shader::set_uniform_f32(const char *uniform_name, float value)
     {
         i32 location = get_uniform_location(uniform_name);
