@@ -1,7 +1,14 @@
 #include "world.h"
 #include "renderer/opengl_renderer.h"
+#include "game/job_system.h"
+#include "game/jobs.h"
+
 #include <glm/gtc/noise.hpp>
+#include <time.h>
 #include <sstream>
+#include <filesystem>
+#include <errno.h>
+#include <new>
 
 namespace minecraft {
 
@@ -14,20 +21,21 @@ namespace minecraft {
         {
             Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
 
-            render_data.id = -1;
             memset(render_data.vertices, 0, sizeof(Sub_Chunk_Vertex) * MC_SUB_CHUNK_VERTEX_COUNT);
-
-            render_data.vertex_count = 0;
-            render_data.face_count   = 0;
-
-            render_data.base_vertex   = NULL;
-            render_data.base_instance = NULL;
-
-            render_data.uploaded_to_gpu  = false;
+            render_data.memory_id       = -1;
+            render_data.vertex_count    = 0;
+            render_data.face_count      = 0;
+            render_data.base_vertex     = nullptr;
+            render_data.base_instance   = nullptr;
+            render_data.uploaded_to_gpu = false;
         }
 
         this->loaded  = false;
         this->pending = true;
+
+        std::stringstream ss;
+        ss << World::path << "/(" << this->world_coords.x << "," << this->world_coords.y << ").chunk";
+        this->file_path = ss.str();
 
         return true;
     }
@@ -76,7 +84,7 @@ namespace minecraft {
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
         i32 min_biome_height = 150;
-        i32 max_biome_height = 200;
+        i32 max_biome_height = 255;
 
         const f32 noise_scale = 69.0f;
         const f32 one_over_nosie_scale = 1.0f / noise_scale;
@@ -173,12 +181,13 @@ namespace minecraft {
 
     void Chunk::serialize()
     {
-        std::string path = World::get_chunk_path(this);
-        FILE *file = fopen(path.c_str(), "wb");
-        while (file == 0) {
-            file = fopen(path.c_str(), "wb");
+        FILE *file = fopen(file_path.c_str(), "wb");
+        if (file == NULL)
+        {
+            fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", file_path.c_str(), strerror(errno));
+            return;
         }
-        assert(file);
+        assert(this->loaded);
         fwrite(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
         fwrite(front_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
         fwrite(back_edge_blocks,  sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
@@ -189,9 +198,13 @@ namespace minecraft {
 
     void Chunk::deserialize()
     {
-        std::string path = World::get_chunk_path(this);
-        FILE *file = fopen(path.c_str(), "rb");
-        assert(file);
+        FILE *file = fopen(file_path.c_str(), "rb");
+        if (file == NULL)
+        {
+            fprintf(stderr, "[ERROR]: failed to open file %s for reading: %s\n", file_path.c_str(), strerror(errno));
+            return;
+        }
+        assert(!this->loaded);
         fread(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
         fread(front_edge_blocks, sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
         fread(back_edge_blocks,  sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
@@ -268,13 +281,142 @@ namespace minecraft {
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
-
-    std::string World::get_chunk_path(Chunk *chunk)
+    bool World::initialize(const std::string& world_path)
     {
-        std::stringstream ss;
-        ss << World::path << "/" << chunk->world_coords.x << " - " << chunk->world_coords.y;
-        std::string s = ss.str();
-        return s;
+        namespace fs = std::filesystem;
+
+        if (!fs::exists(fs::path(world_path)))
+        {
+            fs::create_directories(fs::path(world_path));
+        }
+
+        World::path = world_path;
+        std::string meta_file_path = world_path + "/meta";
+        FILE* meta_file = fopen(meta_file_path.c_str(), "rb");
+
+        if (meta_file)
+        {
+            fscanf(meta_file, "%d", &World::seed);
+        }
+        else
+        {
+            srand((u32)time(nullptr));
+            World::seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000000.0f);
+            meta_file = fopen(meta_file_path.c_str(), "wb");
+            fprintf(meta_file, "%d", World::seed);
+        }
+
+        fclose(meta_file);
+
+        // todo(harlequin): do more testing on the std::unordered_map or replace it at some point
+        loaded_chunks.reserve(2 * World::chunk_capacity);
+        loaded_chunks.max_load_factor(0.25);
+
+        chunk_pool.initialize();
+
+        return true;
+    }
+
+    Block_Query_Result World::select_block(const glm::vec3& view_position,
+                                           const glm::vec3& view_direction,
+                                           u32 max_block_select_dist_in_cube_units,
+                                           Ray_Cast_Result *out_ray_cast_result)
+    {
+        Block_Query_Result result;
+        result.chunk = nullptr;
+        result.block = nullptr;
+        result.block_coords = { -1, -1, -1 };
+
+        glm::vec3 query_position = view_position + 0.1f;
+
+        for (u32 i = 0; i < max_block_select_dist_in_cube_units * 10; i++)
+        {
+            Block_Query_Result query = World::query_block(query_position);
+
+            if (query.chunk && query.block && query.block->id != BlockId_Air)
+            {
+                glm::vec3 block_position = query.chunk->get_block_position(query.block_coords);
+                Ray ray   = { view_position, view_direction };
+                AABB aabb = { block_position - glm::vec3(0.5f, 0.5f, 0.5f), block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
+                Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb);
+
+                if (ray_cast_result.hit)
+                {
+                    result = query;
+                    if (out_ray_cast_result) *out_ray_cast_result = ray_cast_result;
+                    break;
+                }
+            }
+
+            query_position += view_direction * 0.1f;
+        }
+
+        return result;
+    }
+
+    void World::load_chunks_at_region(const World_Region_Bounds& region_bounds)
+    {
+        for (i32 z = region_bounds.min.y; z <= region_bounds.max.y; ++z)
+        {
+            for (i32 x = region_bounds.min.x; x <= region_bounds.max.x; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+
+                if (it == loaded_chunks.end())
+                {
+                    chunk_pool_mutex.lock();
+                    Chunk* chunk = chunk_pool.allocate();
+                    chunk_pool_mutex.unlock();
+
+                    chunk->initialize(chunk_coords);
+                    loaded_chunks.emplace(chunk_coords, chunk);
+
+                    Load_Chunk_Job load_chunk_job;
+                    load_chunk_job.chunk = chunk;
+                    Job_System::schedule(load_chunk_job);
+                }
+            }
+        }
+    }
+
+    void World::free_chunks_out_of_region(const World_Region_Bounds& region_bounds)
+    {
+        for (auto it = loaded_chunks.begin(); it != loaded_chunks.end();)
+        {
+            auto chunk_coords = it->first;
+            Chunk* chunk = it->second;
+
+            bool out_of_bounds = chunk_coords.x < region_bounds.min.x - 1 ||
+                                 chunk_coords.x > region_bounds.max.x + 1 ||
+                                 chunk_coords.y < region_bounds.min.y - 1 ||
+                                 chunk_coords.y > region_bounds.max.y + 1;
+
+            if (!chunk->pending && chunk->loaded && out_of_bounds)
+            {
+                for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+                {
+                    Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+                    if (render_data.uploaded_to_gpu)
+                    {
+                        Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
+                    }
+                }
+
+                chunk->pending = true;
+
+                Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
+                serialize_and_free_chunk_job.chunk = chunk;
+                Job_System::schedule(serialize_and_free_chunk_job);
+
+                it = loaded_chunks.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
     void World::set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id)
@@ -282,7 +424,7 @@ namespace minecraft {
         Block *block = chunk->get_block(block_coords);
         block->id = block_id;
 
-        u32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
+        i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
         Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
 
         if (block_coords.x == 0)
@@ -315,14 +457,14 @@ namespace minecraft {
             Opengl_Renderer::update_sub_chunk(back_chunk, sub_chunk_index);
         }
 
-        i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_count_per_chunk;
-        i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_count_per_chunk - 1;
+        i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height - 1;
 
-        if (block_coords.y == sub_chunk_end_y && block_coords.y != 255)
+        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != World::sub_chunk_count_per_chunk - 1)
         {
             Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index + 1);
         }
-        else if (block_coords.y == sub_chunk_start_y && block_coords.y != 0)
+        else if (block_coords.y == sub_chunk_start_y && sub_chunk_index != 0)
         {
             Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index - 1);
         }
@@ -632,10 +774,12 @@ namespace minecraft {
     };
 
     Block World::null_block = { BlockId_Air };
+
     std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
     std::string World::path;
     i32 World::seed;
 
     std::mutex World::chunk_pool_mutex;
-    minecraft::Free_List<minecraft::Chunk, World::chunk_capacity> World::chunk_pool;
+    Free_List<Chunk, World::chunk_capacity> World::chunk_pool;
+    i64 World::chunk_radius = 12;
 }

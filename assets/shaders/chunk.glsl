@@ -10,11 +10,11 @@ layout (location = 2) in ivec2 instance_chunk_coords;
 out vec2 a_uv;
 out flat uint a_data0;
 out vec4 a_biome_color;
-out float a_visibility;
+out float a_fog_factor;
 
 uniform mat4 u_view;
 uniform mat4 u_projection;
-
+uniform float u_chunk_radius;
 uniform vec3 u_camera_position;
 
 #define BLOCK_X_MASK 15
@@ -54,9 +54,6 @@ uniform samplerBuffer u_uvs;
 #define CHUNK_WIDTH 16
 #define CHUNK_DEPTH 16
 
-const float fog_density = 0.007f;
-const float fog_gradient = 0.9f;
-
 void main()
 {
     uint block_x = in_data0 & BLOCK_X_MASK;
@@ -72,8 +69,7 @@ void main()
     gl_Position = u_projection * u_view * vec4(position, 1.0f);
 
     float distance_relative_to_camera = length(u_camera_position - position);
-    a_visibility = exp(-pow(distance_relative_to_camera * fog_density, fog_gradient));
-    a_visibility = clamp(a_visibility, 0.0f, 1.0f);
+    a_fog_factor = clamp(distance_relative_to_camera / (u_chunk_radius * 16.0f), 0.0f, 1.0f);
 
     int uv_index = int(in_data1);
     float u = texelFetch(u_uvs, uv_index).r;
@@ -123,7 +119,7 @@ layout (location = 0) out vec4 out_color;
 in vec2 a_uv;
 in flat uint a_data0;
 in vec4 a_biome_color;
-in float a_visibility;
+in float a_fog_factor;
 
 uniform vec4 u_sky_color;
 uniform sampler2D u_block_sprite_sheet;
@@ -177,5 +173,5 @@ void main()
     vec3 diffuse = light_color * diffuse_amount;
 
     out_color = vec4(ambient + diffuse, 1.0f) * color;
-    out_color = mix(u_sky_color, out_color, a_visibility);
+    out_color = mix(out_color, u_sky_color, a_fog_factor);
 }

@@ -8,6 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "meta/spritesheet_meta.h"
+#include "game/world.h"
 
 namespace minecraft {
 
@@ -234,13 +235,13 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (render_data.id != -1)
+        if (render_data.memory_id != -1)
         {
             internal_data.free_sub_chunks_mutex.lock();
-            internal_data.free_sub_chunks.push_back(render_data.id);
+            internal_data.free_sub_chunks.push_back(render_data.memory_id);
             internal_data.free_sub_chunks_mutex.unlock();
 
-            render_data.id = -1;
+            render_data.memory_id = -1;
             render_data.base_vertex = 0;
             render_data.base_instance = 0;
             render_data.vertex_count = 0;
@@ -458,15 +459,15 @@ namespace minecraft {
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (render_data.vertex_count > 0)
+        if (!render_data.uploaded_to_gpu && render_data.vertex_count > 0)
         {
-            if (render_data.id == -1)
+            if (render_data.memory_id == -1)
             {
                 internal_data.free_sub_chunks_mutex.lock();
                 i32 sub_chunk_id = internal_data.free_sub_chunks.back();
                 internal_data.free_sub_chunks.pop_back();
                 internal_data.free_sub_chunks_mutex.unlock();
-                render_data.id = sub_chunk_id;
+                render_data.memory_id = sub_chunk_id;
                 render_data.base_vertex = internal_data.base_vertex + sub_chunk_id * World::max_vertex_count_per_sub_chunk;
                 render_data.base_instance = internal_data.base_instance + sub_chunk_id;
             }
@@ -489,8 +490,8 @@ namespace minecraft {
         command.count = render_data.face_count * 6;
         command.firstIndex = 0;
         command.instanceCount = 1;
-        command.baseVertex = render_data.id * World::max_vertex_count_per_sub_chunk;
-        command.baseInstance = render_data.id;
+        command.baseVertex = render_data.memory_id * World::max_vertex_count_per_sub_chunk;
+        command.baseInstance = render_data.memory_id;
     }
 
     void Opengl_Renderer::begin(
@@ -502,6 +503,7 @@ namespace minecraft {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->use();
+        shader->set_uniform_f32("u_chunk_radius", World::chunk_radius);
         shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
         shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
@@ -530,11 +532,11 @@ namespace minecraft {
 
     void Opengl_Renderer::end()
     {
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.command_buffer_id);
-        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.command_count, internal_data.command_buffer);
-
         glBindVertexArray(internal_data.chunk_vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
+
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.command_buffer_id);
+        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.command_count, internal_data.command_buffer);
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.command_count, sizeof(Draw_Elements_Indirect_Command));
     }

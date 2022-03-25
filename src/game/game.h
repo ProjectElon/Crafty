@@ -21,6 +21,7 @@ namespace minecraft {
         u32 window_height = 720;
         WindowMode window_mode = WindowMode_Windowed;
 
+        bool minimized = false;
         bool update_camera = true;
     };
 

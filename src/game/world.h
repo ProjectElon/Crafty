@@ -4,11 +4,13 @@
 
 #include "meta/spritesheet_meta.h"
 #include "memory/free_list.h"
+#include "game/math_utils.h"
 
 #include <glm/glm.hpp>
 
 #include <mutex>
 #include <algorithm>
+#include <string>
 #include <unordered_map> // todo(harlequin): containers
 
 #define MC_CHUNK_HEIGHT 256
@@ -23,6 +25,7 @@
 #define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
 #define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
 
+#define MC_MAX_CHUNK_RADIUS 12
 #define MC_SUB_CHUNK_VERTEX_COUNT 2048
 
 namespace minecraft {
@@ -60,7 +63,7 @@ namespace minecraft {
         BlockId_Acacia_Planks = 28,
         BlockId_Count = 29
     };
-    
+
     enum BlockFlags : u32
     {
         BlockFlags_Is_Solid = 1,
@@ -126,7 +129,7 @@ namespace minecraft {
         i32 vertex_count;
         i32 face_count;
 
-        i32 id;
+        i32 memory_id;
         Sub_Chunk_Vertex   *base_vertex;
         Sub_Chunk_Instance *base_instance;
 
@@ -137,6 +140,8 @@ namespace minecraft {
     {
         glm::ivec2 world_coords;
         glm::vec3 position;
+
+        std::string file_path;
 
         bool pending;
         bool loaded;
@@ -191,27 +196,43 @@ namespace minecraft {
         Chunk *chunk;
     };
 
+    struct World_Region_Bounds
+    {
+        glm::ivec2 min;
+        glm::ivec2 max;
+    };
+
+    struct Ray_Cast_Result;
+
     struct World
     {
-        static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
-        static Block null_block;
-        
-        static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
-        static std::string path;
-        static i32 seed;
-
-        static constexpr i64 sub_chunk_height = MC_SUB_CHUNK_HEIGHT;
+        static constexpr i64 sub_chunk_height          = MC_SUB_CHUNK_HEIGHT;
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
+        static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 chunk_radius = 12;
-        static constexpr i64 chunk_capacity = 4 * (chunk_radius + 2) * (chunk_radius + 2);
+        static constexpr i64 max_chunk_radius = MC_MAX_CHUNK_RADIUS;
+        static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
         static constexpr i64 sub_chunk_capacity = sub_chunk_count_per_chunk * chunk_capacity;
         static constexpr i64 max_vertex_count_per_sub_chunk = MC_SUB_CHUNK_VERTEX_COUNT;
         static constexpr i64 sub_chunk_size = sizeof(Sub_Chunk_Vertex) * max_vertex_count_per_sub_chunk;
 
+        static Block null_block;
+        static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
+
+        static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
+        static std::string path;
+        static i32 seed;
+
+        static i64 chunk_radius;
         static std::mutex chunk_pool_mutex;
-        static minecraft::Free_List<minecraft::Chunk, chunk_capacity> chunk_pool;
+        static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
+
+        static bool initialize(const std::string& path);
+        static void shutdown();
+
+        static void load_chunks_at_region(const World_Region_Bounds& region_bounds);
+        static void free_chunks_out_of_region(const World_Region_Bounds& region_bounds);
 
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
         {
@@ -224,6 +245,14 @@ namespace minecraft {
             glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
             glm::vec3 offset = position - glm::vec3(chunk_coords.x * 16.0f, position.y, chunk_coords.y * 16.0f);
             return { (i32)glm::floor(offset.x), (i32)glm::floor(position.y), (i32)glm::floor(offset.z)};
+        }
+
+        static inline World_Region_Bounds get_world_bounds_from_chunk_coords(const glm::ivec2& chunk_coords)
+        {
+            World_Region_Bounds bounds;
+            bounds.min = chunk_coords - glm::ivec2(World::chunk_radius, World::chunk_radius);
+            bounds.max = chunk_coords + glm::ivec2(World::chunk_radius, World::chunk_radius);
+            return bounds;
         }
 
         static inline Chunk* get_chunk(const glm::ivec2& chunk_coords)
@@ -279,8 +308,11 @@ namespace minecraft {
         static Block_Query_Result get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords);
         static Block_Query_Result get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords);
 
-        static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
+        static Block_Query_Result select_block(const glm::vec3& view_position,
+                                               const glm::vec3& view_direction,
+                                               u32 max_block_select_dist_in_cube_units,
+                                               Ray_Cast_Result *out_ray_cast_result);
 
-        static std::string get_chunk_path(Chunk *chunk);
+        static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
     };
 }

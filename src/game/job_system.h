@@ -19,6 +19,10 @@ namespace minecraft {
 
     struct Job_Queue
     {
+        std::mutex work_condition_mutex;
+        std::condition_variable work_condition;
+        bool running;
+
         u32 job_index;
         u32 tail_job_index;
         Job jobs[MC_MAX_JOB_COUNT_PER_PATCH];
@@ -26,8 +30,6 @@ namespace minecraft {
 
     struct Job_System_Data
     {
-        bool running;
-
         u32 thread_count;
         std::thread threads[MC_MAX_THREAD_COUNT];
 
@@ -47,13 +49,13 @@ namespace minecraft {
         template<typename T>
         static void schedule(const T& job_data)
         {
-            static std::vector<T> jobs_data(MC_MAX_THREAD_COUNT * MC_MAX_JOB_COUNT_PER_PATCH);
+            static std::vector<T> job_data_pool(MC_MAX_THREAD_COUNT * MC_MAX_JOB_COUNT_PER_PATCH);
             static u32 job_data_index = 0;
 
-            jobs_data[job_data_index] = job_data;
+            job_data_pool[job_data_index] = job_data;
 
             Job job;
-            job.data = &jobs_data[job_data_index];
+            job.data = &job_data_pool[job_data_index];
             job.execute = &T::execute;
             dispatch(job);
 
