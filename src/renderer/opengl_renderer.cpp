@@ -65,7 +65,7 @@ namespace minecraft {
 
         internal_data.platform = platform;
         const char *block_sprite_sheet_path = "../assets/textures/block_spritesheet.png";
-        bool success = internal_data.block_sprite_sheet.load_from_file(block_sprite_sheet_path);
+        bool success = internal_data.block_sprite_sheet.load_from_file(block_sprite_sheet_path, TextureUsage_SpriteSheet);
 
         if (!success)
         {
@@ -92,9 +92,6 @@ namespace minecraft {
 
         i64 sub_chunk_count = World::sub_chunk_capacity;
         i64 sub_chunk_size = World::sub_chunk_size;
-
-        f64 total = (sub_chunk_count * sub_chunk_size) / (1024.0f * 1024.0f);
-        fprintf(stderr, "total size for subchunks : %.2f mb\n", total);
 
         GLbitfield buffer_flags = GL_MAP_PERSISTENT_BIT | GL_MAP_WRITE_BIT | GL_MAP_COHERENT_BIT;
         glBufferStorage(GL_ARRAY_BUFFER, sub_chunk_count * sub_chunk_size, NULL, buffer_flags);
@@ -178,7 +175,10 @@ namespace minecraft {
 
         u32 width = platform->game->config.window_width;
         u32 height = platform->game->config.window_height;
+        internal_data.frame_buffer_size = { (f32)width, (f32)height };
         glViewport(0, 0, width, height);
+
+        internal_data.sub_chunk_used_memory = 0;
 
         return true;
     }
@@ -192,6 +192,7 @@ namespace minecraft {
         u32 width;
         u32 height;
         Event_System::parse_resize_event(event, &width, &height);
+        internal_data.frame_buffer_size = { (f32)width, (f32)height };
         glViewport(0, 0, width, height);
         return false;
     }
@@ -237,6 +238,8 @@ namespace minecraft {
 
         if (render_data.memory_id != -1)
         {
+            internal_data.sub_chunk_used_memory -= render_data.vertex_count * sizeof(Sub_Chunk_Vertex);
+
             internal_data.free_sub_chunks_mutex.lock();
             internal_data.free_sub_chunks.push_back(render_data.memory_id);
             internal_data.free_sub_chunks_mutex.unlock();
@@ -247,19 +250,33 @@ namespace minecraft {
             render_data.vertex_count = 0;
             render_data.face_count = 0;
             render_data.uploaded_to_gpu = false;
+
+            f32 infinity = std::numeric_limits<f32>::max();
+            render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
         }
     }
 
     void Opengl_Renderer::update_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+        internal_data.sub_chunk_used_memory -= render_data.vertex_count * sizeof(Sub_Chunk_Vertex);
+
         render_data.vertex_count = 0;
         render_data.face_count = 0;
         render_data.uploaded_to_gpu = false;
+
+        f32 infinity = std::numeric_limits<f32>::max();
+        render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
         upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
+
+        if (render_data.vertex_count == 0 && render_data.memory_id != -1)
+        {
+            free_sub_chunk(chunk, sub_chunk_index);
+        }
     }
 
-    static void submit_block_face_to_sub_chunk_render_data(Chunk *chunk,
+    static bool submit_block_face_to_sub_chunk_render_data(Chunk *chunk,
                                                            i32 sub_chunk_index,
                                                            Block *block,
                                                            Block *block_facing_normal,
@@ -291,12 +308,17 @@ namespace minecraft {
 
             sub_chunk_render_data.vertex_count += 4;
             sub_chunk_render_data.face_count++;
+
+            return true;
         }
+
+        return false;
     }
 
     void submit_block_to_sub_chunk_render_data(Chunk *chunk, u32 sub_chunk_index, Block *block, const glm::ivec3& block_coords)
     {
         const Block_Info& block_info = World::block_infos[block->id];
+        u32 submit_count = 0;
 
          /*
           1----------2
@@ -321,7 +343,8 @@ namespace minecraft {
         */
 
         Block* top_block = chunk->get_neighbour_block_from_top(block_coords);
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, top_block, block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, top_block, block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3);
+
         /*
             bottom face
 
@@ -335,7 +358,7 @@ namespace minecraft {
         */
 
         Block* bottom_block = chunk->get_neighbour_block_from_bottom(block_coords);
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, bottom_block, block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, bottom_block, block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6);
 
         /*
             left face
@@ -358,7 +381,7 @@ namespace minecraft {
         {
             left_block = chunk->get_neighbour_block_from_left(block_coords);
         }
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, left_block, block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, left_block, block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1);
 
         /*
             right face
@@ -382,7 +405,7 @@ namespace minecraft {
         {
             right_block = chunk->get_neighbour_block_from_right(block_coords);
         }
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, right_block, block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, right_block, block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3);
 
         /*
             front face
@@ -405,7 +428,7 @@ namespace minecraft {
         {
             front_block = chunk->get_neighbour_block_from_front(block_coords);
         }
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
 
         /*
             back face
@@ -430,7 +453,17 @@ namespace minecraft {
             back_block = chunk->get_neighbour_block_from_back(block_coords);
         }
 
-        submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, back_block, block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0);
+        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, back_block, block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0);
+
+        if (submit_count > 0)
+        {
+            Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+            glm::vec3 block_position = chunk->get_block_position(block_coords);
+            glm::vec3 min = block_position - glm::vec3(0.5f, 0.5f, 0.5f);
+            glm::vec3 max = block_position + glm::vec3(0.5f, 0.5f, 0.5f);
+            sub_chunk_render_data.aabb.min = glm::min(sub_chunk_render_data.aabb.min, min);
+            sub_chunk_render_data.aabb.max = glm::max(sub_chunk_render_data.aabb.max, max);
+        }
     }
 
     void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
@@ -467,13 +500,18 @@ namespace minecraft {
                 i32 sub_chunk_id = internal_data.free_sub_chunks.back();
                 internal_data.free_sub_chunks.pop_back();
                 internal_data.free_sub_chunks_mutex.unlock();
-                render_data.memory_id = sub_chunk_id;
-                render_data.base_vertex = internal_data.base_vertex + sub_chunk_id * World::max_vertex_count_per_sub_chunk;
+
+                render_data.memory_id     = sub_chunk_id;
+                render_data.base_vertex   = internal_data.base_vertex + sub_chunk_id * World::max_vertex_count_per_sub_chunk;
                 render_data.base_instance = internal_data.base_instance + sub_chunk_id;
             }
 
+            assert(render_data.vertex_count <= World::max_vertex_count_per_sub_chunk);
+
             render_data.base_instance->chunk_coords = chunk->world_coords;
             memcpy(render_data.base_vertex, render_data.vertices, sizeof(Sub_Chunk_Vertex) * render_data.vertex_count);
+
+            internal_data.sub_chunk_used_memory += sizeof(Sub_Chunk_Vertex) * render_data.vertex_count;
 
             render_data.uploaded_to_gpu = true;
         }
@@ -492,6 +530,12 @@ namespace minecraft {
         command.instanceCount = 1;
         command.baseVertex = render_data.memory_id * World::max_vertex_count_per_sub_chunk;
         command.baseInstance = render_data.memory_id;
+
+        auto& stats = internal_data.stats;
+        stats.vertex_count += render_data.vertex_count;
+        stats.face_count += render_data.face_count;
+        stats.sub_chunk_max_vertex_count = glm::max(internal_data.stats.sub_chunk_max_vertex_count, render_data.vertex_count);
+        stats.sub_chunk_count++;
     }
 
     void Opengl_Renderer::begin(
@@ -528,6 +572,8 @@ namespace minecraft {
         glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
 
         internal_data.command_count = 0;
+
+        memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
     }
 
     void Opengl_Renderer::end()

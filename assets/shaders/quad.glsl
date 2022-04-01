@@ -5,25 +5,31 @@
 layout (location = 0) in vec2 in_position;
 layout (location = 1) in vec2 in_uv;
 
-layout (location = 2) in vec2 instance_position;
-layout (location = 3) in vec2 instance_scale;
-layout (location = 4) in vec4 instance_color;
-layout (location = 5) in int  instance_texture_index;
-layout (location = 6) in vec2 instance_uv_scale;
-layout (location = 7) in vec2 instance_uv_offset;
+layout (location = 2) in vec2  instance_position;
+layout (location = 3) in vec2  instance_scale;
+layout (location = 4) in float instance_rotation;
+
+layout (location = 5) in vec4 instance_color;
+layout (location = 6) in int  instance_texture_index;
+layout (location = 7) in vec2 instance_uv_scale;
+layout (location = 8) in vec2 instance_uv_offset;
 
 out vec4 a_color;
 out vec2 a_uv;
-out flat int  a_texture_index;
+out flat int a_texture_index;
 out vec2 a_uv_scale;
 out vec2 a_uv_offset;
 
-uniform mat4 u_view;
 uniform mat4 u_projection;
 
 void main()
 {
-    gl_Position     = u_projection * u_view * vec4(in_position * instance_scale + instance_position, 0.0f, 1.0f);
+    mat2 rot = mat2(cos(instance_rotation), -sin(instance_rotation),
+                    sin(instance_rotation), cos(instance_rotation));
+
+    vec2 position =  in_position * instance_scale * rot;
+
+    gl_Position     = u_projection * vec4(position + instance_position, 0.0f, 1.0f);
     a_uv            = in_uv * instance_uv_scale + instance_uv_offset;
     a_color         = instance_color;
     a_texture_index = instance_texture_index;
@@ -35,7 +41,7 @@ void main()
 
 in vec4 a_color;
 in vec2 a_uv;
-in flat int  a_texture_index;
+in flat int a_texture_index;
 
 layout (location = 0) out vec4 out_color;
 

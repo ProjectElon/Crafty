@@ -49,10 +49,19 @@ namespace minecraft {
         u32 baseInstance;
     };
 
+    struct Opengl_Renderer_Stats
+    {
+        i32 vertex_count;
+        i32 face_count;
+        i32 sub_chunk_max_vertex_count;
+        i32 sub_chunk_count;
+    };
+
     struct Opengl_Renderer_Data
     {
         Platform *platform;
 
+        glm::vec2 frame_buffer_size;
         u32 chunk_vertex_array_id;
         u32 chunk_vertex_buffer_id;
         u32 chunk_instance_buffer_id;
@@ -72,6 +81,8 @@ namespace minecraft {
         Draw_Elements_Indirect_Command command_buffer[World::sub_chunk_capacity];
         u32 command_buffer_id;
 
+        Opengl_Renderer_Stats stats;
+        i64 sub_chunk_used_memory;
         bool should_trace_debug_messsage = true;
     };
 
@@ -114,5 +125,7 @@ namespace minecraft {
         static void end();
 
         static void swap_buffers();
+
+        static inline glm::vec2 get_frame_buffer_size() { return internal_data.frame_buffer_size; }
     };
 }

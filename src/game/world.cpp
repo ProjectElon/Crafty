@@ -3,12 +3,15 @@
 #include "game/job_system.h"
 #include "game/jobs.h"
 
+#include <glm/gtc/constants.hpp>
 #include <glm/gtc/noise.hpp>
 #include <time.h>
 #include <sstream>
 #include <filesystem>
 #include <errno.h>
 #include <new>
+
+extern int errno;
 
 namespace minecraft {
 
@@ -28,13 +31,17 @@ namespace minecraft {
             render_data.base_vertex     = nullptr;
             render_data.base_instance   = nullptr;
             render_data.uploaded_to_gpu = false;
+            render_data.pending_for_update = false;
+            f32 infinity = std::numeric_limits<f32>::max();
+            render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
         }
 
         this->loaded  = false;
-        this->pending = true;
+        this->pending_for_load = true;
+        this->pending_for_save = false;
 
         std::stringstream ss;
-        ss << World::path << "/(" << this->world_coords.x << "," << this->world_coords.y << ").chunk";
+        ss << World::path << "/chunk_" << this->world_coords.x << "_" << this->world_coords.y << ".pkg";
         this->file_path = ss.str();
 
         return true;
@@ -58,7 +65,7 @@ namespace minecraft {
         return (i32)glm::trunc(min_height + ((max_height - min_height) * noise));
     }
 
-    inline static void set_block_id_based_on_height(Block *block, i32 block_y, i32 height)
+    static void set_block_id_based_on_height(Block *block, i32 block_y, i32 height)
     {
         if (block_y > height)
         {
@@ -83,10 +90,10 @@ namespace minecraft {
         i32 left_edge_height_map[MC_CHUNK_DEPTH];
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
-        i32 min_biome_height = 150;
-        i32 max_biome_height = 255;
+        i32 min_biome_height = 100;
+        i32 max_biome_height = 250;
 
-        const f32 noise_scale = 69.0f;
+        const f32 noise_scale = 69.0f; // a nice noise scale
         const f32 one_over_nosie_scale = 1.0f / noise_scale;
 
         const glm::ivec2 front_chunk_coords = { world_coords.x + 0, world_coords.y - 1 };
@@ -311,7 +318,7 @@ namespace minecraft {
         // todo(harlequin): do more testing on the std::unordered_map or replace it at some point
         loaded_chunks.reserve(2 * World::chunk_capacity);
         loaded_chunks.max_load_factor(0.25);
-
+        update_sub_chunk_jobs.reserve(1024);
         chunk_pool.initialize();
 
         return true;
@@ -327,7 +334,7 @@ namespace minecraft {
         result.block = nullptr;
         result.block_coords = { -1, -1, -1 };
 
-        glm::vec3 query_position = view_position + 0.1f;
+        glm::vec3 query_position = view_position;
 
         for (u32 i = 0; i < max_block_select_dist_in_cube_units * 10; i++)
         {
@@ -380,6 +387,16 @@ namespace minecraft {
         }
     }
 
+    void World::update_sub_chunks()
+    {
+        for (const auto& job : update_sub_chunk_jobs)
+        {
+            Job_System::schedule(job);
+        }
+
+        update_sub_chunk_jobs.resize(0);
+    }
+
     void World::free_chunks_out_of_region(const World_Region_Bounds& region_bounds)
     {
         for (auto it = loaded_chunks.begin(); it != loaded_chunks.end();)
@@ -392,7 +409,7 @@ namespace minecraft {
                                  chunk_coords.y < region_bounds.min.y - 1 ||
                                  chunk_coords.y > region_bounds.max.y + 1;
 
-            if (!chunk->pending && chunk->loaded && out_of_bounds)
+            if (!chunk->pending_for_load && !chunk->pending_for_save && chunk->loaded && out_of_bounds)
             {
                 for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                 {
@@ -404,7 +421,7 @@ namespace minecraft {
                     }
                 }
 
-                chunk->pending = true;
+                chunk->pending_for_save = true;
 
                 Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
                 serialize_and_free_chunk_job.chunk = chunk;
@@ -419,27 +436,41 @@ namespace minecraft {
         }
     }
 
+    static void queue_update_sub_chunk_job(std::vector<Update_Sub_Chunk_Job> &jobs, Chunk *chunk, i32 sub_chunk_index)
+    {
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+        if (!render_data.pending_for_update)
+        {
+            render_data.pending_for_update = true;
+            Update_Sub_Chunk_Job job;
+            job.chunk = chunk;
+            job.sub_chunk_index = sub_chunk_index;
+            jobs.emplace_back(job);
+        }
+    }
+
     void World::set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id)
     {
         Block *block = chunk->get_block(block_coords);
         block->id = block_id;
 
         i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
-        Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
+        queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index);
 
         if (block_coords.x == 0)
         {
             Chunk *left_chunk = World::get_chunk({ chunk->world_coords.x - 1, chunk->world_coords.y });
             assert(left_chunk);
             left_chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].id = block_id;
-            Opengl_Renderer::update_sub_chunk(left_chunk, sub_chunk_index);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, left_chunk, sub_chunk_index);
         }
         else if (block_coords.x == MC_CHUNK_WIDTH - 1)
         {
             Chunk *right_chunk = World::get_chunk({ chunk->world_coords.x + 1, chunk->world_coords.y });
             assert(right_chunk);
             right_chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].id = block_id;
-            Opengl_Renderer::update_sub_chunk(right_chunk, sub_chunk_index);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, right_chunk, sub_chunk_index);
         }
 
         if (block_coords.z == 0)
@@ -447,14 +478,14 @@ namespace minecraft {
             Chunk *front_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y - 1 });
             assert(front_chunk);
             front_chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].id = block_id;
-            Opengl_Renderer::update_sub_chunk(front_chunk, sub_chunk_index);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, front_chunk, sub_chunk_index);
         }
         else if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
             Chunk *back_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
             assert(back_chunk);
             back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].id = block_id;
-            Opengl_Renderer::update_sub_chunk(back_chunk, sub_chunk_index);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, back_chunk, sub_chunk_index);
         }
 
         i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
@@ -462,11 +493,11 @@ namespace minecraft {
 
         if (block_coords.y == sub_chunk_end_y && sub_chunk_index != World::sub_chunk_count_per_chunk - 1)
         {
-            Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index + 1);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index + 1);
         }
         else if (block_coords.y == sub_chunk_start_y && sub_chunk_index != 0)
         {
-            Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index - 1);
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index - 1);
         }
     }
 
@@ -781,5 +812,6 @@ namespace minecraft {
 
     std::mutex World::chunk_pool_mutex;
     Free_List<Chunk, World::chunk_capacity> World::chunk_pool;
-    i64 World::chunk_radius = 12;
+    std::vector<Update_Sub_Chunk_Job> World::update_sub_chunk_jobs;
+
 }

@@ -129,6 +129,13 @@ namespace minecraft {
         draw_line(p3, p7, color);
     }
 
+    void Opengl_Debug_Renderer::draw_aabb(const AABB& aabb, const glm::vec4& color)
+    {
+        glm::vec3 position = (aabb.min + aabb.max) * 0.5f;
+        glm::vec3 half_extends = aabb.max - position;
+        draw_cube(position, half_extends, color);
+    }
+
     void Opengl_Debug_Renderer::end()
     {
         auto& [line_vao_id,

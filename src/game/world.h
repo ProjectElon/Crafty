@@ -5,6 +5,7 @@
 #include "meta/spritesheet_meta.h"
 #include "memory/free_list.h"
 #include "game/math_utils.h"
+#include "game/jobs.h"
 
 #include <glm/glm.hpp>
 
@@ -25,7 +26,6 @@
 #define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
 #define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
 
-#define MC_MAX_CHUNK_RADIUS 12
 #define MC_SUB_CHUNK_VERTEX_COUNT 2048
 
 namespace minecraft {
@@ -133,7 +133,10 @@ namespace minecraft {
         Sub_Chunk_Vertex   *base_vertex;
         Sub_Chunk_Instance *base_instance;
 
+        AABB aabb;
+
         bool uploaded_to_gpu;
+        bool pending_for_update;
     };
 
     struct Chunk
@@ -143,7 +146,8 @@ namespace minecraft {
 
         std::string file_path;
 
-        bool pending;
+        bool pending_for_load;
+        bool pending_for_save;
         bool loaded;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
@@ -210,7 +214,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius = MC_MAX_CHUNK_RADIUS;
+        static constexpr i64 max_chunk_radius = 20;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
         static constexpr i64 sub_chunk_capacity = sub_chunk_count_per_chunk * chunk_capacity;
@@ -224,14 +228,18 @@ namespace minecraft {
         static std::string path;
         static i32 seed;
 
-        static i64 chunk_radius;
+        static const i64 chunk_radius = 12;
+        static_assert(World::chunk_radius <= World::max_chunk_radius);
+
         static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
+        static std::vector<Update_Sub_Chunk_Job> update_sub_chunk_jobs;
 
         static bool initialize(const std::string& path);
         static void shutdown();
 
         static void load_chunks_at_region(const World_Region_Bounds& region_bounds);
+        static void update_sub_chunks();
         static void free_chunks_out_of_region(const World_Region_Bounds& region_bounds);
 
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
@@ -243,7 +251,7 @@ namespace minecraft {
         static inline glm::ivec3 world_position_to_block_coords(const glm::vec3& position)
         {
             glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
-            glm::vec3 offset = position - glm::vec3(chunk_coords.x * 16.0f, position.y, chunk_coords.y * 16.0f);
+            glm::vec3 offset = position - World::get_chunk(chunk_coords)->position;
             return { (i32)glm::floor(offset.x), (i32)glm::floor(position.y), (i32)glm::floor(offset.z)};
         }
 

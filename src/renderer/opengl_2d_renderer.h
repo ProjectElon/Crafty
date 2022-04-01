@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "renderer/opengl_texture.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -17,6 +18,7 @@ namespace minecraft {
     {
         glm::vec2 position;
         glm::vec2 scale;
+        f32 rotation;
         glm::vec4 color;
         i32 texture_index;
         glm::vec2 uv_scale;
@@ -40,10 +42,12 @@ namespace minecraft {
 
         u32 instance_count_per_patch = 65536;
         std::vector<Quad_Instance> quad_instances;
+
+        Opengl_Texture white_pixel;
     };
 
     struct Opengl_Shader;
-    struct Opengl_Texture;
+    struct Bitmap_Font;
 
     struct Opengl_2D_Renderer
     {
@@ -52,14 +56,17 @@ namespace minecraft {
         static bool initialize();
         static void shutdown();
 
-        static void begin(f32 ortho_size, f32 aspect_radio, Opengl_Shader *shader);
+        static void begin(Opengl_Shader *shader);
 
         static void draw_rect(const glm::vec2& position,
                               const glm::vec2& scale,
+                              f32 rotation,
                               const glm::vec4& color,
-                              Opengl_Texture *texture,
+                              Opengl_Texture *texture = &internal_data.white_pixel,
                               const glm::vec2& uv_scale = { 1.0f, 1.0f },
                               const glm::vec2& uv_offset = { 0.0f, 0.0f });
+
+        static void draw_string(Bitmap_Font *font, const std::string& text, const glm::vec2& text_size, const glm::vec2& position, const glm::vec4& color);
 
         static void end();
     };

@@ -176,7 +176,7 @@ namespace minecraft {
         u32 file_size = ftell(file_handle);
         fseek(file_handle, 0, SEEK_SET);
 
-        char *contents = (char *)malloc(file_size + 1);
+        char *contents = (char*)malloc(file_size + 1);
 
         if (!contents)
         {

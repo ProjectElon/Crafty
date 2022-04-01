@@ -17,6 +17,8 @@
 #include "renderer/opengl_debug_renderer.h"
 #include "renderer/camera.h"
 #include "renderer/opengl_texture.h"
+#include "renderer/font.h"
+#include "ui/ui.h"
 
 #include "assets/texture_packer.h"
 
@@ -27,6 +29,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include <filesystem>
+#include <sstream>
 
 namespace minecraft {
 
@@ -182,9 +185,6 @@ int main()
     Event_System::register_event(EventType_MouseMove, on_mouse_move, &game);
     Event_System::register_event(EventType_MouseWheel, on_mouse_wheel, &game);
 
-    f32 current_time = platform.get_current_time();
-    f32 last_time = current_time;
-
     Opengl_Shader chunk_shader;
     chunk_shader.load_from_file("../assets/shaders/chunk.glsl");
 
@@ -195,10 +195,28 @@ int main()
     ui_shader.load_from_file("../assets/shaders/quad.glsl");
 
     Opengl_Texture crosshair001_texture;
-    crosshair001_texture.load_from_file("../assets/textures/crosshair/crosshair001.png");
+    crosshair001_texture.load_from_file("../assets/textures/crosshair/crosshair001.png", TextureUsage_UI);
 
     Opengl_Texture crosshair022_texture;
-    crosshair022_texture.load_from_file("../assets/textures/crosshair/crosshair022.png");
+    crosshair022_texture.load_from_file("../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
+
+    Bitmap_Font fira_code;
+    fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
+
+    Bitmap_Font noto_mono;
+    noto_mono.load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
+
+    UI_State default_ui_state;
+    default_ui_state.cursor = { 0.0f, 0.0f };
+    default_ui_state.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    default_ui_state.offset = { 0.0f, 0.0f };
+    default_ui_state.font = &noto_mono;
+
+    if (!UI::initialize(&default_ui_state))
+    {
+        fprintf(stderr, "[ERROR]: failed to initialize ui system\n");
+        return -1;
+    }
 
 #if 0
     {
@@ -212,11 +230,17 @@ int main()
     }
 #endif
 
+    f32 current_time = platform.get_current_time();
+    f32 last_time = current_time;
+
     game.is_running = true;
 
     Camera camera;
     camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f));
     Event_System::register_event(EventType_Resize, on_resize, &camera);
+
+    Frustum camera_frustum;
+    camera_frustum.initialize(camera.projection * camera.view);
 
     std::string world_name = "harlequin";
     std::string world_path = "../assets/worlds/" + world_name;
@@ -227,9 +251,40 @@ int main()
     f32 frame_timer = 0;
     u32 frames_per_second = 0;
 
+    // todo(harlequin): String_Builder
+    std::string frames_per_second_text = "FPS: 0";
+    std::string frame_time_text = "frame time: 0.00 ms";
+    std::string vertex_count_text = "chunk vertex count: 0";
+    std::string face_count_text = "chunk face count: 0";
+    std::string sub_chunk_max_vertex_count_text = "sub chunk max vertex count: 0";
+    std::string total_sub_chunk_memory_text = "total sub chuck memory: 0 mbs";
+    std::string sub_chunk_allocated_memory_text = "total allocated sub chuck memory: 0 mbs";
+    std::string sub_chunk_used_memory_text;
+    std::string total_sub_chunk_count_text;
+    std::string rendered_sub_chunk_count_text;
+
+    {
+        i64 sub_chunk_count = World::sub_chunk_capacity;
+        i64 sub_chunk_size = World::sub_chunk_size;
+        f64 sub_chunk_total_memory = (sub_chunk_count * sub_chunk_size) / (1024.0 * 1024.0);
+
+        std::stringstream ss;
+        ss.precision(2);
+        ss << "total sub chunk memory: " << std::fixed << sub_chunk_total_memory << " mbs";
+        total_sub_chunk_memory_text = ss.str();
+    }
+
     while (game.is_running)
     {
         f32 delta_time = current_time - last_time;
+
+        {
+            std::stringstream ss;
+            ss.precision(2);
+            ss << "frame time: " << delta_time * 1000.0f << " ms";
+            frame_time_text = ss.str();
+        }
+
         last_time = current_time;
         current_time = platform.get_current_time();
 
@@ -238,7 +293,11 @@ int main()
         if (frame_timer >= 1.0f)
         {
             frame_timer -= 1.0f;
-            // fprintf(stderr, "FPS: %d\n", frames_per_second);
+
+            std::stringstream ss;
+            ss << "FPS: " << frames_per_second;
+            frames_per_second_text = ss.str();
+
             frames_per_second = 0;
         }
 
@@ -248,6 +307,7 @@ int main()
         if (game.config.update_camera)
         {
             camera.update(delta_time);
+            camera_frustum.update(camera.projection * camera.view);
         }
 
         glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
@@ -322,6 +382,8 @@ int main()
             }
         }
 
+        World::update_sub_chunks();
+
         f32 color_factor = 1.0f / 255.0f;
         glm::vec3 sky_color = { 135, 206, 235 };
 
@@ -339,18 +401,18 @@ int main()
                 assert(it != loaded_chunks.end());
                 Chunk* chunk = it->second;
 
-                if (!chunk->pending && chunk->loaded)
+                if (!chunk->pending_for_load && chunk->loaded)
                 {
                     for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                     {
                         Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-
-                        if (render_data.uploaded_to_gpu)
+                        bool should_render_sub_chunks = render_data.uploaded_to_gpu &&
+                                                        render_data.vertex_count > 0 &&
+                                                        camera_frustum.is_aabb_visible(render_data.aabb);
+                        if (should_render_sub_chunks)
                         {
-                            if (render_data.vertex_count > 0)
-                            {
-                                Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
-                            }
+                            // Opengl_Debug_Renderer::draw_aabb(render_data.aabb);
+                            Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
                         }
                     }
                 }
@@ -359,18 +421,97 @@ int main()
 
         Opengl_Renderer::end();
 
-        f32 line_thickness = 3.5f;
+        {
+            std::stringstream ss;
+            ss << "vertex count: " << Opengl_Renderer::internal_data.stats.vertex_count;
+            vertex_count_text = ss.str();
+        }
+
+        {
+            std::stringstream ss;
+            ss << "face count: " << Opengl_Renderer::internal_data.stats.face_count;
+            face_count_text = ss.str();
+        }
+
+        {
+            std::stringstream ss;
+            ss << "sub chunk max vertex count: " << Opengl_Renderer::internal_data.stats.sub_chunk_max_vertex_count;
+            sub_chunk_max_vertex_count_text = ss.str();
+        }
+
+        {
+            i64 free_sub_chunk_count = Opengl_Renderer::internal_data.free_sub_chunks.size();
+            i64 allocated_sub_chunk_count = World::sub_chunk_capacity - free_sub_chunk_count;
+
+            f64 allocated_sub_chunk_memory = (allocated_sub_chunk_count * World::sub_chunk_size) / (1024.0 * 1024.0);
+            std::stringstream ss;
+            ss.precision(2);
+            ss << "total allocated sub chucks memory: " << std::fixed << allocated_sub_chunk_memory << " mbs";
+            sub_chunk_allocated_memory_text = ss.str();
+        }
+
+        {
+            f64 used_sub_chunk_memory = Opengl_Renderer::internal_data.sub_chunk_used_memory / (1024.0 * 1024.0);
+            std::stringstream ss;
+            ss.precision(2);
+            ss << "total sub chucks used memory: " << std::fixed << used_sub_chunk_memory << " mbs";
+            sub_chunk_used_memory_text = ss.str();
+        }
+
+        {
+            i64 free_sub_chunk_count = Opengl_Renderer::internal_data.free_sub_chunks.size();
+            i64 allocated_sub_chunk_count = World::sub_chunk_capacity - free_sub_chunk_count;
+            std::stringstream ss;
+            ss << "sub chunks: " << allocated_sub_chunk_count;
+            total_sub_chunk_count_text = ss.str();
+        }
+
+        {
+            std::stringstream ss;
+            ss << "rendered sub chunks: " << Opengl_Renderer::internal_data.stats.sub_chunk_count;
+            rendered_sub_chunk_count_text = ss.str();
+        }
+
+        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
+
+        UI::begin();
+
+        UI::set_offset({ 10.0f, 10.0f });
+        UI::set_color({ 0.0f, 0.0f, 0.0f, 0.8f });
+        UI::rect(frame_buffer_size * glm::vec2(0.4f, 1.0f) - glm::vec2(0.0f, 20.0f));
+
+        UI::set_cursor({ 10.0f, 10.0f });
+        UI::set_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+        UI::text(frames_per_second_text);
+        UI::text(frame_time_text);
+        UI::text(total_sub_chunk_count_text);
+        UI::text(rendered_sub_chunk_count_text);
+        UI::text(vertex_count_text);
+        UI::text(face_count_text);
+        UI::text(sub_chunk_max_vertex_count_text);
+        UI::text(total_sub_chunk_memory_text);
+        UI::text(sub_chunk_allocated_memory_text);
+        UI::text(sub_chunk_used_memory_text);
+
+        UI::end();
+
+        Opengl_2D_Renderer::draw_rect({ frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f },
+                                      { crosshair022_texture.width * 0.5f,
+                                        crosshair022_texture.height * 0.5f },
+                                        0.0f,
+                                        { 1.0f, 1.0f, 1.0f, 1.0f },
+                                        &crosshair022_texture);
+
+        f32 line_thickness = 3.0f;
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
 
-        f32 ortho_size = 10.0f;
-        Opengl_2D_Renderer::begin(ortho_size, camera.aspect_ratio, &ui_shader);
-        Opengl_2D_Renderer::draw_rect({ 0.0f, 0.0f }, { 1.0f, 1.0f }, { 1.0f, 1.0f, 1.0f, 1.0f }, &crosshair022_texture);
+        Opengl_2D_Renderer::begin(&ui_shader);
         Opengl_2D_Renderer::end();
 
-        World::free_chunks_out_of_region(region_bounds);
-
         Opengl_Renderer::swap_buffers();
+
+        World::free_chunks_out_of_region(region_bounds);
 
         frames_per_second++;
     }
@@ -378,17 +519,17 @@ int main()
     for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
     {
         Chunk *chunk = it->second;
-        chunk->pending = true;
+        chunk->pending_for_save = true;
 
-        Serialize_Chunk_Job serialize_chunk_job;
-        serialize_chunk_job.chunk = chunk;
-
-        Job_System::schedule(serialize_chunk_job);
+        Serialize_Chunk_Job job;
+        job.chunk = chunk;
+        Job_System::schedule(job);
     }
 
     Job_System::wait_for_jobs_to_finish();
 
     Job_System::shutdown();
+    UI::shutdown();
     Opengl_Renderer::shutdown();
     Event_System::shutdown();
     Input::shutdown();

@@ -2,8 +2,7 @@
 
 #include "core/common.h"
 
-#include <glm/glm.hpp>
-
+#include "game/math_utils.h"
 #include <vector> // todo(harlequin): containers
 
 namespace minecraft {
@@ -48,6 +47,8 @@ namespace minecraft {
         static void draw_cube(const glm::vec3& position,
                               const glm::vec3& half_extends,
                               const glm::vec4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
+
+        static void draw_aabb(const AABB& aabb, const glm::vec4& color = { 1.0f, 1.0f, 1.0f, 1.0f });
 
         static void end();
     };

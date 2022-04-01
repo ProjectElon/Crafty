@@ -14,6 +14,7 @@ namespace minecraft {
     {
         glm::vec3 position;
 
+        // todo(harlequin): move to player controller
         f32 walk_speed;
         f32 run_speed;
         f32 movment_speed;

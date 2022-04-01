@@ -1,6 +1,8 @@
 #include "opengl_2d_renderer.h"
+#include "opengl_renderer.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
+#include "font.h"
 
 #include <glad/glad.h>
 
@@ -68,20 +70,24 @@ namespace minecraft {
         glVertexAttribDivisor(3, 1);
 
         glEnableVertexAttribArray(4);
-        glVertexAttribPointer(4, 4, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, color));
+        glVertexAttribPointer(4, 1, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, rotation));
         glVertexAttribDivisor(4, 1);
 
         glEnableVertexAttribArray(5);
-        glVertexAttribIPointer(5, 1, GL_INT, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, texture_index));
+        glVertexAttribPointer(5, 4, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, color));
         glVertexAttribDivisor(5, 1);
 
         glEnableVertexAttribArray(6);
-        glVertexAttribPointer(6, 2, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, uv_scale));
+        glVertexAttribIPointer(6, 1, GL_INT, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, texture_index));
         glVertexAttribDivisor(6, 1);
 
         glEnableVertexAttribArray(7);
-        glVertexAttribPointer(7, 2, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, uv_offset));
+        glVertexAttribPointer(7, 2, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, uv_scale));
         glVertexAttribDivisor(7, 1);
+
+        glEnableVertexAttribArray(8);
+        glVertexAttribPointer(8, 2, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, uv_offset));
+        glVertexAttribDivisor(8, 1);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -92,6 +98,9 @@ namespace minecraft {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
+        u32 white_pxiel = 0xffffffff;
+        internal_data.white_pixel.initialize(reinterpret_cast<u8*>(&white_pxiel), 1, 1, TextureFormat_RGBA, TextureUsage_UI);
+
         return true;
     }
 
@@ -99,21 +108,19 @@ namespace minecraft {
     {
     }
 
-    void Opengl_2D_Renderer::begin(f32 ortho_size, f32 aspect_ratio, Opengl_Shader *shader)
+    void Opengl_2D_Renderer::begin(Opengl_Shader *shader)
     {
-        shader->use();
+        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
+        glm::mat4 projection = glm::ortho(0.0f, frame_buffer_size.x, 0.0f, frame_buffer_size.y); // left right bottom top
 
-        f32 half_ortho_size = ortho_size / 2.0f;
-        glm::vec3 camera_position = glm::vec3(0.0f, 0.0f, 0.0f);
-        glm::mat4 view = glm::translate(glm::mat4(1.0f), -camera_position);
-        glm::mat4 projection = glm::ortho(-half_ortho_size * aspect_ratio, half_ortho_size * aspect_ratio, -half_ortho_size, half_ortho_size);
-        shader->set_uniform_mat4("u_view", glm::value_ptr(view));
+        shader->use();
         shader->set_uniform_mat4("u_projection", glm::value_ptr(projection));
         shader->set_uniform_i32_array("u_textures", internal_data.samplers, 32);
     }
 
     void Opengl_2D_Renderer::draw_rect(const glm::vec2& position,
                                        const glm::vec2& scale,
+                                       f32 rotation,
                                        const glm::vec4& color,
                                        Opengl_Texture *texture,
                                        const glm::vec2& uv_scale,
@@ -145,16 +152,59 @@ namespace minecraft {
         }
 
         assert(texture_index != -1);
-        Quad_Instance instance = { position, scale, color, texture_index, uv_scale, uv_offset };
+
+        glm::vec2 size = Opengl_Renderer::get_frame_buffer_size();
+        glm::vec2 top_left_position = position;
+        top_left_position.y = size.y - position.y;
+
+        Quad_Instance instance = { top_left_position, scale, rotation, color, texture_index, uv_scale, uv_offset };
         internal_data.quad_instances.emplace_back(instance);
+    }
+
+    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font, const std::string& text, const glm::vec2& text_size, const glm::vec2& position, const glm::vec4& color)
+    {
+        glm::vec2 half_text_size = text_size * 0.5f;
+        glm::vec2 cursor = position;
+
+        for (i32 i = 0; i < text.length(); i++)
+        {
+            stbtt_aligned_quad quad;
+            stbtt_GetPackedQuad(font->glyphs,
+                                font->atlas.width,
+                                font->atlas.height,
+                                text[i] - ' ',
+                                &cursor.x,
+                                &cursor.y,
+                                &quad,
+                                1); // 1 for opengl, 0 for dx3d
+
+            f32 xp = (quad.x1 + quad.x0) / 2.0f;
+            f32 yp = (quad.y1 + quad.y0) / 2.0f;
+
+            f32 sx = (quad.x1 - quad.x0);
+            f32 sy = (quad.y1 - quad.y0);
+
+            glm::vec2 uv0 = { quad.s0, quad.t1 };
+            glm::vec2 uv1 = { quad.s1, quad.t0 };
+            glm::vec2 uv_scale = uv1 - uv0;
+
+            draw_rect(glm::vec2(xp - half_text_size.x, yp + half_text_size.y),
+                      glm::vec2(sx, sy),
+                      0.0f,
+                      color,
+                      &font->atlas,
+                      uv_scale,
+                      uv0);
+        }
     }
 
     void Opengl_2D_Renderer::end()
     {
         if (internal_data.quad_instances.size())
         {
-            // alpha blending
             glEnable(GL_BLEND);
+            glDisable(GL_DEPTH_TEST);
+
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
             glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_instance_vbo);
@@ -169,6 +219,7 @@ namespace minecraft {
             internal_data.quad_instances.resize(0);
 
             glDisable(GL_BLEND);
+            glEnable(GL_DEPTH_TEST);
         }
     }
 
