@@ -21,12 +21,12 @@
 #define MC_BLOCK_COUNT_PER_CHUNK MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
 #define MC_INDEX_COUNT_PER_CHUNK MC_BLOCK_COUNT_PER_CHUNK * 36
 
-#define MC_SUB_CHUNK_HEIGHT 8
+#define MC_SUB_CHUNK_HEIGHT 16
 #define MC_BLOCK_COUNT_PER_SUB_CHUNK  MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_SUB_CHUNK_HEIGHT
 #define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
 #define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
 
-#define MC_SUB_CHUNK_VERTEX_COUNT 2048
+#define MC_SUB_CHUNK_VERTEX_COUNT 3400
 
 namespace minecraft {
 
@@ -124,8 +124,6 @@ namespace minecraft {
 
     struct Sub_Chunk_Render_Data
     {
-        Sub_Chunk_Vertex vertices[MC_SUB_CHUNK_VERTEX_COUNT];
-
         i32 vertex_count;
         i32 face_count;
 
@@ -214,10 +212,10 @@ namespace minecraft {
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius = 20;
+        static constexpr i64 max_chunk_radius = 34;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
-        static constexpr i64 sub_chunk_capacity = sub_chunk_count_per_chunk * chunk_capacity;
+        static constexpr i64 sub_chunk_capacity = 4 * chunk_capacity;
         static constexpr i64 max_vertex_count_per_sub_chunk = MC_SUB_CHUNK_VERTEX_COUNT;
         static constexpr i64 sub_chunk_size = sizeof(Sub_Chunk_Vertex) * max_vertex_count_per_sub_chunk;
 

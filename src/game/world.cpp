@@ -24,7 +24,6 @@ namespace minecraft {
         {
             Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
 
-            memset(render_data.vertices, 0, sizeof(Sub_Chunk_Vertex) * MC_SUB_CHUNK_VERTEX_COUNT);
             render_data.memory_id       = -1;
             render_data.vertex_count    = 0;
             render_data.face_count      = 0;
@@ -65,11 +64,23 @@ namespace minecraft {
         return (i32)glm::trunc(min_height + ((max_height - min_height) * noise));
     }
 
-    static void set_block_id_based_on_height(Block *block, i32 block_y, i32 height)
+    static void set_block_id_based_on_height(Block *block,
+                                             i32 block_y,
+                                             i32 height,
+                                             i32 min_height,
+                                             i32 max_height,
+                                             i32 water_level)
     {
         if (block_y > height)
         {
-            block->id = BlockId_Air;
+            if (block_y < water_level)
+            {
+                block->id = BlockId_Water;
+            }
+            else
+            {
+                block->id = BlockId_Air;
+            }
         }
         else if (block_y == height)
         {
@@ -90,8 +101,10 @@ namespace minecraft {
         i32 left_edge_height_map[MC_CHUNK_DEPTH];
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
-        i32 min_biome_height = 100;
-        i32 max_biome_height = 250;
+        const i32 min_biome_height = 120;
+        const i32 max_biome_height = 180;
+        const i32 water_level = 140;
+        assert(water_level >= min_biome_height);
 
         const f32 noise_scale = 69.0f; // a nice noise scale
         const f32 one_over_nosie_scale = 1.0f / noise_scale;
@@ -153,7 +166,7 @@ namespace minecraft {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = this->get_block(block_coords);
                     const i32& height = height_map[z][x];
-                    set_block_id_based_on_height(block, y, height);
+                    set_block_id_based_on_height(block, y, height, min_biome_height, max_biome_height, water_level);
                 }
             }
         }
@@ -164,22 +177,22 @@ namespace minecraft {
             {
                 const i32& top_edge_height = top_edge_height_map[x];
                 Block *top_edge_block = &(front_edge_blocks[y * MC_CHUNK_WIDTH + x]);
-                set_block_id_based_on_height(top_edge_block, y, top_edge_height);
+                set_block_id_based_on_height(top_edge_block, y, top_edge_height, min_biome_height, max_biome_height, water_level);
 
                 const i32& bottom_edge_height = bottom_edge_height_map[x];
                 Block *bottom_edge_block = &(back_edge_blocks[y * MC_CHUNK_WIDTH + x]);
-                set_block_id_based_on_height(bottom_edge_block, y, bottom_edge_height);
+                set_block_id_based_on_height(bottom_edge_block, y, bottom_edge_height, min_biome_height, max_biome_height, water_level);
             }
 
             for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
             {
                 const i32& left_edge_height = left_edge_height_map[z];
                 Block *left_edge_block = &(left_edge_blocks[y * MC_CHUNK_DEPTH + z]);
-                set_block_id_based_on_height(left_edge_block, y, left_edge_height);
+                set_block_id_based_on_height(left_edge_block, y, left_edge_height, min_biome_height, max_biome_height, water_level);
 
                 const i32& right_edge_height = right_edge_height_map[z];
                 Block *right_edge_block = &(right_edge_blocks[y * MC_CHUNK_DEPTH + z]);
-                set_block_id_based_on_height(right_edge_block, y, right_edge_height);
+                set_block_id_based_on_height(right_edge_block, y, right_edge_height, min_biome_height, max_biome_height, water_level);
             }
         }
 

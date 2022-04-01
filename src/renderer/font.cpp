@@ -100,9 +100,10 @@ namespace minecraft {
                                 &quad,
                                 1); // 1 for opengl, 0 for dx3d
 
-            size.x += (quad.x1 - quad.x0);
             size.y = glm::max(size.y, (quad.y1 - quad.y0));
         }
+
+        size.x = cursor.x;
 
         return size;
     }

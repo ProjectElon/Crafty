@@ -202,9 +202,9 @@ namespace minecraft {
     {
         if (internal_data.quad_instances.size())
         {
-            glEnable(GL_BLEND);
             glDisable(GL_DEPTH_TEST);
 
+            glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
             glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_instance_vbo);
@@ -218,8 +218,8 @@ namespace minecraft {
             glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0, internal_data.quad_instances.size());
             internal_data.quad_instances.resize(0);
 
-            glDisable(GL_BLEND);
             glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
         }
     }
 

@@ -208,7 +208,8 @@ int main()
 
     UI_State default_ui_state;
     default_ui_state.cursor = { 0.0f, 0.0f };
-    default_ui_state.color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    default_ui_state.fill_color = { 1.0f, 0.0f, 0.0f, 1.0f };
     default_ui_state.offset = { 0.0f, 0.0f };
     default_ui_state.font = &noto_mono;
 
@@ -252,13 +253,13 @@ int main()
     u32 frames_per_second = 0;
 
     // todo(harlequin): String_Builder
-    std::string frames_per_second_text = "FPS: 0";
-    std::string frame_time_text = "frame time: 0.00 ms";
-    std::string vertex_count_text = "chunk vertex count: 0";
-    std::string face_count_text = "chunk face count: 0";
-    std::string sub_chunk_max_vertex_count_text = "sub chunk max vertex count: 0";
-    std::string total_sub_chunk_memory_text = "total sub chuck memory: 0 mbs";
-    std::string sub_chunk_allocated_memory_text = "total allocated sub chuck memory: 0 mbs";
+    std::string frames_per_second_text;
+    std::string frame_time_text;
+    std::string vertex_count_text;
+    std::string face_count_text;
+    std::string sub_chunk_max_vertex_count_text;
+    std::string total_sub_chunk_memory_text;
+    std::string sub_chunk_allocated_memory_text;
     std::string sub_chunk_used_memory_text;
     std::string total_sub_chunk_count_text;
     std::string rendered_sub_chunk_count_text;
@@ -373,7 +374,7 @@ int main()
 
             if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
             {
-                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, BlockId_Sand);
+                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, BlockId_Stone);
             }
 
             if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
@@ -477,11 +478,13 @@ int main()
         UI::begin();
 
         UI::set_offset({ 10.0f, 10.0f });
-        UI::set_color({ 0.0f, 0.0f, 0.0f, 0.8f });
+        UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
+        UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+
         UI::rect(frame_buffer_size * glm::vec2(0.4f, 1.0f) - glm::vec2(0.0f, 20.0f));
 
         UI::set_cursor({ 10.0f, 10.0f });
-        UI::set_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+
         UI::text(frames_per_second_text);
         UI::text(frame_time_text);
         UI::text(total_sub_chunk_count_text);
@@ -493,6 +496,10 @@ int main()
         UI::text(sub_chunk_allocated_memory_text);
         UI::text(sub_chunk_used_memory_text);
 
+        UI::set_fill_color({ 1.0f, 0.0f, 0.0, 1.0f });
+        std::string button_text = "click me";
+        bool clicked = UI::button(button_text);
+        if (clicked) fprintf(stderr, "clicked !!!!\n");
         UI::end();
 
         Opengl_2D_Renderer::draw_rect({ frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f },

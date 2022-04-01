@@ -268,6 +268,7 @@ namespace minecraft {
 
         f32 infinity = std::numeric_limits<f32>::max();
         render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
+
         upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
 
         if (render_data.vertex_count == 0 && render_data.memory_id != -1)
@@ -285,15 +286,33 @@ namespace minecraft {
                                                            u16 face,
                                                            u32 p0, u32 p1, u32 p2, u32 p3)
     {
+        const Block_Info& block_info = World::block_infos[block->id];
         const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];
 
-        if (!block_facing_normal_info.is_solid() || block_facing_normal_info.is_transparent())
+        if ((block_info.is_solid() && (!block_facing_normal_info.is_solid() || block_facing_normal_info.is_transparent())) ||
+            (block_info.is_transparent() && block_facing_normal->id == BlockId_Air))
         {
-            const Block_Info& block_info = World::block_infos[block->id];
             const u32& block_flags = block_info.flags;
 
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            Sub_Chunk_Vertex *vertices = sub_chunk_render_data.vertices;
+
+            if (sub_chunk_render_data.memory_id == -1)
+            {
+                auto& internal_data = Opengl_Renderer::internal_data;
+                auto& mutex = internal_data.free_sub_chunks_mutex;
+                auto& free_sub_chunks = internal_data.free_sub_chunks;
+
+                mutex.lock();
+                i32 sub_chunk_memory_id = free_sub_chunks.back();
+                free_sub_chunks.pop_back();
+                mutex.unlock();
+
+                sub_chunk_render_data.memory_id     = sub_chunk_memory_id;
+                sub_chunk_render_data.base_vertex   = internal_data.base_vertex + sub_chunk_memory_id * World::max_vertex_count_per_sub_chunk;
+                sub_chunk_render_data.base_instance = internal_data.base_instance + sub_chunk_memory_id;
+            }
+
+            Sub_Chunk_Vertex *vertices = sub_chunk_render_data.base_vertex;
             i32 vertex_index = sub_chunk_render_data.vertex_count;
 
             u32 data00 = Opengl_Renderer::compress_vertex(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
@@ -318,6 +337,7 @@ namespace minecraft {
     void submit_block_to_sub_chunk_render_data(Chunk *chunk, u32 sub_chunk_index, Block *block, const glm::ivec3& block_coords)
     {
         const Block_Info& block_info = World::block_infos[block->id];
+
         u32 submit_count = 0;
 
          /*
@@ -494,26 +514,10 @@ namespace minecraft {
 
         if (!render_data.uploaded_to_gpu && render_data.vertex_count > 0)
         {
-            if (render_data.memory_id == -1)
-            {
-                internal_data.free_sub_chunks_mutex.lock();
-                i32 sub_chunk_id = internal_data.free_sub_chunks.back();
-                internal_data.free_sub_chunks.pop_back();
-                internal_data.free_sub_chunks_mutex.unlock();
-
-                render_data.memory_id     = sub_chunk_id;
-                render_data.base_vertex   = internal_data.base_vertex + sub_chunk_id * World::max_vertex_count_per_sub_chunk;
-                render_data.base_instance = internal_data.base_instance + sub_chunk_id;
-            }
-
             assert(render_data.vertex_count <= World::max_vertex_count_per_sub_chunk);
-
             render_data.base_instance->chunk_coords = chunk->world_coords;
-            memcpy(render_data.base_vertex, render_data.vertices, sizeof(Sub_Chunk_Vertex) * render_data.vertex_count);
-
-            internal_data.sub_chunk_used_memory += sizeof(Sub_Chunk_Vertex) * render_data.vertex_count;
-
             render_data.uploaded_to_gpu = true;
+            internal_data.sub_chunk_used_memory += sizeof(Sub_Chunk_Vertex) * render_data.vertex_count;
         }
     }
 

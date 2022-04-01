@@ -12,7 +12,8 @@ namespace minecraft {
     {
         glm::vec2 cursor;
         glm::vec2 offset;
-        glm::vec4 color;
+        glm::vec4 text_color;
+        glm::vec4 fill_color;
         Bitmap_Font *font;
     };
 
@@ -32,12 +33,15 @@ namespace minecraft {
         static void begin();
 
         static void set_font(Bitmap_Font *font);
-        static void set_color(const glm::vec4& color);
+        static void set_text_color(const glm::vec4& color);
+        static void set_fill_color(const glm::vec4& color);
+
         static void set_cursor(const glm::vec2& cursor);
         static void set_offset(const glm::vec2& offset);
 
         static bool rect(const glm::vec2& size);
         static bool text(const std::string& text);
+        static bool button(const std::string& text);
 
         static void end();
     };

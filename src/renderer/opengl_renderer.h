@@ -83,6 +83,7 @@ namespace minecraft {
 
         Opengl_Renderer_Stats stats;
         i64 sub_chunk_used_memory;
+
         bool should_trace_debug_messsage = true;
     };
 
