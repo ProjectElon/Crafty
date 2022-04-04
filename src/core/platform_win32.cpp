@@ -48,6 +48,10 @@ namespace minecraft {
         {
             Event_System::fire_event(EventType_KeyPress, &event);
         }
+        else if (action == GLFW_REPEAT)
+        {
+            Event_System::fire_event(EventType_KeyHeld, &event);
+        }
         else
         {
             Event_System::fire_event(EventType_KeyRelease, &event);
@@ -70,6 +74,10 @@ namespace minecraft {
         if (action == GLFW_PRESS)
         {
             Event_System::fire_event(EventType_MouseButtonPress, &event);
+        }
+        else if (action == GLFW_REPEAT)
+        {
+            Event_System::fire_event(EventType_MouseButtonHeld, &event);
         }
         else
         {

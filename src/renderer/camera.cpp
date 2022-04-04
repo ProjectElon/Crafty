@@ -95,6 +95,6 @@ namespace minecraft {
 
     void Camera::update_projection()
     {
-        this->projection = glm::perspective(this->fov, this->aspect_ratio, this->near, this->far);
+        this->projection = glm::perspective(glm::radians(this->fov), this->aspect_ratio, this->near, this->far);
     }
 }

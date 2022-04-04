@@ -24,14 +24,20 @@ namespace minecraft {
         {
             Sub_Chunk_Render_Data& render_data = this->sub_chunks_render_data[sub_chunk_index];
 
-            render_data.memory_id       = -1;
-            render_data.vertex_count    = 0;
             render_data.face_count      = 0;
-            render_data.base_vertex     = nullptr;
-            render_data.base_instance   = nullptr;
+            render_data.instance_memory_id = -1;
+
+            render_data.opaque_bucket.memory_id = -1;
+            render_data.opaque_bucket.current_vertex = nullptr;
+            render_data.opaque_bucket.face_count = 0;
+
+            render_data.transparent_bucket.memory_id = -1;
+            render_data.transparent_bucket.current_vertex = nullptr;
+            render_data.transparent_bucket.face_count = 0;
+
             render_data.uploaded_to_gpu = false;
             render_data.pending_for_update = false;
-            f32 infinity = std::numeric_limits<f32>::max();
+            constexpr f32 infinity = std::numeric_limits<f32>::max();
             render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
         }
 
@@ -102,7 +108,7 @@ namespace minecraft {
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
         const i32 min_biome_height = 120;
-        const i32 max_biome_height = 180;
+        const i32 max_biome_height = 200;
         const i32 water_level = 140;
         assert(water_level >= min_biome_height);
 
@@ -353,7 +359,7 @@ namespace minecraft {
         {
             Block_Query_Result query = World::query_block(query_position);
 
-            if (query.chunk && query.block && query.block->id != BlockId_Air)
+            if (query.chunk && query.block && query.block->id != BlockId_Air && query.block->id != BlockId_Water)
             {
                 glm::vec3 block_position = query.chunk->get_block_position(query.block_coords);
                 Ray ray   = { view_position, view_direction };

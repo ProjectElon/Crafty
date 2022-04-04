@@ -16,10 +16,12 @@ namespace minecraft {
 
             // Key Events
             case EventType_KeyPress: return "KeyPress"; break;
+            case EventType_KeyHeld: return "KeyHeld"; break;
             case EventType_KeyRelease: return "KeyRelease"; break;
 
             // Mouse Events
             case EventType_MouseButtonPress: return "MouseButtonPress"; break;
+            case EventType_MouseButtonHeld: return "MouseButtonHeld"; break;
             case EventType_MouseButtonRelease: return "MouseButtonRelease"; break;
             case EventType_MouseWheel: return "MouseWheel"; break;
             case EventType_MouseMove: return "MouseMove"; break;
@@ -64,6 +66,13 @@ namespace minecraft {
                 return internal_string_buffer;
             } break;
 
+            case EventType_KeyHeld:
+            {
+                u16 key = event->data_u16;
+                sprintf(internal_string_buffer, "[EVENT]: KeyHeld => key: \"%s\"", Input::convert_key_code_to_string(key));
+                return internal_string_buffer;
+            } break;
+
             case EventType_KeyRelease:
             {
                 u16 key = event->data_u16;
@@ -83,6 +92,13 @@ namespace minecraft {
             {
                 u16 button = event->data_u16;
                 sprintf(internal_string_buffer, "[EVENT]: MouseButtonPress => button: \"%s\"", Input::convert_button_code_to_string(button));
+                return internal_string_buffer;
+            } break;
+
+            case EventType_MouseButtonHeld:
+            {
+                u16 button = event->data_u16;
+                sprintf(internal_string_buffer, "[EVENT]: MouseButtonHeld => button: \"%s\"", Input::convert_button_code_to_string(button));
                 return internal_string_buffer;
             } break;
 

@@ -1,2 +1,3 @@
-﻿  main.cpp
+﻿  dropdown_console.cpp
+C:\dev\cpp\Crafty\src\ui\dropdown_console.cpp(135,39): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

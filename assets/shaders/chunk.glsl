@@ -12,10 +12,10 @@ out flat uint a_data0;
 out vec4 a_biome_color;
 out float a_fog_factor;
 
-uniform mat4 u_view;
-uniform mat4 u_projection;
-uniform float u_chunk_radius;
-uniform vec3 u_camera_position;
+uniform mat4  u_view;
+uniform mat4  u_projection;
+uniform float u_one_over_chunk_radius;
+uniform vec3  u_camera_position;
 
 #define BLOCK_X_MASK 15
 #define BLOCK_Y_MASK 255
@@ -69,7 +69,7 @@ void main()
     gl_Position = u_projection * u_view * vec4(position, 1.0f);
 
     float distance_relative_to_camera = length(u_camera_position - position);
-    a_fog_factor = clamp(distance_relative_to_camera / (u_chunk_radius * 16.0f), 0.0f, 1.0f);
+    a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
     int uv_index = int(in_data1);
     float u = texelFetch(u_uvs, uv_index).r;
@@ -163,10 +163,9 @@ void main()
     // uint flags = a_data0 >> 24;
 
     vec3 normal = face_normal[face_id];
-
     vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color;
 
-    float ambient_amount = 0.2f;
+    float ambient_amount = 0.4f;
     vec3 ambient = light_color * ambient_amount;
 
     float diffuse_amount = max(dot(normal, light_dir), 0.0f);

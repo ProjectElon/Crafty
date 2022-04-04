@@ -15,11 +15,13 @@ namespace minecraft {
 
         // Key Events
         EventType_KeyPress,
+        EventType_KeyHeld,
         EventType_KeyRelease,
         EventType_Char,
 
         // Mouse Events
         EventType_MouseButtonPress,
+        EventType_MouseButtonHeld,
         EventType_MouseButtonRelease,
         EventType_MouseWheel,
         EventType_MouseMove,

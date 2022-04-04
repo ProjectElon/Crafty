@@ -19,6 +19,7 @@
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
 #include "ui/ui.h"
+#include "ui/dropdown_console.h"
 
 #include "assets/texture_packer.h"
 
@@ -32,6 +33,8 @@
 #include <sstream>
 
 namespace minecraft {
+
+    static bool should_render_ui = false;
 
     static bool on_quit(const Event *event, void *sender)
     {
@@ -52,10 +55,23 @@ namespace minecraft {
             game->is_running = false;
         }
 
-        if (key == MC_KEY_C)
+        if (Dropdown_Console::internal_data.state == ConsoleState_Closed)
         {
-            Input::toggle_cursor();
-            game->config.update_camera = !game->config.update_camera;
+            if (key == MC_KEY_U)
+            {
+                should_render_ui = !should_render_ui;
+            }
+
+            if (key == MC_KEY_C)
+            {
+                Input::toggle_cursor();
+                game->config.update_camera = !game->config.update_camera;
+            }
+        }
+
+        if (key == MC_KEY_F1)
+        {
+            Dropdown_Console::toggle();
         }
 
         return false;
@@ -200,6 +216,9 @@ int main()
     Opengl_Texture crosshair022_texture;
     crosshair022_texture.load_from_file("../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
 
+    Opengl_Texture button_texture;
+    button_texture.load_from_file("../assets/textures/ui/buttonLong_blue.png", TextureUsage_UI);
+
     Bitmap_Font fira_code;
     fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
 
@@ -211,13 +230,38 @@ int main()
     default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
     default_ui_state.fill_color = { 1.0f, 0.0f, 0.0f, 1.0f };
     default_ui_state.offset = { 0.0f, 0.0f };
-    default_ui_state.font = &noto_mono;
+    default_ui_state.font = &fira_code;
 
     if (!UI::initialize(&default_ui_state))
     {
         fprintf(stderr, "[ERROR]: failed to initialize ui system\n");
         return -1;
     }
+
+    glm::vec4 text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glm::vec4 background_color = { 63, 129, 120, 240 };
+
+    f32 rgba_normalize_factor = 1.0f / 255.0f;
+
+    glm::vec4 input_text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
+    glm::vec4 input_text_background_color = { 73, 27, 57, 255 };
+
+    glm::vec4 input_text_cursor_color = { 1.0f, 0.0f, 0.0f, 0.5f };
+
+    if (!Dropdown_Console::initialize(&fira_code,
+                                      text_color,
+                                      background_color * rgba_normalize_factor,
+                                      input_text_color,
+                                      input_text_background_color * rgba_normalize_factor,
+                                      input_text_cursor_color))
+    {
+        fprintf(stderr, "[ERROR]: failed to initialize dropdown console\n");
+        return -1;
+    }
+
+    Event_System::register_event(EventType_Char, Dropdown_Console::on_char_input, nullptr);
+    Event_System::register_event(EventType_KeyPress, Dropdown_Console::on_key, nullptr);
+    Event_System::register_event(EventType_KeyHeld, Dropdown_Console::on_key, nullptr);
 
 #if 0
     {
@@ -237,7 +281,7 @@ int main()
     game.is_running = true;
 
     Camera camera;
-    camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f));
+    camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f), 70.0f);
     Event_System::register_event(EventType_Resize, on_resize, &camera);
 
     Frustum camera_frustum;
@@ -257,23 +301,6 @@ int main()
     std::string frame_time_text;
     std::string vertex_count_text;
     std::string face_count_text;
-    std::string sub_chunk_max_vertex_count_text;
-    std::string total_sub_chunk_memory_text;
-    std::string sub_chunk_allocated_memory_text;
-    std::string sub_chunk_used_memory_text;
-    std::string total_sub_chunk_count_text;
-    std::string rendered_sub_chunk_count_text;
-
-    {
-        i64 sub_chunk_count = World::sub_chunk_capacity;
-        i64 sub_chunk_size = World::sub_chunk_size;
-        f64 sub_chunk_total_memory = (sub_chunk_count * sub_chunk_size) / (1024.0 * 1024.0);
-
-        std::stringstream ss;
-        ss.precision(2);
-        ss << "total sub chunk memory: " << std::fixed << sub_chunk_total_memory << " mbs";
-        total_sub_chunk_memory_text = ss.str();
-    }
 
     while (game.is_running)
     {
@@ -305,7 +332,8 @@ int main()
         platform.pump_messages();
         Input::update();
 
-        if (game.config.update_camera)
+        // todo(harlequin): more work on the event system
+        if (game.config.update_camera && Dropdown_Console::internal_data.state == ConsoleState_Closed)
         {
             camera.update(delta_time);
             camera_frustum.update(camera.projection * camera.view);
@@ -372,12 +400,12 @@ int main()
                                            block_facing_normal_query.block_coords.y < MC_CHUNK_HEIGHT &&
                                            block_facing_normal_query.block->id == BlockId_Air;
 
-            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
+            if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
             {
-                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, BlockId_Stone);
+                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, BlockId_Glass);
             }
 
-            if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
             {
                 World::set_block_id(select_query.chunk, select_query.block_coords, BlockId_Air);
             }
@@ -408,7 +436,7 @@ int main()
                     {
                         Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
                         bool should_render_sub_chunks = render_data.uploaded_to_gpu &&
-                                                        render_data.vertex_count > 0 &&
+                                                        render_data.face_count > 0 &&
                                                         camera_frustum.is_aabb_visible(render_data.aabb);
                         if (should_render_sub_chunks)
                         {
@@ -422,85 +450,104 @@ int main()
 
         Opengl_Renderer::end();
 
-        {
-            std::stringstream ss;
-            ss << "vertex count: " << Opengl_Renderer::internal_data.stats.vertex_count;
-            vertex_count_text = ss.str();
-        }
-
-        {
-            std::stringstream ss;
-            ss << "face count: " << Opengl_Renderer::internal_data.stats.face_count;
-            face_count_text = ss.str();
-        }
-
-        {
-            std::stringstream ss;
-            ss << "sub chunk max vertex count: " << Opengl_Renderer::internal_data.stats.sub_chunk_max_vertex_count;
-            sub_chunk_max_vertex_count_text = ss.str();
-        }
-
-        {
-            i64 free_sub_chunk_count = Opengl_Renderer::internal_data.free_sub_chunks.size();
-            i64 allocated_sub_chunk_count = World::sub_chunk_capacity - free_sub_chunk_count;
-
-            f64 allocated_sub_chunk_memory = (allocated_sub_chunk_count * World::sub_chunk_size) / (1024.0 * 1024.0);
-            std::stringstream ss;
-            ss.precision(2);
-            ss << "total allocated sub chucks memory: " << std::fixed << allocated_sub_chunk_memory << " mbs";
-            sub_chunk_allocated_memory_text = ss.str();
-        }
-
-        {
-            f64 used_sub_chunk_memory = Opengl_Renderer::internal_data.sub_chunk_used_memory / (1024.0 * 1024.0);
-            std::stringstream ss;
-            ss.precision(2);
-            ss << "total sub chucks used memory: " << std::fixed << used_sub_chunk_memory << " mbs";
-            sub_chunk_used_memory_text = ss.str();
-        }
-
-        {
-            i64 free_sub_chunk_count = Opengl_Renderer::internal_data.free_sub_chunks.size();
-            i64 allocated_sub_chunk_count = World::sub_chunk_capacity - free_sub_chunk_count;
-            std::stringstream ss;
-            ss << "sub chunks: " << allocated_sub_chunk_count;
-            total_sub_chunk_count_text = ss.str();
-        }
-
-        {
-            std::stringstream ss;
-            ss << "rendered sub chunks: " << Opengl_Renderer::internal_data.stats.sub_chunk_count;
-            rendered_sub_chunk_count_text = ss.str();
-        }
-
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
-        UI::begin();
+        if (should_render_ui)
+        {
+            {
+                std::stringstream ss;
+                ss << "vertex count: " << Opengl_Renderer::internal_data.stats.face_count * 4;
+                vertex_count_text = ss.str();
+            }
 
-        UI::set_offset({ 10.0f, 10.0f });
-        UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
-        UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+            {
+                std::stringstream ss;
+                ss << "face count: " << Opengl_Renderer::internal_data.stats.face_count;
+                face_count_text = ss.str();
+            }
 
-        UI::rect(frame_buffer_size * glm::vec2(0.4f, 1.0f) - glm::vec2(0.0f, 20.0f));
+            i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - Opengl_Renderer::internal_data.free_buckets.size();
 
-        UI::set_cursor({ 10.0f, 10.0f });
+            std::string sub_chunk_bucket_capacity_text;
+            std::string sub_chunk_bucket_count_text;
+            std::string sub_chunk_bucket_total_memory_text;
+            std::string sub_chunk_bucket_allocated_memory_text;
 
-        UI::text(frames_per_second_text);
-        UI::text(frame_time_text);
-        UI::text(total_sub_chunk_count_text);
-        UI::text(rendered_sub_chunk_count_text);
-        UI::text(vertex_count_text);
-        UI::text(face_count_text);
-        UI::text(sub_chunk_max_vertex_count_text);
-        UI::text(total_sub_chunk_memory_text);
-        UI::text(sub_chunk_allocated_memory_text);
-        UI::text(sub_chunk_used_memory_text);
+            {
+                std::stringstream ss;
+                ss << "sub chunk capacity: " << World::sub_chunk_bucket_capacity;
+                sub_chunk_bucket_capacity_text = ss.str();
+            }
 
-        UI::set_fill_color({ 1.0f, 0.0f, 0.0, 1.0f });
-        std::string button_text = "click me";
-        bool clicked = UI::button(button_text);
-        if (clicked) fprintf(stderr, "clicked !!!!\n");
-        UI::end();
+            {
+                std::stringstream ss;
+                ss << "sub chunk buckets: " << sub_chunk_bucket_count;
+                sub_chunk_bucket_count_text = ss.str();
+            }
+
+            {
+                f64 total_size = (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+                std::stringstream ss;
+                ss.precision(2);
+                ss << "total sub chunk buckets memory: " << std::fixed << total_size << " mbs";
+                sub_chunk_bucket_total_memory_text = ss.str();
+            }
+
+            {
+                f64 total_size = (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+                std::stringstream ss;
+                ss.precision(2);
+                ss << "sub chunk buckets allocated memory: " << std::fixed << total_size << " mbs";
+                sub_chunk_bucket_allocated_memory_text = ss.str();
+            }
+
+            std::string player_position_text;
+            std::string player_chunk_coords_text;
+            std::string chunk_radius_text;
+
+            {
+                std::stringstream ss;
+                ss.precision(2);
+                ss << "position: <" << std::fixed << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << ">";
+                player_position_text = ss.str();
+            }
+
+            {
+                std::stringstream ss;
+                ss << "chunk: <" << player_chunk_coords.x << ", " << player_chunk_coords.y << ">";
+                player_chunk_coords_text = ss.str();
+            }
+
+            {
+                std::stringstream ss;
+                ss << "chunk radius: " << World::chunk_radius;
+                chunk_radius_text = ss.str();
+            }
+
+            UI::begin();
+
+            UI::set_offset({ 10.0f, 10.0f });
+            UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
+            UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+            UI::rect(frame_buffer_size * glm::vec2(0.4f, 1.0f) - glm::vec2(0.0f, 20.0f));
+            UI::set_cursor({ 10.0f, 10.0f });
+
+            UI::text(player_position_text);
+            UI::text(player_chunk_coords_text);
+            UI::text(chunk_radius_text);
+
+            UI::text(frames_per_second_text);
+            UI::text(frame_time_text);
+            UI::text(face_count_text);
+            UI::text(vertex_count_text);
+            UI::text(sub_chunk_bucket_capacity_text);
+            UI::text(sub_chunk_bucket_count_text);
+            UI::text(sub_chunk_bucket_total_memory_text);
+            UI::text(sub_chunk_bucket_allocated_memory_text);
+
+            UI::end();
+        }
 
         Opengl_2D_Renderer::draw_rect({ frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f },
                                       { crosshair022_texture.width * 0.5f,
@@ -512,6 +559,8 @@ int main()
         f32 line_thickness = 3.0f;
         Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
         Opengl_Debug_Renderer::end();
+
+        Dropdown_Console::draw(delta_time);
 
         Opengl_2D_Renderer::begin(&ui_shader);
         Opengl_2D_Renderer::end();

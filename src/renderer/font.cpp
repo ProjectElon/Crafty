@@ -24,8 +24,16 @@ namespace minecraft {
         fseek(file_handle, 0, SEEK_SET);
 
         u8 *font = new u8[file_size];
+        defer { delete[] font; };
         fread(font, file_size, 1, file_handle);
         fclose(file_handle);
+
+        stbtt_fontinfo font_info;
+        stbtt_InitFont(&font_info, font, 0);
+        f32 scale = stbtt_ScaleForPixelHeight(&font_info, size_in_pixels);
+        i32 ascent;
+        stbtt_GetFontVMetrics(&font_info, &ascent, 0, 0);
+        this->char_height = (i32)(ascent * scale);
 
         char first_char = ' ';
         char last_char = '~';
@@ -84,7 +92,7 @@ namespace minecraft {
     glm::vec2 Bitmap_Font::get_string_size(const std::string& text)
     {
         glm::vec2 cursor = { 0.0f, 0.0f };
-        glm::vec2 size = { 0.0f, std::numeric_limits<f32>::min() };
+        glm::vec2 size = { 0.0f, this->char_height };
 
         for (i32 i = 0; i < text.length(); i++)
         {
@@ -99,12 +107,9 @@ namespace minecraft {
                                 &cursor.y,
                                 &quad,
                                 1); // 1 for opengl, 0 for dx3d
-
-            size.y = glm::max(size.y, (quad.y1 - quad.y0));
         }
 
         size.x = cursor.x;
-
         return size;
     }
 }

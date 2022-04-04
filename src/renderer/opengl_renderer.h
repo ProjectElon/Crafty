@@ -51,9 +51,7 @@ namespace minecraft {
 
     struct Opengl_Renderer_Stats
     {
-        i32 vertex_count;
         i32 face_count;
-        i32 sub_chunk_max_vertex_count;
         i32 sub_chunk_count;
     };
 
@@ -70,16 +68,23 @@ namespace minecraft {
         Sub_Chunk_Vertex *base_vertex;
         Sub_Chunk_Instance *base_instance;
 
-        std::mutex free_sub_chunks_mutex;
-        std::vector<u32> free_sub_chunks;
+        std::mutex free_buckets_mutex;
+        std::vector<i32> free_buckets;
+
+        std::mutex free_instances_mutex;
+        std::vector<i32> free_instances;
+
+        u32 opaque_command_count;
+        Draw_Elements_Indirect_Command opaque_command_buffer[World::sub_chunk_bucket_capacity];
+        u32 opaque_command_buffer_id;
+
+        u32 transparent_command_count;
+        Draw_Elements_Indirect_Command transparent_command_buffer[World::sub_chunk_bucket_capacity];
+        u32 transparent_command_buffer_id;
 
         Opengl_Texture block_sprite_sheet;
         u32 uv_buffer_id;
         u32 uv_texture_id;
-
-        u32 command_count;
-        Draw_Elements_Indirect_Command command_buffer[World::sub_chunk_capacity];
-        u32 command_buffer_id;
 
         Opengl_Renderer_Stats stats;
         i64 sub_chunk_used_memory;
@@ -110,6 +115,13 @@ namespace minecraft {
             u32& out_face_id,
             u32& out_face_corner_id,
             u32& out_flags);
+
+        static void allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+        static void reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+        static void free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+
+        static i32 allocate_sub_chunk_instance();
+        static void free_sub_chunk_instance(i32 instance_memory_id);
 
         static void free_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
 

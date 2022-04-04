@@ -76,7 +76,7 @@ namespace minecraft {
         glm::vec2 position = state.offset + state.cursor;
         glm::vec2 text_size = state.font->get_string_size(text);
         Opengl_2D_Renderer::draw_string(state.font, text, text_size, position + text_size * 0.5f, state.text_color);
-        state.cursor.y += text_size.y;
+        state.cursor.y += state.font->char_height;
 
         glm::vec2 mouse = Input::get_mouse_position();
 
@@ -90,24 +90,50 @@ namespace minecraft {
         return false;
     }
 
-    bool UI::button(const std::string& text)
+    bool UI::button(const std::string& text, const glm::vec2& padding)
     {
         UI_State& state = internal_data.current_state;
 
-        glm::vec2 size = state.font->get_string_size(text);
+        glm::vec2 size     = state.font->get_string_size(text);
         glm::vec2 position = state.offset + state.cursor;
 
         glm::vec2 mouse = Input::get_mouse_position();
 
-        bool hovered = mouse.x >= position.x && mouse.x <= position.x + size.x &&
-                       mouse.y >= position.y && mouse.y <= position.y + size.y;
+        bool hovered = mouse.x >= position.x && mouse.x <= position.x + size.x + padding.x &&
+                       mouse.y >= position.y && mouse.y <= position.y + size.y + padding.y;
 
         glm::vec4 color = state.fill_color;
-        if (hovered || Input::is_button_held(MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
+        if (hovered && Input::is_button_held(MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
 
-        Opengl_2D_Renderer::draw_rect(position + size * 0.5f, size, 0.0f, color);
-        Opengl_2D_Renderer::draw_string(state.font, text, size, position + size * 0.5f, state.text_color);
-        state.cursor.y += size.y;
+        Opengl_2D_Renderer::draw_rect(position + (size + padding) * 0.5f, size + padding, 0.0f, color);
+        Opengl_2D_Renderer::draw_string(state.font, text, size, position + (size + padding) * 0.5f, state.text_color);
+        state.cursor.y += size.y + padding.y + 5.0f;
+        return hovered && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT);
+    }
+
+    bool UI::textured_button(const std::string& text,
+                             Opengl_Texture *texture,
+                             const glm::vec2& padding,
+                             const glm::vec2& uv_scale,
+                             const glm::vec2& uv_offset)
+    {
+        UI_State& state = internal_data.current_state;
+
+        glm::vec2 size     = state.font->get_string_size(text);
+        glm::vec2 position = state.offset + state.cursor;
+
+        glm::vec2 mouse = Input::get_mouse_position();
+
+        bool hovered = mouse.x >= position.x && mouse.x <= position.x + size.x + padding.x &&
+                       mouse.y >= position.y && mouse.y <= position.y + size.y + padding.y;
+
+        glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
+        if (hovered && Input::is_button_held(MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
+
+        Opengl_2D_Renderer::draw_rect(position + (size + padding) * 0.5f, size + padding, 0.0f, color, texture, uv_scale, uv_offset);
+        Opengl_2D_Renderer::draw_string(state.font, text, size, position + (size + padding) * 0.5f, state.text_color);
+
+        state.cursor.y += size.y + padding.y + 5.0f;
         return hovered && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT);
     }
 

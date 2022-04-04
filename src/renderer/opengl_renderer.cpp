@@ -90,12 +90,9 @@ namespace minecraft {
         glGenBuffers(1, &internal_data.chunk_vertex_buffer_id);
         glBindBuffer(GL_ARRAY_BUFFER, internal_data.chunk_vertex_buffer_id);
 
-        i64 sub_chunk_count = World::sub_chunk_capacity;
-        i64 sub_chunk_size = World::sub_chunk_size;
-
         GLbitfield buffer_flags = GL_MAP_PERSISTENT_BIT | GL_MAP_WRITE_BIT | GL_MAP_COHERENT_BIT;
-        glBufferStorage(GL_ARRAY_BUFFER, sub_chunk_count * sub_chunk_size, NULL, buffer_flags);
-        internal_data.base_vertex = (Sub_Chunk_Vertex*)glMapBufferRange(GL_ARRAY_BUFFER, 0, sub_chunk_count * sub_chunk_size, buffer_flags);
+        glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size, NULL, buffer_flags);
+        internal_data.base_vertex = (Sub_Chunk_Vertex*)glMapBufferRange(GL_ARRAY_BUFFER, 0, World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size, buffer_flags);
 
         glEnableVertexAttribArray(0);
         glVertexAttribIPointer(0,
@@ -115,8 +112,8 @@ namespace minecraft {
 
         glGenBuffers(1, &internal_data.chunk_instance_buffer_id);
         glBindBuffer(GL_ARRAY_BUFFER, internal_data.chunk_instance_buffer_id);
-        glBufferStorage(GL_ARRAY_BUFFER, sub_chunk_count * sizeof(Sub_Chunk_Instance), NULL, buffer_flags);
-        internal_data.base_instance = (Sub_Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER, 0, sub_chunk_count * sizeof(Sub_Chunk_Instance), buffer_flags);
+        glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), NULL, buffer_flags);
+        internal_data.base_instance = (Sub_Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER, 0, World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), buffer_flags);
 
         glEnableVertexAttribArray(2);
         glVertexAttribIPointer(2,
@@ -129,11 +126,13 @@ namespace minecraft {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
-        internal_data.free_sub_chunks.resize(sub_chunk_count);
+        internal_data.free_buckets.resize(World::sub_chunk_bucket_capacity);
+        internal_data.free_instances.resize(World::sub_chunk_bucket_capacity);
 
-        for (u32 i = 0; i < sub_chunk_count; ++i)
+        for (i32 i = 0; i < World::sub_chunk_bucket_capacity; ++i)
         {
-            internal_data.free_sub_chunks[i] = sub_chunk_count - i - 1;
+            internal_data.free_buckets[i] = World::sub_chunk_bucket_capacity - i - 1;
+            internal_data.free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
         }
 
         // todo(harlequin): memory system
@@ -168,9 +167,14 @@ namespace minecraft {
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-        glGenBuffers(1, &internal_data.command_buffer_id);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.command_buffer_id);
-        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * sub_chunk_count, NULL, GL_DYNAMIC_DRAW);
+        glGenBuffers(1, &internal_data.opaque_command_buffer_id);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.opaque_command_buffer_id);
+        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+
+        glGenBuffers(1, &internal_data.transparent_command_buffer_id);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.transparent_command_buffer_id);
+        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
         u32 width = platform->game->config.window_width;
@@ -232,48 +236,109 @@ namespace minecraft {
         out_flags = (vertex >> 24);
     }
 
+    void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
+    {
+        assert(internal_data.free_buckets.size());
+        internal_data.free_buckets_mutex.lock();
+        bucket->memory_id = internal_data.free_buckets.back();
+        internal_data.free_buckets.pop_back();
+        internal_data.free_buckets_mutex.unlock();
+        bucket->current_vertex = internal_data.base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        bucket->face_count = 0;
+    }
+
+    void Opengl_Renderer::reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
+    {
+        assert(bucket->memory_id != -1 && bucket->current_vertex);
+        bucket->current_vertex = internal_data.base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        bucket->face_count = 0;
+    }
+
+    void Opengl_Renderer::free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
+    {
+        assert(bucket->memory_id != -1 && bucket->current_vertex);
+        internal_data.free_buckets_mutex.lock();
+        internal_data.free_buckets.push_back(bucket->memory_id);
+        internal_data.free_buckets_mutex.unlock();
+        bucket->memory_id = -1;
+        bucket->current_vertex = nullptr;
+        bucket->face_count = 0;
+    }
+
+    i32 Opengl_Renderer::allocate_sub_chunk_instance()
+    {
+        assert(internal_data.free_buckets.size());
+
+        internal_data.free_instances_mutex.lock();
+        i32 instance_memory_id = internal_data.free_instances.back();
+        internal_data.free_instances.pop_back();
+        internal_data.free_instances_mutex.unlock();
+        return instance_memory_id;
+    }
+
+    void Opengl_Renderer::free_sub_chunk_instance(i32 instance_memory_id)
+    {
+        internal_data.free_instances_mutex.lock();
+        internal_data.free_instances.push_back(instance_memory_id);
+        internal_data.free_instances_mutex.unlock();
+    }
+
     void Opengl_Renderer::free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (render_data.memory_id != -1)
+        internal_data.sub_chunk_used_memory -= render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
+
+        if (render_data.instance_memory_id != -1)
         {
-            internal_data.sub_chunk_used_memory -= render_data.vertex_count * sizeof(Sub_Chunk_Vertex);
-
-            internal_data.free_sub_chunks_mutex.lock();
-            internal_data.free_sub_chunks.push_back(render_data.memory_id);
-            internal_data.free_sub_chunks_mutex.unlock();
-
-            render_data.memory_id = -1;
-            render_data.base_vertex = 0;
-            render_data.base_instance = 0;
-            render_data.vertex_count = 0;
-            render_data.face_count = 0;
-            render_data.uploaded_to_gpu = false;
-
-            f32 infinity = std::numeric_limits<f32>::max();
-            render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
+            free_sub_chunk_instance(render_data.instance_memory_id);
+            render_data.instance_memory_id = -1;
+            render_data.base_instance = nullptr;
         }
+
+        if (render_data.opaque_bucket.memory_id != -1)
+        {
+            free_sub_chunk_bucket(&render_data.opaque_bucket);
+        }
+
+        if (render_data.transparent_bucket.memory_id != -1)
+        {
+            free_sub_chunk_bucket(&render_data.transparent_bucket);
+        }
+
+        render_data.face_count = 0;
+        render_data.uploaded_to_gpu = false;
+
+        constexpr f32 infinity = std::numeric_limits<f32>::max();
+        render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
     }
 
     void Opengl_Renderer::update_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        internal_data.sub_chunk_used_memory -= render_data.vertex_count * sizeof(Sub_Chunk_Vertex);
+        if (render_data.opaque_bucket.is_allocated())
+        {
+            reset_sub_chunk_bucket(&render_data.opaque_bucket);
+        }
 
-        render_data.vertex_count = 0;
-        render_data.face_count = 0;
+        if (render_data.transparent_bucket.is_allocated())
+        {
+            reset_sub_chunk_bucket(&render_data.transparent_bucket);
+        }
+
         render_data.uploaded_to_gpu = false;
-
-        f32 infinity = std::numeric_limits<f32>::max();
-        render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
 
         upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
 
-        if (render_data.vertex_count == 0 && render_data.memory_id != -1)
+        if (render_data.opaque_bucket.face_count == 0 && render_data.opaque_bucket.is_allocated())
         {
-            free_sub_chunk(chunk, sub_chunk_index);
+            free_sub_chunk_bucket(&render_data.opaque_bucket);
+        }
+
+        if (render_data.transparent_bucket.face_count == 0 && render_data.transparent_bucket.is_allocated())
+        {
+            free_sub_chunk_bucket(&render_data.transparent_bucket);
         }
     }
 
@@ -289,43 +354,44 @@ namespace minecraft {
         const Block_Info& block_info = World::block_infos[block->id];
         const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];
 
-        if ((block_info.is_solid() && (!block_facing_normal_info.is_solid() || block_facing_normal_info.is_transparent())) ||
-            (block_info.is_transparent() && block_facing_normal->id == BlockId_Air))
+        bool is_solid = block_info.is_solid();
+        bool is_transparent = block_info.is_transparent();
+
+        if ((is_solid && block_facing_normal_info.is_transparent()) || (is_transparent && block_facing_normal->id != block->id))
         {
             const u32& block_flags = block_info.flags;
 
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+            Sub_Chunk_Bucket *bucket = nullptr;
 
-            if (sub_chunk_render_data.memory_id == -1)
+            if (is_transparent)
             {
-                auto& internal_data = Opengl_Renderer::internal_data;
-                auto& mutex = internal_data.free_sub_chunks_mutex;
-                auto& free_sub_chunks = internal_data.free_sub_chunks;
-
-                mutex.lock();
-                i32 sub_chunk_memory_id = free_sub_chunks.back();
-                free_sub_chunks.pop_back();
-                mutex.unlock();
-
-                sub_chunk_render_data.memory_id     = sub_chunk_memory_id;
-                sub_chunk_render_data.base_vertex   = internal_data.base_vertex + sub_chunk_memory_id * World::max_vertex_count_per_sub_chunk;
-                sub_chunk_render_data.base_instance = internal_data.base_instance + sub_chunk_memory_id;
+                bucket = &sub_chunk_render_data.transparent_bucket;
+            }
+            else
+            {
+                bucket = &sub_chunk_render_data.opaque_bucket;
             }
 
-            Sub_Chunk_Vertex *vertices = sub_chunk_render_data.base_vertex;
-            i32 vertex_index = sub_chunk_render_data.vertex_count;
+            if (!bucket->is_allocated())
+            {
+                Opengl_Renderer::allocate_sub_chunk_bucket(bucket);
+            }
+
+            assert(bucket->face_count + 1 <= World::sub_chunk_bucket_face_count);
 
             u32 data00 = Opengl_Renderer::compress_vertex(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
             u32 data01 = Opengl_Renderer::compress_vertex(block_coords, p1, face, BlockFaceCornerId_BottomLeft,  block_flags);
             u32 data02 = Opengl_Renderer::compress_vertex(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
             u32 data03 = Opengl_Renderer::compress_vertex(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            vertices[vertex_index + 0] = { data00, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
-            vertices[vertex_index + 1] = { data01, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
-            vertices[vertex_index + 2] = { data02, texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
-            vertices[vertex_index + 3] = { data03, texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
+            *bucket->current_vertex++ = { data00, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
+            *bucket->current_vertex++ = { data01, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
+            *bucket->current_vertex++ = { data02, texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
+            *bucket->current_vertex++ = { data03, texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
 
-            sub_chunk_render_data.vertex_count += 4;
+            bucket->face_count++;
+
             sub_chunk_render_data.face_count++;
 
             return true;
@@ -512,33 +578,51 @@ namespace minecraft {
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (!render_data.uploaded_to_gpu && render_data.vertex_count > 0)
+        if (render_data.face_count > 0)
         {
-            assert(render_data.vertex_count <= World::max_vertex_count_per_sub_chunk);
-            render_data.base_instance->chunk_coords = chunk->world_coords;
-            render_data.uploaded_to_gpu = true;
-            internal_data.sub_chunk_used_memory += sizeof(Sub_Chunk_Vertex) * render_data.vertex_count;
+            if (render_data.instance_memory_id == -1)
+            {
+                render_data.instance_memory_id = allocate_sub_chunk_instance();
+                render_data.base_instance = internal_data.base_instance + render_data.instance_memory_id;
+                render_data.base_instance->chunk_coords = chunk->world_coords;
+            }
+
+            internal_data.sub_chunk_used_memory += render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
+
+        render_data.uploaded_to_gpu = true;
     }
 
     void Opengl_Renderer::render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-        assert(render_data.vertex_count <= World::max_vertex_count_per_sub_chunk);
 
-        Draw_Elements_Indirect_Command& command = internal_data.command_buffer[internal_data.command_count];
-        internal_data.command_count++;
+        if (render_data.opaque_bucket.face_count > 0)
+        {
+            Draw_Elements_Indirect_Command& command = internal_data.opaque_command_buffer[internal_data.opaque_command_count];
+            internal_data.opaque_command_count++;
 
-        command.count = render_data.face_count * 6;
-        command.firstIndex = 0;
-        command.instanceCount = 1;
-        command.baseVertex = render_data.memory_id * World::max_vertex_count_per_sub_chunk;
-        command.baseInstance = render_data.memory_id;
+            command.count = render_data.opaque_bucket.face_count * 6;
+            command.firstIndex = 0;
+            command.instanceCount = 1;
+            command.baseVertex = render_data.opaque_bucket.memory_id * World::sub_chunk_bucket_vertex_count;
+            command.baseInstance = render_data.instance_memory_id;
+        }
+
+        if (render_data.transparent_bucket.face_count > 0)
+        {
+            Draw_Elements_Indirect_Command& command = internal_data.transparent_command_buffer[internal_data.transparent_command_count];
+            internal_data.transparent_command_count++;
+
+            command.count = render_data.transparent_bucket.face_count * 6;
+            command.firstIndex = 0;
+            command.instanceCount = 1;
+            command.baseVertex = render_data.transparent_bucket.memory_id * World::sub_chunk_bucket_vertex_count;
+            command.baseInstance = render_data.instance_memory_id;
+        }
 
         auto& stats = internal_data.stats;
-        stats.vertex_count += render_data.vertex_count;
         stats.face_count += render_data.face_count;
-        stats.sub_chunk_max_vertex_count = glm::max(internal_data.stats.sub_chunk_max_vertex_count, render_data.vertex_count);
         stats.sub_chunk_count++;
     }
 
@@ -551,7 +635,7 @@ namespace minecraft {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->use();
-        shader->set_uniform_f32("u_chunk_radius", World::chunk_radius);
+        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
         shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
         shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
@@ -575,7 +659,8 @@ namespace minecraft {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
 
-        internal_data.command_count = 0;
+        internal_data.opaque_command_count = 0;
+        internal_data.transparent_command_count = 0;
 
         memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
     }
@@ -585,10 +670,20 @@ namespace minecraft {
         glBindVertexArray(internal_data.chunk_vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
 
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.command_buffer_id);
-        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.command_count, internal_data.command_buffer);
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.opaque_command_buffer_id);
+        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.opaque_command_count, internal_data.opaque_command_buffer);
 
-        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.command_count, sizeof(Draw_Elements_Indirect_Command));
+        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
+
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.transparent_command_buffer_id);
+        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.transparent_command_count, internal_data.transparent_command_buffer);
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
+
+        glDisable(GL_BLEND);
     }
 
     void Opengl_Renderer::swap_buffers()

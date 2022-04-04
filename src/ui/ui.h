@@ -7,6 +7,7 @@
 namespace minecraft {
 
     struct Bitmap_Font;
+    struct Opengl_Texture;
 
     struct UI_State
     {
@@ -41,7 +42,13 @@ namespace minecraft {
 
         static bool rect(const glm::vec2& size);
         static bool text(const std::string& text);
-        static bool button(const std::string& text);
+        static bool button(const std::string& text, const glm::vec2& padding = { 5.0f, 5.0f });
+
+        static bool textured_button(const std::string& text,
+                                    Opengl_Texture *texture,
+                                    const glm::vec2& padding   = { 5.0f, 5.0f },
+                                    const glm::vec2& uv_scale  = { 1.0f, 1.0f },
+                                    const glm::vec2& uv_offset = { 0.0f, 0.0f });
 
         static void end();
     };

@@ -122,13 +122,23 @@ namespace minecraft {
         glm::ivec2 chunk_coords;
     };
 
-    struct Sub_Chunk_Render_Data
+    struct Sub_Chunk_Bucket
     {
-        i32 vertex_count;
+        i32 memory_id;
+        Sub_Chunk_Vertex *current_vertex;
         i32 face_count;
 
-        i32 memory_id;
-        Sub_Chunk_Vertex   *base_vertex;
+        inline bool is_allocated() { return this->memory_id != -1 && current_vertex != nullptr; }
+    };
+
+    struct Sub_Chunk_Render_Data
+    {
+        i32 face_count;
+
+        Sub_Chunk_Bucket opaque_bucket;
+        Sub_Chunk_Bucket transparent_bucket;
+
+        i32 instance_memory_id;
         Sub_Chunk_Instance *base_instance;
 
         AABB aabb;
@@ -212,12 +222,16 @@ namespace minecraft {
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius = 34;
+        static constexpr i64 max_chunk_radius = 30;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
-        static constexpr i64 sub_chunk_capacity = 4 * chunk_capacity;
-        static constexpr i64 max_vertex_count_per_sub_chunk = MC_SUB_CHUNK_VERTEX_COUNT;
-        static constexpr i64 sub_chunk_size = sizeof(Sub_Chunk_Vertex) * max_vertex_count_per_sub_chunk;
+        static constexpr i64 sub_chunk_bucket_capacity = 5 * chunk_capacity;
+        static constexpr i64 sub_chunk_bucket_face_count = 900;
+        static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
+        static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
+
+        static const i64 chunk_radius = 12;
+        static_assert(World::chunk_radius <= World::max_chunk_radius);
 
         static Block null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
@@ -225,9 +239,6 @@ namespace minecraft {
         static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
         static std::string path;
         static i32 seed;
-
-        static const i64 chunk_radius = 12;
-        static_assert(World::chunk_radius <= World::max_chunk_radius);
 
         static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
