@@ -1,6 +1,7 @@
 #include "world.h"
 #include "renderer/opengl_renderer.h"
 #include "game/job_system.h"
+#include "ui/dropdown_console.h"
 #include "game/jobs.h"
 
 #include <glm/gtc/constants.hpp>
@@ -10,6 +11,7 @@
 #include <filesystem>
 #include <errno.h>
 #include <new>
+#include <sstream>
 
 extern int errno;
 
@@ -612,10 +614,44 @@ namespace minecraft {
         return result;
     }
 
+    void World::set_block_to_place_command(const std::vector<Command_Argument>& args)
+    {
+        if (args[0].type == CommandArgumentType_String)
+        {
+            std::string block_name = std::get<std::string>(args[0].data);
+            i32 block_id = -1;
+            for (i32 i = 0; i < BlockId_Count; i++)
+            {
+                const Block_Info& block_info = block_infos[i];
+                if (block_name == block_info.name)
+                {
+                    block_id = i;
+                    break;
+                }
+            }
+
+            if (block_id != -1) {
+                block_to_place_id = (u16)block_id;
+            } else {
+                Dropdown_Console::log("invalid block name");
+            }
+        }
+    }
+
+    void World::blocks_command(const std::vector<Command_Argument>& args)
+    {
+        for (i32 i = 0; i < BlockId_Count; i++)
+        {
+            const Block_Info& block_info = block_infos[i];
+            Dropdown_Console::log(block_info.name);
+        }
+    }
+
     const Block_Info World::block_infos[BlockId_Count] =
     {
         // Air
         {
+            "air",
             0,
             0,
             0,
@@ -623,6 +659,7 @@ namespace minecraft {
         },
         // Grass
         {
+            "grass",
             Texture_Id_grass_block_top,
             Texture_Id_dirt,
             Texture_Id_grass_block_side,
@@ -630,6 +667,7 @@ namespace minecraft {
         },
         // Sand
         {
+            "sand",
             Texture_Id_sand,
             Texture_Id_sand,
             Texture_Id_sand,
@@ -637,6 +675,7 @@ namespace minecraft {
         },
         // Dirt
         {
+            "dirt",
             Texture_Id_dirt,
             Texture_Id_dirt,
             Texture_Id_dirt,
@@ -644,6 +683,7 @@ namespace minecraft {
         },
         // Stone
         {
+            "stone",
             Texture_Id_stone,
             Texture_Id_stone,
             Texture_Id_stone,
@@ -651,6 +691,7 @@ namespace minecraft {
         },
         // Green Concrete
         {
+            "green_concrete",
             Texture_Id_green_concrete_powder,
             Texture_Id_green_concrete_powder,
             Texture_Id_green_concrete_powder,
@@ -658,6 +699,7 @@ namespace minecraft {
         },
         // BedRock
         {
+            "bedrock",
             Texture_Id_bedrock,
             Texture_Id_bedrock,
             Texture_Id_bedrock,
@@ -665,6 +707,7 @@ namespace minecraft {
         },
         // Oak Log
         {
+            "oak_log",
             Texture_Id_oak_log_top,
             Texture_Id_oak_log_top,
             Texture_Id_oak_log,
@@ -672,6 +715,7 @@ namespace minecraft {
         },
         // Oak Leaves
         {
+            "oak_leaves",
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
@@ -683,6 +727,7 @@ namespace minecraft {
         },
         // Oak Planks
         {
+            "oak_planks",
             Texture_Id_oak_planks,
             Texture_Id_oak_planks,
             Texture_Id_oak_planks,
@@ -690,6 +735,7 @@ namespace minecraft {
         },
         // Glow Stone
         {
+            "oak_glow_stone",
             Texture_Id_glowstone,
             Texture_Id_glowstone,
             Texture_Id_glowstone,
@@ -697,6 +743,7 @@ namespace minecraft {
         },
         // Cobble Stone
         {
+            "cobble_stone",
             Texture_Id_cobblestone,
             Texture_Id_cobblestone,
             Texture_Id_cobblestone,
@@ -704,6 +751,7 @@ namespace minecraft {
         },
         // Spruce Log
         {
+            "spruce_log",
             Texture_Id_spruce_log_top,
             Texture_Id_spruce_log_top,
             Texture_Id_spruce_log,
@@ -711,6 +759,7 @@ namespace minecraft {
         },
         // Spruce Planks
         {
+            "spruce_planks",
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
@@ -718,6 +767,7 @@ namespace minecraft {
         },
         // Glass
         {
+            "glass",
             Texture_Id_glass,
             Texture_Id_glass,
             Texture_Id_glass,
@@ -725,6 +775,7 @@ namespace minecraft {
         },
         // Sea Lantern
         {
+            "sea lantern",
             Texture_Id_sea_lantern,
             Texture_Id_sea_lantern,
             Texture_Id_sea_lantern,
@@ -732,6 +783,7 @@ namespace minecraft {
         },
         // Birch Log
         {
+            "birch log",
             Texture_Id_birch_log_top,
             Texture_Id_birch_log_top,
             Texture_Id_birch_log,
@@ -739,6 +791,7 @@ namespace minecraft {
         },
         // Blue Stained Glass
         {
+            "blue stained glass",
             Texture_Id_blue_stained_glass,
             Texture_Id_blue_stained_glass,
             Texture_Id_blue_stained_glass,
@@ -746,6 +799,7 @@ namespace minecraft {
         },
         // Water
         {
+            "water",
             Texture_Id_water,
             Texture_Id_water,
             Texture_Id_water,
@@ -753,6 +807,7 @@ namespace minecraft {
         },
         // Birch Planks
         {
+            "birch_planks",
             Texture_Id_birch_planks,
             Texture_Id_birch_planks,
             Texture_Id_birch_planks,
@@ -760,6 +815,7 @@ namespace minecraft {
         },
         // Diamond
         {
+            "diamond",
             Texture_Id_diamond_block,
             Texture_Id_diamond_block,
             Texture_Id_diamond_block,
@@ -767,6 +823,7 @@ namespace minecraft {
         },
         // Obsidian
         {
+            "obsidian",
             Texture_Id_obsidian,
             Texture_Id_obsidian,
             Texture_Id_obsidian,
@@ -774,6 +831,7 @@ namespace minecraft {
         },
         // Crying Obsidian
         {
+            "crying_obsidian",
             Texture_Id_crying_obsidian,
             Texture_Id_crying_obsidian,
             Texture_Id_crying_obsidian,
@@ -781,6 +839,7 @@ namespace minecraft {
         },
         // Dark Oak Log
         {
+            "dark_oak_log",
             Texture_Id_dark_oak_log_top,
             Texture_Id_dark_oak_log_top,
             Texture_Id_dark_oak_log,
@@ -788,6 +847,7 @@ namespace minecraft {
         },
         // Dark Oak Planks
         {
+            "dark_oak_planks",
             Texture_Id_dark_oak_planks,
             Texture_Id_dark_oak_planks,
             Texture_Id_dark_oak_planks,
@@ -795,6 +855,7 @@ namespace minecraft {
         },
         // Jungle Log
         {
+            "jungle_log",
             Texture_Id_jungle_log_top,
             Texture_Id_jungle_log_top,
             Texture_Id_jungle_log,
@@ -802,6 +863,7 @@ namespace minecraft {
         },
         // Jungle Planks
         {
+            "jungle_planks",
             Texture_Id_jungle_planks,
             Texture_Id_jungle_planks,
             Texture_Id_jungle_planks,
@@ -809,6 +871,7 @@ namespace minecraft {
         },
         // Acacia Log
         {
+            "acacia_log",
             Texture_Id_acacia_log_top,
             Texture_Id_acacia_log_top,
             Texture_Id_acacia_log,
@@ -816,6 +879,7 @@ namespace minecraft {
         },
         // Acacia Planks
         {
+            "acacia_planks",
             Texture_Id_acacia_planks,
             Texture_Id_acacia_planks,
             Texture_Id_acacia_planks,
@@ -832,5 +896,7 @@ namespace minecraft {
     std::mutex World::chunk_pool_mutex;
     Free_List<Chunk, World::chunk_capacity> World::chunk_pool;
     std::vector<Update_Sub_Chunk_Job> World::update_sub_chunk_jobs;
+
+    u16 World::block_to_place_id = BlockId_Stone;
 
 }

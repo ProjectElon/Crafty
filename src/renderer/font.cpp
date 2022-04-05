@@ -9,7 +9,8 @@ namespace minecraft {
 
     bool Bitmap_Font::load_from_file(const char *file_path, i32 size_in_pixels)
     {
-         // todo(harlequin): move to platform
+        this->size_in_pixels = size_in_pixels;
+        // todo(harlequin): move to platform
         // always read text in binary mode
         FILE *file_handle = fopen(file_path, "rb");
 

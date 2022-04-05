@@ -667,6 +667,7 @@ namespace minecraft {
 
     void Opengl_Renderer::end()
     {
+        // opaque pass
         glBindVertexArray(internal_data.chunk_vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
 
@@ -675,14 +676,18 @@ namespace minecraft {
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
 
+        // transparent pass
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.transparent_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.transparent_command_count, internal_data.transparent_command_buffer);
+
+        glDepthMask(GL_FALSE);
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
 
+        glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
     }
 

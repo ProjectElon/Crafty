@@ -6,6 +6,7 @@
 #include "memory/free_list.h"
 #include "game/math_utils.h"
 #include "game/jobs.h"
+#include "game/console_commands.h"
 
 #include <glm/glm.hpp>
 
@@ -75,6 +76,7 @@ namespace minecraft {
 
     struct Block_Info
     {
+        const char *name;
         u16 top_texture_id;
         u16 bottom_texture_id;
         u16 side_texture_id;
@@ -244,6 +246,8 @@ namespace minecraft {
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
         static std::vector<Update_Sub_Chunk_Job> update_sub_chunk_jobs;
 
+        static u16 block_to_place_id;
+
         static bool initialize(const std::string& path);
         static void shutdown();
 
@@ -331,5 +335,8 @@ namespace minecraft {
                                                Ray_Cast_Result *out_ray_cast_result);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
+
+        static void set_block_to_place_command(const std::vector<Command_Argument>& args);
+        static void blocks_command(const std::vector<Command_Argument>& args);
     };
 }

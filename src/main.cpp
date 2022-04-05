@@ -10,6 +10,7 @@
 
 #include "game/job_system.h"
 #include "game/jobs.h"
+#include "game/console_commands.h"
 
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_renderer.h"
@@ -220,17 +221,17 @@ int main()
     button_texture.load_from_file("../assets/textures/ui/buttonLong_blue.png", TextureUsage_UI);
 
     Bitmap_Font fira_code;
-    fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
+    fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 24);
 
     Bitmap_Font noto_mono;
-    noto_mono.load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
+    noto_mono.load_from_file("../assets/fonts/NotoMono-Regular.ttf", 24);
 
     UI_State default_ui_state;
     default_ui_state.cursor = { 0.0f, 0.0f };
     default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
     default_ui_state.fill_color = { 1.0f, 0.0f, 0.0f, 1.0f };
     default_ui_state.offset = { 0.0f, 0.0f };
-    default_ui_state.font = &fira_code;
+    default_ui_state.font = &noto_mono;
 
     if (!UI::initialize(&default_ui_state))
     {
@@ -238,22 +239,22 @@ int main()
         return -1;
     }
 
-    glm::vec4 text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    glm::vec4 background_color = { 63, 129, 120, 240 };
-
     f32 rgba_normalize_factor = 1.0f / 255.0f;
 
-    glm::vec4 input_text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
-    glm::vec4 input_text_background_color = { 73, 27, 57, 255 };
+    glm::vec4 text_color = { 0xee, 0xe6, 0xce, 255 };
+    glm::vec4 background_color = { 31, 35, 52, 150 };
 
-    glm::vec4 input_text_cursor_color = { 1.0f, 0.0f, 0.0f, 0.5f };
+    glm::vec4 input_text_color = { 255, 255, 255, 255 };
+    glm::vec4 input_text_background_color = { 0x15, 0x72, 0xA1, 255 }; // 1572A1
+
+    glm::vec4 input_text_cursor_color = { 0xB8, 0x40, 0x5E, 255.0f * 0.9f }; // B8405E
 
     if (!Dropdown_Console::initialize(&fira_code,
-                                      text_color,
+                                      text_color * rgba_normalize_factor,
                                       background_color * rgba_normalize_factor,
-                                      input_text_color,
+                                      input_text_color * rgba_normalize_factor,
                                       input_text_background_color * rgba_normalize_factor,
-                                      input_text_cursor_color))
+                                      input_text_cursor_color * rgba_normalize_factor))
     {
         fprintf(stderr, "[ERROR]: failed to initialize dropdown console\n");
         return -1;
@@ -262,6 +263,15 @@ int main()
     Event_System::register_event(EventType_Char, Dropdown_Console::on_char_input, nullptr);
     Event_System::register_event(EventType_KeyPress, Dropdown_Console::on_key, nullptr);
     Event_System::register_event(EventType_KeyHeld, Dropdown_Console::on_key, nullptr);
+
+    Console_Command clear_command = { "clear", {}, Dropdown_Console::clear };
+    console::register_command(clear_command);
+
+    Console_Command set_place_block_command = { "set_block_to_place", { { CommandArgumentType_String, "" } }, World::set_block_to_place_command };
+    console::register_command(set_place_block_command);
+
+    Console_Command blocks_command = { "blocks", {}, World::blocks_command };
+    console::register_command(blocks_command);
 
 #if 0
     {
@@ -402,7 +412,7 @@ int main()
 
             if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
             {
-                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, BlockId_Glass);
+                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, World::block_to_place_id);
             }
 
             if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
