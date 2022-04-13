@@ -27,8 +27,6 @@
 #define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
 #define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
 
-#define MC_SUB_CHUNK_VERTEX_COUNT 3400
-
 namespace minecraft {
 
     enum BlockId : u16
@@ -227,13 +225,12 @@ namespace minecraft {
         static constexpr i64 max_chunk_radius = 30;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
-        static constexpr i64 sub_chunk_bucket_capacity = 5 * chunk_capacity;
+        static constexpr i64 sub_chunk_bucket_capacity = 4 * chunk_capacity;
         static constexpr i64 sub_chunk_bucket_face_count = 900;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
-        static const i64 chunk_radius = 12;
-        static_assert(World::chunk_radius <= World::max_chunk_radius);
+        static i32 chunk_radius;
 
         static Block null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
@@ -335,8 +332,5 @@ namespace minecraft {
                                                Ray_Cast_Result *out_ray_cast_result);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
-
-        static void set_block_to_place_command(const std::vector<Command_Argument>& args);
-        static void blocks_command(const std::vector<Command_Argument>& args);
     };
 }

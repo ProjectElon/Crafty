@@ -614,39 +614,6 @@ namespace minecraft {
         return result;
     }
 
-    void World::set_block_to_place_command(const std::vector<Command_Argument>& args)
-    {
-        if (args[0].type == CommandArgumentType_String)
-        {
-            std::string block_name = std::get<std::string>(args[0].data);
-            i32 block_id = -1;
-            for (i32 i = 0; i < BlockId_Count; i++)
-            {
-                const Block_Info& block_info = block_infos[i];
-                if (block_name == block_info.name)
-                {
-                    block_id = i;
-                    break;
-                }
-            }
-
-            if (block_id != -1) {
-                block_to_place_id = (u16)block_id;
-            } else {
-                Dropdown_Console::log("invalid block name");
-            }
-        }
-    }
-
-    void World::blocks_command(const std::vector<Command_Argument>& args)
-    {
-        for (i32 i = 0; i < BlockId_Count; i++)
-        {
-            const Block_Info& block_info = block_infos[i];
-            Dropdown_Console::log(block_info.name);
-        }
-    }
-
     const Block_Info World::block_infos[BlockId_Count] =
     {
         // Air
@@ -898,5 +865,6 @@ namespace minecraft {
     std::vector<Update_Sub_Chunk_Job> World::update_sub_chunk_jobs;
 
     u16 World::block_to_place_id = BlockId_Stone;
+    i32 World::chunk_radius = 12;
 
 }

@@ -55,7 +55,6 @@ namespace minecraft {
         bool is_aabb_visible(const AABB& aabb) const;
 
     private:
-
         template<Planes i, Planes j>
         struct ij2k
         {

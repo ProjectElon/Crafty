@@ -76,7 +76,7 @@ namespace minecraft {
         glm::vec2 position = state.offset + state.cursor;
         glm::vec2 text_size = state.font->get_string_size(text);
         Opengl_2D_Renderer::draw_string(state.font, text, text_size, position + text_size * 0.5f, state.text_color);
-        state.cursor.y += state.font->char_height;
+        state.cursor.y += state.font->char_height * 1.3f;
 
         glm::vec2 mouse = Input::get_mouse_position();
 

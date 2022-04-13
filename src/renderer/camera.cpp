@@ -20,6 +20,8 @@ namespace minecraft {
         
         update_view();
         update_projection();
+
+        this->frustum.initialize(this->projection * this->view);
     }
 
     void Camera::update(f32 delta_time)
@@ -79,6 +81,7 @@ namespace minecraft {
 
         update_view();
         update_projection();
+        this->frustum.update(this->projection * this->view);
     }
 
     void Camera::update_view()

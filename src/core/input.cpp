@@ -1,6 +1,7 @@
 #include "input.h"
 
 #include "platform.h"
+#include "ui/dropdown_console.h"
 #include <GLFW/glfw3.h>
 
 namespace minecraft {
@@ -29,12 +30,12 @@ namespace minecraft {
 
         for (u32 key_code = 0; key_code < MC_KEY_STATE_COUNT; key_code++)
         {
-            internal_data.key_states[key_code] = glfwGetKey(internal_data.window_handle, key_code) == GLFW_PRESS;
+            internal_data.key_states[key_code] = Dropdown_Console::is_closed() && glfwGetKey(internal_data.window_handle, key_code) == GLFW_PRESS;
         }
 
         for (u32 button_code = 0; button_code < MC_BUTTON_STATE_COUNT; button_code++)
         {
-            internal_data.button_states[button_code] = glfwGetMouseButton(internal_data.window_handle, button_code) == GLFW_PRESS;
+            internal_data.button_states[button_code] = Dropdown_Console::is_closed() && glfwGetMouseButton(internal_data.window_handle, button_code) == GLFW_PRESS;
         }
 
         f64 mouse_x, mouse_y;

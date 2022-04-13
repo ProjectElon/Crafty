@@ -144,6 +144,8 @@ namespace minecraft {
 
         if (line_vertices.size() == 0) return;
 
+        glDepthMask(GL_FALSE);
+
         glBindVertexArray(line_vao_id);
         glBindBuffer(GL_ARRAY_BUFFER, line_vbo_id);
 
@@ -165,6 +167,8 @@ namespace minecraft {
 
             glDrawArrays(GL_LINES, 0, count * 2);
         }
+
+        glDepthMask(GL_TRUE);
 
         line_vertices.resize(0);
     }

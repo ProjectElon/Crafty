@@ -74,13 +74,13 @@ namespace minecraft {
         std::mutex free_instances_mutex;
         std::vector<i32> free_instances;
 
+        u32 opaque_command_buffer_id;
         u32 opaque_command_count;
         Draw_Elements_Indirect_Command opaque_command_buffer[World::sub_chunk_bucket_capacity];
-        u32 opaque_command_buffer_id;
 
+        u32 transparent_command_buffer_id;
         u32 transparent_command_count;
         Draw_Elements_Indirect_Command transparent_command_buffer[World::sub_chunk_bucket_capacity];
-        u32 transparent_command_buffer_id;
 
         Opengl_Texture block_sprite_sheet;
         u32 uv_buffer_id;

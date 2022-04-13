@@ -25,9 +25,17 @@ namespace minecraft {
         bool update_camera = true;
     };
 
-    struct Game
+    struct Game_Data
     {
         Game_Config config = {};
         bool is_running = false;
+    };
+
+    struct Game
+    {
+        static Game_Data internal_data;
+
+        static const Game_Config& get_config() { return internal_data.config; }
+        static void shutdown();
     };
 }

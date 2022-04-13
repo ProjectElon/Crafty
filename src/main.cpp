@@ -4,7 +4,7 @@
 #include "core/platform.h"
 #include "core/input.h"
 #include "core/event.h"
-#include "core/file_system.h"
+
 #include "game/game.h"
 #include "game/world.h"
 
@@ -22,8 +22,6 @@
 #include "ui/ui.h"
 #include "ui/dropdown_console.h"
 
-#include "assets/texture_packer.h"
-
 #include "containers/string.h"
 
 #include <glm/glm.hpp>
@@ -40,7 +38,7 @@ namespace minecraft {
     static bool on_quit(const Event *event, void *sender)
     {
         Game *game = (Game*)sender;
-        game->is_running = false;
+        game->internal_data.is_running = false;
         return true;
     }
 
@@ -51,28 +49,35 @@ namespace minecraft {
         u16 key;
         Event_System::parse_key_code(event, &key);
 
-        if (key == MC_KEY_ESCAPE)
+        if (key == MC_KEY_F1)
         {
-            game->is_running = false;
+            Dropdown_Console::toggle();
         }
 
-        if (Dropdown_Console::internal_data.state == ConsoleState_Closed)
+        if (key == MC_KEY_F2)
         {
+            Input::toggle_cursor();
+            game->internal_data.config.update_camera = !game->internal_data.config.update_camera;
+        }
+
+        if (Dropdown_Console::is_closed())
+        {
+            if (key == MC_KEY_ESCAPE)
+            {
+                game->internal_data.is_running = false;
+            }
+
             if (key == MC_KEY_U)
             {
                 should_render_ui = !should_render_ui;
             }
-
-            if (key == MC_KEY_C)
-            {
-                Input::toggle_cursor();
-                game->config.update_camera = !game->config.update_camera;
-            }
         }
-
-        if (key == MC_KEY_F1)
+        else
         {
-            Dropdown_Console::toggle();
+            if (key == MC_KEY_ESCAPE)
+            {
+                Dropdown_Console::close();
+            }
         }
 
         return false;
@@ -133,12 +138,12 @@ int main()
 
     // todo(harlequin): load the game config from disk
     Game game = {};
-    game.config.window_title = "Minecraft";
-    game.config.window_x = -1;
-    game.config.window_y = -1;
-    game.config.window_width = 1280;
-    game.config.window_height = 720;
-    game.config.window_mode = WindowMode_Windowed;
+    game.internal_data.config.window_title = "Minecraft";
+    game.internal_data.config.window_x = -1;
+    game.internal_data.config.window_y = -1;
+    game.internal_data.config.window_width = 1280;
+    game.internal_data.config.window_height = 720;
+    game.internal_data.config.window_mode = WindowMode_Windowed;
 
     Platform platform = {};
     u32 opengl_major_version = 4;
@@ -221,17 +226,23 @@ int main()
     button_texture.load_from_file("../assets/textures/ui/buttonLong_blue.png", TextureUsage_UI);
 
     Bitmap_Font fira_code;
-    fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 24);
+    fira_code.load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
 
     Bitmap_Font noto_mono;
-    noto_mono.load_from_file("../assets/fonts/NotoMono-Regular.ttf", 24);
+    noto_mono.load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
+
+    Bitmap_Font consolas;
+    consolas.load_from_file("../assets/fonts/Consolas.ttf", 20);
+
+    Bitmap_Font liberation_mono;
+    liberation_mono.load_from_file("../assets/fonts/liberation-mono.ttf", 20);
 
     UI_State default_ui_state;
     default_ui_state.cursor = { 0.0f, 0.0f };
     default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
     default_ui_state.fill_color = { 1.0f, 0.0f, 0.0f, 1.0f };
     default_ui_state.offset = { 0.0f, 0.0f };
-    default_ui_state.font = &noto_mono;
+    default_ui_state.font = &consolas;
 
     if (!UI::initialize(&default_ui_state))
     {
@@ -241,54 +252,41 @@ int main()
 
     f32 rgba_normalize_factor = 1.0f / 255.0f;
 
-    glm::vec4 text_color = { 0xee, 0xe6, 0xce, 255 };
-    glm::vec4 background_color = { 31, 35, 52, 150 };
+    glm::vec4 text_color = { 0xee, 0xe6, 0xce, 0xff };
+    glm::vec4 background_color = { 31, 35, 52, 0xff * 0.7f };
 
-    glm::vec4 input_text_color = { 255, 255, 255, 255 };
-    glm::vec4 input_text_background_color = { 0x15, 0x72, 0xA1, 255 }; // 1572A1
+    glm::vec4 input_text_color = { 0xff, 0xff, 0xff, 0xff };
+    glm::vec4 input_text_background_color = { 0x15, 0x72, 0xA1, 0xff }; // 1572A1
 
-    glm::vec4 input_text_cursor_color = { 0xB8, 0x40, 0x5E, 255.0f * 0.9f }; // B8405E
+    glm::vec4 input_text_cursor_color = { 0x85, 0xC8, 0x8A, 0xff * 0.7f }; // 85C88A
 
-    if (!Dropdown_Console::initialize(&fira_code,
+    glm::vec4 scroll_bar_background_color = { 0x43, 0x91, 0x9B, 0xff * 0.5f };
+    glm::vec4 scrool_bar_color = { 0x00, 0x67, 0x78, 0xff }; // 006778
+
+    glm::vec4 command_color = { 0xf4, 0x73, 0x40, 0xff }; // F47340
+    glm::vec4 argument_color = { 0xFF, 0x59, 0x59, 0xff }; // FF5959
+    glm::vec4 type_color = { 0.0f, 0.0f, 1.0f, 1.0f};
+
+    if (!Dropdown_Console::initialize(&consolas,
                                       text_color * rgba_normalize_factor,
                                       background_color * rgba_normalize_factor,
                                       input_text_color * rgba_normalize_factor,
                                       input_text_background_color * rgba_normalize_factor,
-                                      input_text_cursor_color * rgba_normalize_factor))
+                                      input_text_cursor_color * rgba_normalize_factor,
+                                      scroll_bar_background_color * rgba_normalize_factor,
+                                      scrool_bar_color * rgba_normalize_factor,
+                                      command_color * rgba_normalize_factor,
+                                      argument_color * rgba_normalize_factor,
+                                      type_color))
     {
         fprintf(stderr, "[ERROR]: failed to initialize dropdown console\n");
         return -1;
     }
 
-    Event_System::register_event(EventType_Char, Dropdown_Console::on_char_input, nullptr);
-    Event_System::register_event(EventType_KeyPress, Dropdown_Console::on_key, nullptr);
-    Event_System::register_event(EventType_KeyHeld, Dropdown_Console::on_key, nullptr);
-
-    Console_Command clear_command = { "clear", {}, Dropdown_Console::clear };
-    console::register_command(clear_command);
-
-    Console_Command set_place_block_command = { "set_block_to_place", { { CommandArgumentType_String, "" } }, World::set_block_to_place_command };
-    console::register_command(set_place_block_command);
-
-    Console_Command blocks_command = { "blocks", {}, World::blocks_command };
-    console::register_command(blocks_command);
-
-#if 0
-    {
-        std::vector<std::string> texture_extensions = { ".png" };
-        std::vector<std::string> paths = File_System::list_files_recursivly("../assets/textures/blocks", texture_extensions);
-        const char *output_path = "../assets/textures/spritesheet.png";
-        const char *locations_path = "../assets/textures/spritesheet_meta.txt";
-        const char *header_file_path = "../src/meta/spritesheet_meta.h";
-        bool success = Texture_Packer::pack_textures(paths, output_path, locations_path, header_file_path);
-        if (success) fprintf(stderr, "texture at %s packed successfully.\n", output_path);
-    }
-#endif
-
     f32 current_time = platform.get_current_time();
     f32 last_time = current_time;
 
-    game.is_running = true;
+    game.internal_data.is_running = true;
 
     Camera camera;
     camera.initialize(glm::vec3(0.0f, 257.0f, 0.0f), 70.0f);
@@ -311,42 +309,49 @@ int main()
     std::string frame_time_text;
     std::string vertex_count_text;
     std::string face_count_text;
+    std::string sub_chunk_bucket_capacity_text;
+    std::string sub_chunk_bucket_count_text;
+    std::string sub_chunk_bucket_total_memory_text;
+    std::string sub_chunk_bucket_allocated_memory_text;
+    std::string sub_chunk_bucket_used_memory_text;
 
-    while (game.is_running)
+    i32 physics_update_rate = 60;
+    f32 physics_delta_time = 1.0f / (f32)physics_update_rate;
+    f32 physics_delta_time_accumulator = 0.0f;
+
+    while (game.internal_data.is_running)
     {
         f32 delta_time = current_time - last_time;
-
-        {
-            std::stringstream ss;
-            ss.precision(2);
-            ss << "frame time: " << delta_time * 1000.0f << " ms";
-            frame_time_text = ss.str();
-        }
+        physics_delta_time_accumulator += delta_time;
 
         last_time = current_time;
         current_time = platform.get_current_time();
 
         frame_timer += delta_time;
+        frames_per_second++;
 
         if (frame_timer >= 1.0f)
         {
             frame_timer -= 1.0f;
-
             std::stringstream ss;
             ss << "FPS: " << frames_per_second;
             frames_per_second_text = ss.str();
-
             frames_per_second = 0;
         }
 
         platform.pump_messages();
         Input::update();
 
-        // todo(harlequin): more work on the event system
-        if (game.config.update_camera && Dropdown_Console::internal_data.state == ConsoleState_Closed)
+        if (Dropdown_Console::is_closed() && game.internal_data.config.update_camera)
         {
             camera.update(delta_time);
             camera_frustum.update(camera.projection * camera.view);
+        }
+
+        if (physics_delta_time_accumulator >= physics_delta_time)
+        {
+            // simulate physics here
+            physics_delta_time_accumulator -= physics_delta_time;
         }
 
         glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
@@ -354,55 +359,42 @@ int main()
 
         World::load_chunks_at_region(region_bounds);
 
-        Ray_Cast_Result ray_cast_result = { false, { 0.0f, 0.0f, 0.0f } };
-        auto select_query = World::select_block(camera.position, camera.forward, 10, &ray_cast_result);
+        Ray_Cast_Result ray_cast_result = {};
+        u32 max_block_select_dist_in_cube_units = 10;
+        auto select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
 
         if (select_query.chunk && select_query.block)
         {
             glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
-            Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-            glm::vec4 debug_cube_color;
             Block_Query_Result block_facing_normal_query = {};
 
             if (glm::epsilonEqual(ray_cast_result.point.y, block_position.y + 0.5f, glm::epsilon<f32>())) // top face
             {
-                debug_cube_color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(0.0f, 0.5f, 0.0f), block_position + glm::vec3(0.0f, 1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
             }
             else if (glm::epsilonEqual(ray_cast_result.point.y, block_position.y - 0.5f, glm::epsilon<f32>())) // bottom face
             {
-                debug_cube_color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(0.0f, -0.5f, 0.0f), block_position + glm::vec3(0.0f, -1.5f, 0.0f), glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
             }
             else if (glm::epsilonEqual(ray_cast_result.point.x, block_position.x + 0.5f, glm::epsilon<f32>())) // right face
             {
-                debug_cube_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(0.5f, 0.0f, 0.0f), block_position + glm::vec3(1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
             }
             else if (glm::epsilonEqual(ray_cast_result.point.x, block_position.x - 0.5f, glm::epsilon<f32>())) // left face
             {
-                debug_cube_color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(-0.5f, 0.0f, 0.0f), block_position + glm::vec3(-1.5f, 0.0f, 0.0f), glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
             }
             else if (glm::epsilonEqual(ray_cast_result.point.z, block_position.z - 0.5f, glm::epsilon<f32>())) // front face
             {
-                debug_cube_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(0.0f, 0.0f, -0.5f), block_position + glm::vec3(0.0f, 0.0f, -1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
             }
             else if (glm::epsilonEqual(ray_cast_result.point.z, block_position.z + 0.5f, glm::epsilon<f32>())) // back face
             {
-                debug_cube_color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
                 block_facing_normal_query = World::get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
-                Opengl_Debug_Renderer::draw_line(block_position + glm::vec3(0.0f, 0.0f, 0.5f), block_position + glm::vec3(0.0f, 0.0f, 1.5f), glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
             }
 
-            Opengl_Debug_Renderer::draw_cube(ray_cast_result.point, { 0.03f, 0.03f, 0.03f }, debug_cube_color);
+            Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
             bool is_valid_block_to_place = block_facing_normal_query.chunk != nullptr &&
                                            block_facing_normal_query.block != nullptr &&
@@ -410,12 +402,13 @@ int main()
                                            block_facing_normal_query.block_coords.y < MC_CHUNK_HEIGHT &&
                                            block_facing_normal_query.block->id == BlockId_Air;
 
-            if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && is_valid_block_to_place)
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) &&
+                is_valid_block_to_place)
             {
                 World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, World::block_to_place_id);
             }
 
-            if (Dropdown_Console::internal_data.state == ConsoleState_Closed && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
             {
                 World::set_block_id(select_query.chunk, select_query.block_coords, BlockId_Air);
             }
@@ -424,10 +417,8 @@ int main()
         World::update_sub_chunks();
 
         f32 color_factor = 1.0f / 255.0f;
-        glm::vec3 sky_color = { 135, 206, 235 };
-
-        sky_color *= color_factor;
-        glm::vec4 clear_color(sky_color.r, sky_color.g, sky_color.b, 1.0f);
+        glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
+        glm::vec4 clear_color = sky_color * color_factor;
 
         Opengl_Renderer::begin(clear_color, &camera, &chunk_shader);
 
@@ -450,7 +441,6 @@ int main()
                                                         camera_frustum.is_aabb_visible(render_data.aabb);
                         if (should_render_sub_chunks)
                         {
-                            // Opengl_Debug_Renderer::draw_aabb(render_data.aabb);
                             Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
                         }
                     }
@@ -466,6 +456,13 @@ int main()
         {
             {
                 std::stringstream ss;
+                ss.precision(2);
+                ss << "frame time: " << delta_time * 1000.0f << " ms";
+                frame_time_text = ss.str();
+            }
+
+            {
+                std::stringstream ss;
                 ss << "vertex count: " << Opengl_Renderer::internal_data.stats.face_count * 4;
                 vertex_count_text = ss.str();
             }
@@ -478,14 +475,9 @@ int main()
 
             i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - Opengl_Renderer::internal_data.free_buckets.size();
 
-            std::string sub_chunk_bucket_capacity_text;
-            std::string sub_chunk_bucket_count_text;
-            std::string sub_chunk_bucket_total_memory_text;
-            std::string sub_chunk_bucket_allocated_memory_text;
-
             {
                 std::stringstream ss;
-                ss << "sub chunk capacity: " << World::sub_chunk_bucket_capacity;
+                ss << "sub chunk bucket capacity: " << World::sub_chunk_bucket_capacity;
                 sub_chunk_bucket_capacity_text = ss.str();
             }
 
@@ -499,7 +491,7 @@ int main()
                 f64 total_size = (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
                 std::stringstream ss;
                 ss.precision(2);
-                ss << "total sub chunk buckets memory: " << std::fixed << total_size << " mbs";
+                ss << "buckets total memory: " << std::fixed << total_size << " mbs";
                 sub_chunk_bucket_total_memory_text = ss.str();
             }
 
@@ -507,8 +499,17 @@ int main()
                 f64 total_size = (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
                 std::stringstream ss;
                 ss.precision(2);
-                ss << "sub chunk buckets allocated memory: " << std::fixed << total_size << " mbs";
+                ss << "buckets allocated memory: " << std::fixed << total_size << " mbs";
+
                 sub_chunk_bucket_allocated_memory_text = ss.str();
+            }
+
+            {
+                f64 total_size = Opengl_Renderer::internal_data.sub_chunk_used_memory / (1024.0 * 1024.0);
+                std::stringstream ss;
+                ss.precision(2);
+                ss << "buckets used memory: " << std::fixed << total_size << " mbs";
+                sub_chunk_bucket_used_memory_text = ss.str();
             }
 
             std::string player_position_text;
@@ -518,13 +519,13 @@ int main()
             {
                 std::stringstream ss;
                 ss.precision(2);
-                ss << "position: <" << std::fixed << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << ">";
+                ss << "position: (" << std::fixed << camera.position.x << ", " << camera.position.y << ", " << camera.position.z << ")";
                 player_position_text = ss.str();
             }
 
             {
                 std::stringstream ss;
-                ss << "chunk: <" << player_chunk_coords.x << ", " << player_chunk_coords.y << ">";
+                ss << "chunk: (" << player_chunk_coords.x << ", " << player_chunk_coords.y << ")";
                 player_chunk_coords_text = ss.str();
             }
 
@@ -540,7 +541,7 @@ int main()
             UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
             UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
 
-            UI::rect(frame_buffer_size * glm::vec2(0.4f, 1.0f) - glm::vec2(0.0f, 20.0f));
+            UI::rect(frame_buffer_size * glm::vec2(0.35f, 1.0f) - glm::vec2(0.0f, 20.0f));
             UI::set_cursor({ 10.0f, 10.0f });
 
             UI::text(player_position_text);
@@ -555,6 +556,7 @@ int main()
             UI::text(sub_chunk_bucket_count_text);
             UI::text(sub_chunk_bucket_total_memory_text);
             UI::text(sub_chunk_bucket_allocated_memory_text);
+            UI::text(sub_chunk_bucket_used_memory_text);
 
             UI::end();
         }
@@ -578,8 +580,6 @@ int main()
         Opengl_Renderer::swap_buffers();
 
         World::free_chunks_out_of_region(region_bounds);
-
-        frames_per_second++;
     }
 
     for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)

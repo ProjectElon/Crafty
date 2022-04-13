@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "game/math_utils.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -36,6 +37,8 @@ namespace minecraft {
 
         glm::mat4 view;
         glm::mat4 projection;
+
+        Frustum frustum;
 
         void initialize(const glm::vec3& position, f32 fov = 45.0f, f32 aspect_ratio = 16.0f / 9.0f, f32 near = 0.01f, f32 far = 1000.0f);
         void update(f32 delta_time);

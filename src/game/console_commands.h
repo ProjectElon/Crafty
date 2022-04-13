@@ -3,50 +3,49 @@
 #include "core/common.h"
 #include <string>
 #include <variant>
+#include <vector>
 
 namespace minecraft {
 
-    enum CommandArgumentType
-    {
-        CommandArgumentType_I32,
-        CommandArgumentType_F32,
-        CommandArgumentType_String
-    };
-
-    struct Command_Argument
-    {
-        CommandArgumentType type;
-        std::variant<std::string, i32, f32> data;
-    };
-
     struct Console_Command
     {
+        typedef std::vector< std::string > Arguments;
+
         std::string name;
-        std::vector<Command_Argument> args;
-
-        void (*execute)(const std::vector<Command_Argument>& args);
-
-        bool operator==(const Console_Command& other)
-        {
-            if (name != other.name) return false;
-            if (args.size() != other.args.size()) return false;
-
-            for (i32 i = 0; i < args.size(); i++)
-            {
-                if (args[i].type != other.args[i].type)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
+        Arguments args;
+        void (*execute)(const Arguments& args);
     };
 
-    namespace console
+    struct Console_Command_Parse_Result
     {
-        bool register_command(const Console_Command& command);
-        std::vector<std::string> parse_command(const std::string& text);
-        const Console_Command* find_command(const std::string& name, const std::vector<Command_Argument>& args);
+        std::string name;
+        Console_Command::Arguments args;
     };
+
+    namespace console_commands {
+
+        void register_commands();
+
+        bool register_command(const Console_Command& command);
+
+        Console_Command_Parse_Result parse_command(const std::string& text);
+        const Console_Command* find_command_from_parse_result(const Console_Command_Parse_Result& parse_result);
+
+        void print(const Console_Command::Arguments& args);
+
+        void exit(const Console_Command::Arguments& args);
+        void close(const Console_Command::Arguments& args);
+
+        void clear(const Console_Command::Arguments& args);
+        void list_commands(const Console_Command::Arguments& args);
+
+        // world
+        void list_blocks(const Console_Command::Arguments& args);
+        void set_block(const Console_Command::Arguments& args);
+        void chunk_radius(const Console_Command::Arguments& args);
+        void set_chunk_radius(const Console_Command::Arguments& args);
+
+        // assets
+        void build_assets(const Console_Command::Arguments& args);
+    }
 }

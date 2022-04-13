@@ -1,5 +1,6 @@
 #include "opengl_renderer.h"
 #include "core/platform.h"
+#include "game/game.h"
 #include "camera.h"
 #include "opengl_shader.h"
 #include "opengl_debug_renderer.h"
@@ -177,8 +178,8 @@ namespace minecraft {
         glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
-        u32 width = platform->game->config.window_width;
-        u32 height = platform->game->config.window_height;
+        u32 width = Game::internal_data.config.window_width;
+        u32 height = Game::internal_data.config.window_height;
         internal_data.frame_buffer_size = { (f32)width, (f32)height };
         glViewport(0, 0, width, height);
 

@@ -111,8 +111,8 @@ namespace minecraft {
         }
 
         this->game = game;
-        this->window_x_before_fullscreen = game->config.window_x;
-        this->window_y_before_fullscreen = game->config.window_y;
+        this->window_x_before_fullscreen = game->internal_data.config.window_x;
+        this->window_y_before_fullscreen = game->internal_data.config.window_y;
 
         const GLFWmonitor *monitor = glfwGetPrimaryMonitor();
         i32 monitor_x;
@@ -121,14 +121,14 @@ namespace minecraft {
         i32 monitor_height;
         glfwGetMonitorWorkarea((GLFWmonitor*)monitor, &monitor_x, &monitor_y, &monitor_width, &monitor_height);
 
-        if (game->config.window_x == -1)
+        if (game->internal_data.config.window_x == -1)
         {
-            game->config.window_x = monitor_x + (monitor_width - game->config.window_width) / 2;
+            game->internal_data.config.window_x = monitor_x + (monitor_width - game->internal_data.config.window_width) / 2;
         }
 
-        if (game->config.window_y == -1)
+        if (game->internal_data.config.window_y == -1)
         {
-            game->config.window_y = monitor_y + (monitor_height - game->config.window_height) / 2;
+            game->internal_data.config.window_y = monitor_y + (monitor_height - game->internal_data.config.window_height) / 2;
         }
 
 #ifdef MC_DEBUG
@@ -140,9 +140,9 @@ namespace minecraft {
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_SAMPLES, 16); // msaa
 
-        window_handle = glfwCreateWindow(game->config.window_width,
-                                         game->config.window_height,
-                                         game->config.window_title,
+        window_handle = glfwCreateWindow(game->internal_data.config.window_width,
+                                         game->internal_data.config.window_height,
+                                         game->internal_data.config.window_title,
                                          NULL,
                                          NULL);
 
@@ -154,8 +154,8 @@ namespace minecraft {
         }
 
         // hack(harlequin)
-        WindowMode desired_window_mode = game->config.window_mode;
-        game->config.window_mode = WindowMode_Windowed;
+        WindowMode desired_window_mode = game->internal_data.config.window_mode;
+        game->internal_data.config.window_mode = WindowMode_Windowed;
         switch_to_window_mode(desired_window_mode);
         if (desired_window_mode == WindowMode_Windowed)
         {
@@ -202,39 +202,39 @@ namespace minecraft {
 
     void Platform::switch_to_window_mode(WindowMode new_window_mode)
     {
-        if (game->config.window_mode == new_window_mode)
+        if (game->internal_data.config.window_mode == new_window_mode)
         {
             return;
         }
 
-        game->config.window_mode = new_window_mode;
+        game->internal_data.config.window_mode = new_window_mode;
 
         const GLFWmonitor *monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode *video_mode = glfwGetVideoMode((GLFWmonitor*)monitor);
 
-        if (game->config.window_mode == WindowMode_Windowed)
+        if (game->internal_data.config.window_mode == WindowMode_Windowed)
         {
             glfwSetWindowMonitor(window_handle,
                                  nullptr,
-                                 game->config.window_x,
-                                 game->config.window_y,
-                                 game->config.window_width,
-                                 game->config.window_height,
+                                 game->internal_data.config.window_x,
+                                 game->internal_data.config.window_y,
+                                 game->internal_data.config.window_width,
+                                 game->internal_data.config.window_height,
                                  video_mode->refreshRate);
-            game->config.window_x = window_x_before_fullscreen;
-            game->config.window_y = window_y_before_fullscreen;
+            game->internal_data.config.window_x = window_x_before_fullscreen;
+            game->internal_data.config.window_y = window_y_before_fullscreen;
         }
-        else if (game->config.window_mode == WindowMode_Fullscreen)
+        else if (game->internal_data.config.window_mode == WindowMode_Fullscreen)
         {
             glfwSetWindowMonitor(window_handle,
                                  (GLFWmonitor*)monitor,
                                  0,
                                  0,
-                                 game->config.window_width,
-                                 game->config.window_height,
+                                 game->internal_data.config.window_width,
+                                 game->internal_data.config.window_height,
                                  video_mode->refreshRate);
-            game->config.window_x = 0;
-            game->config.window_y = 0;
+            game->internal_data.config.window_x = 0;
+            game->internal_data.config.window_y = 0;
         }
         else
         {
@@ -246,16 +246,16 @@ namespace minecraft {
                                  video_mode->height,
                                  video_mode->refreshRate);
 
-            game->config.window_x = 0;
-            game->config.window_y = 0;
-            game->config.window_width  = video_mode->width;
-            game->config.window_height = video_mode->height;
+            game->internal_data.config.window_x = 0;
+            game->internal_data.config.window_y = 0;
+            game->internal_data.config.window_width  = video_mode->width;
+            game->internal_data.config.window_height = video_mode->height;
         }
     }
 
     void Platform::center_window()
     {
-        if (game->config.window_mode == WindowMode_Windowed)
+        if (game->internal_data.config.window_mode == WindowMode_Windowed)
         {
             const GLFWmonitor *monitor = glfwGetPrimaryMonitor();
             i32 monitor_x;
@@ -263,11 +263,11 @@ namespace minecraft {
             i32 monitor_width;
             i32 monitor_height;
             glfwGetMonitorWorkarea((GLFWmonitor*)monitor, &monitor_x, &monitor_y, &monitor_width, &monitor_height);
-            game->config.window_x = monitor_x + (monitor_width - game->config.window_width) / 2;
-            game->config.window_y = monitor_y + (monitor_height - game->config.window_height) / 2;
-            window_x_before_fullscreen = game->config.window_x;
-            window_y_before_fullscreen = game->config.window_y;
-            glfwSetWindowPos(window_handle, game->config.window_x, game->config.window_y);
+            game->internal_data.config.window_x = monitor_x + (monitor_width - game->internal_data.config.window_width) / 2;
+            game->internal_data.config.window_y = monitor_y + (monitor_height - game->internal_data.config.window_height) / 2;
+            window_x_before_fullscreen = game->internal_data.config.window_x;
+            window_y_before_fullscreen = game->internal_data.config.window_y;
+            glfwSetWindowPos(window_handle, game->internal_data.config.window_x, game->internal_data.config.window_y);
         }
     }
 
