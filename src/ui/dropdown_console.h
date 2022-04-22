@@ -53,7 +53,7 @@ namespace minecraft {
         ConsoleState state;
         Bitmap_Font *font;
 
-        f32 left_padding;
+        f32 padding_x;
 
         std::string current_text;
         i32 current_cursor_index;
@@ -68,6 +68,7 @@ namespace minecraft {
         f32 y_extent;
         f32 y_extent_target;
 
+        f32 scroll_bar_width;
         f32 scroll_speed;
 
         f32 scroll_y;
@@ -110,6 +111,11 @@ namespace minecraft {
         static void close();
 
         inline static bool is_closed() { return internal_data.state == ConsoleState_Closed; }
+
+        static f32 get_text_height();
+        static f32 get_line_height();
+        static f32 get_size_y();
+        static f32 get_max_scroll_y();
 
         static void draw(f32 dt);
 

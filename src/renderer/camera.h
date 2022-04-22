@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/common.h"
-#include "game/math_utils.h"
+#include "game/math.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>

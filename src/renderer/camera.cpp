@@ -26,54 +26,54 @@ namespace minecraft {
 
     void Camera::update(f32 delta_time)
     {
-        if (Input::get_key(MC_KEY_LEFT_SHIFT))
-        {
-            this->movment_speed = this->run_speed;
-        }
-        else
-        {
-            this->movment_speed = this->walk_speed;
-        }
+        // if (Input::get_key(MC_KEY_LEFT_SHIFT))
+        // {
+        //     this->movment_speed = this->run_speed;
+        // }
+        // else
+        // {
+        //     this->movment_speed = this->walk_speed;
+        // }
 
-        if (Input::get_key(MC_KEY_W))
-        {
-            this->position += this->forward * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_W))
+        // {
+        //     this->position += this->forward * movment_speed * delta_time;
+        // }
 
-        if (Input::get_key(MC_KEY_S))
-        {
-            this->position -= this->forward * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_S))
+        // {
+        //     this->position -= this->forward * movment_speed * delta_time;
+        // }
 
-        if (Input::get_key(MC_KEY_A))
-        {
-            this->position -= this->right * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_A))
+        // {
+        //     this->position -= this->right * movment_speed * delta_time;
+        // }
 
-        if (Input::get_key(MC_KEY_D))
-        {
-            this->position += this->right * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_D))
+        // {
+        //     this->position += this->right * movment_speed * delta_time;
+        // }
 
-        if (Input::get_key(MC_KEY_SPACE))
-        {
-            this->position += this->up * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_SPACE))
+        // {
+        //     this->position += this->up * movment_speed * delta_time;
+        // }
 
-        if (Input::get_key(MC_KEY_LEFT_CONTROL))
-        {
-            this->position -= this->up * movment_speed * delta_time;
-        }
+        // if (Input::get_key(MC_KEY_LEFT_CONTROL))
+        // {
+        //     this->position -= this->up * movment_speed * delta_time;
+        // }
 
         glm::vec2 mouse_delta = Input::get_mouse_delta();
 
-        this->yaw += mouse_delta.x * this->rotation_speed * this->sensetivity * delta_time;
-        
-        if (this->yaw >= 360.0f) this->yaw -= 360.0f;
-        if (this->yaw <= -360.0f) this->yaw += 360.0f;
+        // this->yaw += mouse_delta.x * this->rotation_speed * this->sensetivity * delta_time;
+
+        // if (this->yaw >= 360.0f) this->yaw -= 360.0f;
+        // if (this->yaw <= -360.0f) this->yaw += 360.0f;
 
         this->pitch += mouse_delta.y * this->rotation_speed * this->sensetivity * delta_time;
-        
+
         if (this->pitch >= 360.0f) this->pitch -= 360.0f;
         if (this->pitch <= -360.0f) this->pitch += 360.0f;
 
@@ -90,6 +90,7 @@ namespace minecraft {
         this->orientation = glm::quat(angles);
         this->forward = glm::rotate(this->orientation, glm::vec3(0.0f, 0.0f, -1.0f));
         this->right = glm::rotate(this->orientation, glm::vec3(1.0f, 0.0f, 0.0f));
+
         this->up = glm::rotate(this->orientation, glm::vec3(0.0f, 1.0f, 0.0f));
 
         glm::mat4 view_model = glm::translate(glm::mat4(1.0f), this->position) * glm::toMat4(this->orientation);

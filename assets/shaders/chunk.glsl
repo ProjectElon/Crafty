@@ -165,12 +165,14 @@ void main()
     vec3 normal = face_normal[face_id];
     vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color;
 
-    float ambient_amount = 0.4f;
-    vec3 ambient = light_color * ambient_amount;
+    // phong
+    // float ambient_amount = 0.4f;
+    // vec3 ambient = light_color * ambient_amount;
 
-    float diffuse_amount = max(dot(normal, light_dir), 0.0f);
-    vec3 diffuse = light_color * diffuse_amount;
+    // float diffuse_amount = max(dot(normal, light_dir), 0.0f);
+    // vec3 diffuse = light_color * diffuse_amount;
+    // out_color = vec4(ambient + diffuse, 1.0f) * color;
+    // out_color = mix(out_color, u_sky_color, a_fog_factor);
 
-    out_color = vec4(ambient + diffuse, 1.0f) * color;
-    out_color = mix(out_color, u_sky_color, a_fog_factor);
+    out_color = mix(color, u_sky_color, a_fog_factor);
 }

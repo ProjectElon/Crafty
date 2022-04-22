@@ -88,7 +88,7 @@ namespace minecraft {
 
         void exit(const Console_Command::Arguments& args)
         {
-            Game::shutdown();
+            Game::internal_data.is_running = false;
         }
 
         void close(const Console_Command::Arguments& args)
@@ -110,7 +110,12 @@ namespace minecraft {
 
                 for (auto& arg : command.args)
                 {
-                    Dropdown_Console::log(" " + arg, Dropdown_Console::internal_data.argument_color);
+                    i32 colon_index = arg.find_first_of(":");
+                    std::string arg_name = arg.substr(0, colon_index);
+                    std::string arg_type = arg.substr(colon_index + 1);
+                    Dropdown_Console::log(" " + arg_name, Dropdown_Console::internal_data.argument_color);
+                    Dropdown_Console::log(":", Dropdown_Console::internal_data.text_color);
+                    Dropdown_Console::log(arg_type, Dropdown_Console::internal_data.type_color);
                 }
 
                 Dropdown_Console::log("\n");
@@ -175,14 +180,14 @@ namespace minecraft {
 
         void build_assets(const Console_Command::Arguments& args)
         {
+            Dropdown_Console::log_with_new_line("packing block textures ...");
             std::vector<std::string> texture_extensions = { ".png" };
             std::vector<std::string> paths = File_System::list_files_recursivly("../assets/textures/blocks", texture_extensions);
             const char *output_path = "../assets/textures/block_spritesheet.png";
             const char *locations_path = "../assets/textures/spritesheet_meta.txt";
             const char *header_file_path = "../src/meta/spritesheet_meta.h";
-            Dropdown_Console::log("packing block textures ...");
             bool success = Texture_Packer::pack_textures(paths, output_path, locations_path, header_file_path);
-            if (success) Dropdown_Console::log("block texture packed successfully");
+            if (success) Dropdown_Console::log_with_new_line("block texture packed successfully");
         }
     }
 }

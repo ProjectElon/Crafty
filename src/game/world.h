@@ -4,7 +4,7 @@
 
 #include "meta/spritesheet_meta.h"
 #include "memory/free_list.h"
-#include "game/math_utils.h"
+#include "game/math.h"
 #include "game/jobs.h"
 #include "game/console_commands.h"
 
@@ -225,8 +225,8 @@ namespace minecraft {
         static constexpr i64 max_chunk_radius = 30;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
 
-        static constexpr i64 sub_chunk_bucket_capacity = 4 * chunk_capacity;
-        static constexpr i64 sub_chunk_bucket_face_count = 900;
+        static constexpr i64 sub_chunk_bucket_capacity = 3 * chunk_capacity;
+        static constexpr i64 sub_chunk_bucket_face_count = 1024;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
@@ -249,7 +249,7 @@ namespace minecraft {
         static void shutdown();
 
         static void load_chunks_at_region(const World_Region_Bounds& region_bounds);
-        static void update_sub_chunks();
+        static void schedule_update_sub_chunk_jobs();
         static void free_chunks_out_of_region(const World_Region_Bounds& region_bounds);
 
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
@@ -262,6 +262,7 @@ namespace minecraft {
         {
             glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
             glm::vec3 offset = position - World::get_chunk(chunk_coords)->position;
+            // todo(harlequin): trunc or floor ?
             return { (i32)glm::floor(offset.x), (i32)glm::floor(position.y), (i32)glm::floor(offset.z)};
         }
 
@@ -300,16 +301,25 @@ namespace minecraft {
         {
             glm::ivec2 chunk_coords = world_position_to_chunk_coords(position);
             Chunk* chunk = get_chunk(chunk_coords);
-            glm::ivec3 block_coords = world_position_to_block_coords(position);
             if (chunk)
             {
-                if (block_coords.y < 0 || block_coords.y >= MC_CHUNK_HEIGHT)
+                glm::ivec3 block_coords = world_position_to_block_coords(position);
+                if (block_coords.x >= 0 && block_coords.x < MC_CHUNK_WIDTH &&
+                    block_coords.y >= 0 && block_coords.y < MC_CHUNK_HEIGHT && 
+                    block_coords.z >= 0 && block_coords.z < MC_CHUNK_WIDTH)
                 {
-                    return { block_coords, &World::null_block, chunk };
+                    return { block_coords, chunk->get_block(block_coords), chunk };
                 }
-                return { block_coords, chunk->get_block(block_coords), chunk };
             }
-            return { block_coords, &World::null_block, nullptr };
+            return { { -1, -1, -1 }, &World::null_block, nullptr };
+        }
+
+        static inline bool is_block_query_valid(const Block_Query_Result& query)
+        {
+            return query.chunk && query.block &&
+                   query.block_coords.x >= 0 && query.block_coords.x < MC_CHUNK_WIDTH  &&
+                   query.block_coords.y >= 0 && query.block_coords.y < MC_CHUNK_HEIGHT &&
+                   query.block_coords.z >= 0 && query.block_coords.z < MC_CHUNK_DEPTH;
         }
 
         static inline i32 get_sub_chunk_index(const glm::ivec3& block_coords)

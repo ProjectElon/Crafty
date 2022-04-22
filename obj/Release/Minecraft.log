@@ -1,3 +1,47 @@
-﻿  dropdown_console.cpp
-C:\dev\cpp\Crafty\src\ui\dropdown_console.cpp(292,35): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
+﻿  texture_packer.cpp
+  string.cpp
+  event.cpp
+  file_system.cpp
+  input.cpp
+  platform_win32.cpp
+  console_commands.cpp
+  ecs.cpp
+  game.cpp
+  job_system.cpp
+  jobs.cpp
+  math.cpp
+C:\dev\cpp\Crafty\src\containers\string.cpp(9,36): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(36,40): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(53,40): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(98,44): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(116,44): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+  physics.cpp
+  world.cpp
+C:\dev\cpp\Crafty\src\core\event.cpp(166,35): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\core\event.cpp(131): warning C4715: 'minecraft::convert_event_to_string': not all control paths return a value
+  main.cpp
+  camera.cpp
+  font.cpp
+C:\dev\cpp\Crafty\src\game\console_commands.cpp(113,61): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
+  opengl_2d_renderer.cpp
+  opengl_debug_renderer.cpp
+C:\dev\cpp\Crafty\src\game\physics.cpp(66): warning C4715: 'minecraft::get_box_vs_box_collision_direction': not all control paths return a value
+  opengl_renderer.cpp
+  opengl_shader.cpp
+C:\dev\cpp\Crafty\src\renderer\font.cpp(34,59): warning C4244: 'argument': conversion from 'i32' to 'float', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\font.cpp(62,34): warning C4244: 'argument': conversion from 'i32' to 'float', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\font.cpp(77,27): warning C4018: '<': signed/unsigned mismatch
+C:\dev\cpp\Crafty\src\game\world.cpp(379,79): warning C4244: 'argument': conversion from 'u32' to 'f32', possible loss of data
+  opengl_texture.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(158,58): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+  dropdown_console.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_shader.cpp(21,30): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_shader.cpp(201,76): warning C4267: '=': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_shader.cpp(202,58): warning C4267: '+=': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_shader.cpp(209,165): warning C4267: '=': conversion from 'size_t' to 'u32', possible loss of data
+  ui.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(218,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(108,13): warning C4101: 'opengl_texture_format': unreferenced local variable
+C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(109,13): warning C4101: 'opengl_internal_format': unreferenced local variable
+  glad.c
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

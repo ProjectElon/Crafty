@@ -1,6 +1,8 @@
 #include "jobs.h"
 #include "renderer/opengl_renderer.h"
+#include "renderer/camera.h"
 #include "game/world.h"
+#include "game/game.h"
 
 #include <filesystem>
 
@@ -38,6 +40,7 @@ namespace minecraft {
         Chunk* chunk = data->chunk;
         i32 sub_chunk_index = data->sub_chunk_index;
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
         Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
         render_data.pending_for_update = false;
     }

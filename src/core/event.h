@@ -83,8 +83,8 @@ namespace minecraft {
         static bool initialize(struct Platform *platform, bool is_tracing_events = false);
         static void shutdown();
 
-        static bool register_event(EventType event_type, on_event_fn on_event, void *sender);
-        static bool unregister_event(EventType event_type, void *sender);
+        static bool register_event(EventType event_type, on_event_fn on_event, void *sender = nullptr);
+        static bool unregister_event(EventType event_type, void *sender = nullptr);
 
         static void fire_event(EventType event_type, const Event *event);
 

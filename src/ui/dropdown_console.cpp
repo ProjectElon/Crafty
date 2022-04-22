@@ -22,7 +22,7 @@ namespace minecraft {
     {
         internal_data.state = ConsoleState_Closed;
         internal_data.font = font;
-        internal_data.left_padding = (font->size_in_pixels / 2.0f);
+        internal_data.padding_x = (font->size_in_pixels / 2.0f);
 
         internal_data.text_color = text_color;
         internal_data.background_color = background_color;
@@ -47,11 +47,12 @@ namespace minecraft {
         internal_data.current_text = "";
         internal_data.current_cursor_index = 0;
 
+        internal_data.scroll_bar_width = 15.0f;
         internal_data.y_extent = 0.0f;
         internal_data.y_extent_target = 0.0f;
         internal_data.toggle_speed = 10.0f;
 
-        internal_data.scroll_speed = font->char_height * 10.0f;
+        internal_data.scroll_speed = get_line_height() * 2.0f;
 
         internal_data.scroll_y = 0.0f;
         internal_data.scroll_y_target = 0.0f;
@@ -59,23 +60,10 @@ namespace minecraft {
         internal_data.scroll_x = 0.0f;
         internal_data.scroll_x_target = 0.0f;
 
-        // todo(harlequin): temprary to be removed
-        {
-            log_with_new_line("first line", command_color);
-
-            for (i32 i = 0; i < 100; i++)
-            {
-                std::string no = std::to_string(i);
-                log_with_new_line(no + ". the name is quin harlequin.", command_color);
-            }
-
-            log_with_new_line("last line", command_color);
-        }
-
-        Event_System::register_event(EventType_Char,       Dropdown_Console::on_char_input,  &internal_data);
-        Event_System::register_event(EventType_KeyPress,   Dropdown_Console::on_key,         &internal_data);
-        Event_System::register_event(EventType_KeyHeld,    Dropdown_Console::on_key,         &internal_data);
-        Event_System::register_event(EventType_MouseWheel, Dropdown_Console::on_mouse_wheel, &internal_data);
+        Event_System::register_event(EventType_Char,       Dropdown_Console::on_char_input);
+        Event_System::register_event(EventType_KeyPress,   Dropdown_Console::on_key);
+        Event_System::register_event(EventType_KeyHeld,    Dropdown_Console::on_key);
+        Event_System::register_event(EventType_MouseWheel, Dropdown_Console::on_mouse_wheel);
 
         console_commands::register_commands();
 
@@ -203,21 +191,55 @@ namespace minecraft {
 
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
-        f32 text_height = internal_data.history.size() * internal_data.font->char_height * 1.3f;
+        auto& history = internal_data.history;
+        auto* font = internal_data.font;
+        auto& y_extent = internal_data.y_extent;
+        auto& scroll_y_target = internal_data.scroll_y_target;
+        auto& scroll_speed = internal_data.scroll_speed;
 
-        f32 max_scroll_y = 0.0f;
-        f32 console_y_size = frame_buffer_size.y * internal_data.y_extent - 2.0f * internal_data.font->char_height;
-
-        if (text_height > console_y_size)
-        {
-            max_scroll_y = text_height - console_y_size + internal_data.font->char_height * 1.3f;
-        }
-
-        internal_data.scroll_y_target += y_offset * internal_data.scroll_speed;
-        internal_data.scroll_y_target = glm::clamp(internal_data.scroll_y_target, 0.0f, max_scroll_y);
+        f32 max_scroll_y = get_max_scroll_y();
+        scroll_y_target += y_offset * scroll_speed;
+        scroll_y_target = glm::clamp(scroll_y_target, 0.0f, max_scroll_y);
 
         return true;
     }
+
+    f32 Dropdown_Console::get_text_height()
+    {
+        auto& history = internal_data.history;
+        auto* font = internal_data.font;
+        return history.size() * get_line_height();
+    }
+
+    f32 Dropdown_Console::get_line_height()
+    {
+        auto* font = internal_data.font;
+        return font->char_height * 1.3f;
+    }
+
+    f32 Dropdown_Console::get_size_y()
+    {
+        auto& y_extent = internal_data.y_extent;
+        auto* font = internal_data.font;
+        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
+        return frame_buffer_size.y * y_extent - 2.0f * get_line_height();
+    }
+
+    f32 Dropdown_Console::get_max_scroll_y()
+    {
+        f32 text_height = get_text_height();
+
+        f32 max_scroll_y = 0.0f;
+        f32 console_size_y = get_size_y();
+
+        if (text_height > console_size_y)
+        {
+            max_scroll_y = text_height - console_size_y;
+        }
+
+        return max_scroll_y;
+    }
+
 
     void Dropdown_Console::log(const std::string& text, const glm::vec4& color)
     {
@@ -284,32 +306,53 @@ namespace minecraft {
     void Dropdown_Console::draw(f32 dt)
     {
         ConsoleState& state = internal_data.state;
-        f32& y_extent = internal_data.y_extent;
-        f32 y_extent_target = internal_data.y_extent_target;
-        f32& cursor_current_cooldown_time = internal_data.cursor_current_cooldown_time;
-        Bitmap_Font *font = internal_data.font;
+        auto& padding_x = internal_data.padding_x;
+        auto& y_extent = internal_data.y_extent;
+        auto& y_extent_target = internal_data.y_extent_target;
+        auto& toggle_speed = internal_data.toggle_speed;
+        auto& cursor_current_cooldown_time = internal_data.cursor_current_cooldown_time;
+        auto *font = internal_data.font;
         auto& history = internal_data.history;
+
+
+        auto& background_color = internal_data.background_color;
+
+        auto& input_text_background_color = internal_data.input_text_background_color;
+
+        auto& current_cursor_index = internal_data.current_cursor_index;
+        auto& current_text = internal_data.current_text;
+        auto& input_text_color = internal_data.input_text_color;
+        auto& input_text_cursor_size = internal_data.input_text_cursor_size;
+        auto& input_text_cursor_color = internal_data.input_text_cursor_color;
+
+        auto& cursor_opacity = internal_data.cursor_opacity;
+        auto& cursor_opacity_limit = internal_data.cursor_opacity_limit;
+
         auto& scroll_y = internal_data.scroll_y;
         auto& scroll_y_target = internal_data.scroll_y_target;
         auto& scroll_x = internal_data.scroll_x;
         auto& scroll_x_target = internal_data.scroll_x_target;
-        auto& left_padding = internal_data.left_padding;
+        auto& scroll_speed = internal_data.scroll_speed;
+        auto& scroll_bar_width = internal_data.scroll_bar_width;
+        auto& scroll_bar_background_color = internal_data.scroll_bar_background_color;
+        auto& scroll_bar_color = internal_data.scroll_bar_color;
 
-        y_extent = glm::lerp(y_extent, y_extent_target, dt * internal_data.toggle_speed);
-        y_extent = glm::clamp(y_extent, 0.0f, 1.0f);
-
-        if (cursor_current_cooldown_time >= 0.0f) cursor_current_cooldown_time -= dt;
+        f32 line_height = get_line_height();
 
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
-        glm::vec2 console_position = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent * 0.5f };
-        glm::vec2 console_scale = { frame_buffer_size.x, frame_buffer_size.y * y_extent };
-        Opengl_2D_Renderer::draw_rect(console_position, console_scale, 0.0f, internal_data.background_color);
+        y_extent = glm::lerp(y_extent, y_extent_target, dt * toggle_speed);
+        y_extent = glm::clamp(y_extent, 0.0f, 1.0f);
 
-        glm::vec2 cursor = { internal_data.left_padding, frame_buffer_size.y * y_extent - 4.0f * font->char_height + scroll_y };
+        glm::vec2 console_background_pos = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent * 0.5f };
+        glm::vec2 console_background_size = { frame_buffer_size.x, frame_buffer_size.y * y_extent };
+        Opengl_2D_Renderer::draw_rect(console_background_pos, console_background_size, 0.0f, background_color);
+
+        glm::vec2 cursor = { padding_x, frame_buffer_size.y * y_extent - 2.0f * line_height + scroll_y };
 
         i32 count = (i32)history.size();
-        f32 text_height = count * font->char_height * 1.3f;
+        f32 text_height = get_text_height();
+
         for (i32 i = count - 1; i >= 0; i--)
         {
             const Dropdown_Console_Line& line = history[i];
@@ -320,7 +363,7 @@ namespace minecraft {
 
                 glm::vec2 text_size = font->get_string_size(word.text);
 
-                if (cursor.y <= frame_buffer_size.y * y_extent - 4.0f * font->char_height)
+                if (cursor.y <= frame_buffer_size.y * y_extent - 2.0f * line_height)
                 {
                     Opengl_2D_Renderer::draw_string(font, word.text, text_size, cursor + text_size * 0.5f, word.color);
                 }
@@ -328,69 +371,75 @@ namespace minecraft {
                 cursor.x += text_size.x;
             }
 
-            cursor.x = internal_data.left_padding;
-            cursor.y -= font->char_height * 1.3f;
+            cursor.x = padding_x;
+            cursor.y -= line_height;
         }
 
-        glm::vec2 input_text_position = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent - font->char_height };
-        glm::vec2 input_text_scale = { frame_buffer_size.x, 2.0f * font->char_height };
-        Opengl_2D_Renderer::draw_rect(input_text_position, input_text_scale, 0.0f, internal_data.input_text_background_color);
+        glm::vec2 input_text_position = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent - line_height };
+        glm::vec2 input_text_size = { frame_buffer_size.x, 2.0f * line_height };
+        Opengl_2D_Renderer::draw_rect(input_text_position, input_text_size, 0.0f, input_text_background_color);
 
-        glm::vec2 current_text_size = font->get_string_size(internal_data.current_text);
+        glm::vec2 current_text_size = font->get_string_size(current_text);
         Opengl_2D_Renderer::draw_string(font,
-                                        internal_data.current_text,
+                                        current_text,
                                         current_text_size,
-                                        glm::vec2(internal_data.left_padding + current_text_size.x * 0.5f - scroll_x, frame_buffer_size.y * y_extent - font->char_height),
-                                        internal_data.input_text_color);
+                                        glm::vec2(padding_x + current_text_size.x * 0.5f - scroll_x, frame_buffer_size.y * y_extent - line_height),
+                                        input_text_color);
 
-        std::string sub_string = internal_data.current_text.substr(0, internal_data.current_cursor_index);
+        std::string sub_string = current_text.substr(0, current_cursor_index);
         glm::vec2 sub_string_size = font->get_string_size(sub_string);
-        glm::vec2 input_text_cursor_position = { left_padding + internal_data.input_text_cursor_size.x * 0.5f + sub_string_size.x, frame_buffer_size.y * y_extent - font->char_height };
+        glm::vec2 input_text_cursor_position = { padding_x + input_text_cursor_size.x * 0.5f + sub_string_size.x, frame_buffer_size.y * y_extent - line_height };
 
-        glm::vec4 input_text_cursor_color = internal_data.input_text_cursor_color;
-        f32 &cursor_opacity = internal_data.cursor_opacity;
-
-        if (cursor_current_cooldown_time <= 0.0f)
+        // cursor
         {
-            cursor_opacity += dt * 360.0f;
-            if (cursor_opacity >= 360.0f) cursor_opacity -= 360.0f;
-            input_text_cursor_color.a = glm::max(glm::abs(glm::sin(glm::radians(cursor_opacity))), internal_data.cursor_opacity_limit);
-        }
+            if (cursor_current_cooldown_time >= 0.0f) cursor_current_cooldown_time -= dt;
 
-        Opengl_2D_Renderer::draw_rect(input_text_cursor_position - glm::vec2(scroll_x, 0.0f), internal_data.input_text_cursor_size, 0.0f, input_text_cursor_color);
+            if (cursor_current_cooldown_time <= 0.0f)
+            {
+                cursor_opacity += dt * 360.0f;
+                if (cursor_opacity >= 360.0f) cursor_opacity -= 360.0f;
+                input_text_cursor_color.a = glm::max(glm::abs(glm::sin(glm::radians(cursor_opacity))), cursor_opacity_limit);
+            }
+
+            Opengl_2D_Renderer::draw_rect(input_text_cursor_position - glm::vec2(scroll_x, 0.0f), input_text_cursor_size, 0.0f, input_text_cursor_color);
+        }
 
         // scroll bar
         {
-            scroll_y = glm::lerp(scroll_y, scroll_y_target, dt * internal_data.scroll_speed);
+            scroll_y = glm::lerp(scroll_y, scroll_y_target, dt * scroll_speed);
+            f32 console_size_y = get_size_y();
 
-            f32 console_y_size = frame_buffer_size.y * y_extent - 2.0f * font->char_height;
-
-            bool should_render_scroll_bar = text_height > console_y_size;
+            bool should_render_scroll_bar = text_height > console_size_y;
 
             if (should_render_scroll_bar)
             {
-                f32 max_scroll_y = text_height - console_y_size + font->char_height * 1.3f;
+                f32 max_scroll_y = get_max_scroll_y();
                 f32 scroll_percent = (max_scroll_y - scroll_y) / max_scroll_y;
 
-                f32 scroll_bar_y_size = glm::max((console_y_size / text_height) * console_y_size, 15.0f);
-                f32 scroll_bar_y_pos  = glm::lerp(scroll_bar_y_size, console_y_size, scroll_percent);
+                f32 scroll_bar_y_size = glm::max((console_size_y / text_height) * console_size_y, 10.0f);
+                f32 scroll_bar_y_pos  = glm::lerp(scroll_bar_y_size, console_size_y, scroll_percent);
 
-                glm::vec2 scroll_bar_size = { 15.0f, scroll_bar_y_size };
+                glm::vec2 scroll_bar_size = { scroll_bar_width, scroll_bar_y_size };
                 glm::vec2 scroll_bar_pos  = { frame_buffer_size.x - scroll_bar_size.x, scroll_bar_y_pos - scroll_bar_size.y };
 
-                glm::vec2 scroll_rect_size = { scroll_bar_size.x, console_y_size };
-                glm::vec2 scroll_rect_pos  = { frame_buffer_size.x - scroll_rect_size.x + scroll_rect_size.x * 0.5f, console_y_size * 0.5f };
+                glm::vec2 scroll_rect_size = { scroll_bar_size.x, console_size_y };
+                glm::vec2 scroll_rect_pos  = { frame_buffer_size.x - scroll_rect_size.x + scroll_rect_size.x * 0.5f, console_size_y * 0.5f };
 
-                Opengl_2D_Renderer::draw_rect(scroll_rect_pos, scroll_rect_size, 0.0f, internal_data.scroll_bar_background_color);
-                Opengl_2D_Renderer::draw_rect(scroll_bar_pos + scroll_bar_size * 0.5f, scroll_bar_size, 0.0f, internal_data.scroll_bar_color);
+                Opengl_2D_Renderer::draw_rect(scroll_rect_pos, scroll_rect_size, 0.0f, scroll_bar_background_color);
+                Opengl_2D_Renderer::draw_rect(scroll_bar_pos + scroll_bar_size * 0.5f, scroll_bar_size, 0.0f, scroll_bar_color);
             }
         }
 
-        // scroll_x
+        // input_text scroll
         {
-            i32 scroll_x_count = (i32)((input_text_cursor_position.x + 3.0f * left_padding) / (frame_buffer_size.x));
-            scroll_x_target = ((frame_buffer_size.x - 4.0f * left_padding) * scroll_x_count);
-            scroll_x = glm::lerp(scroll_x, scroll_x_target, dt * internal_data.scroll_speed);
+            scroll_x_target = 0.0f;
+
+            if (current_text_size.x + 2.0f * input_text_cursor_size.x + padding_x > input_text_size.x)
+            {
+                scroll_x_target = current_text_size.x + 2.0f * input_text_cursor_size.x + padding_x - input_text_size.x;
+            }
+
+            scroll_x = glm::lerp(scroll_x, scroll_x_target, dt * scroll_speed);
         }
     }
 
