@@ -89,6 +89,8 @@ namespace minecraft {
         Opengl_Renderer_Stats stats;
         i64 sub_chunk_used_memory;
 
+        u16 sky_light_level;
+
         bool should_trace_debug_messsage = true;
     };
 
@@ -103,18 +105,21 @@ namespace minecraft {
 
         static bool on_resize(const Event* event, void *sender);
 
-        static u32 compress_vertex(const glm::ivec3& block_coords,
-            u32 local_position_id,
-            u32 face_id,
-            u32 face_corner_id,
-            u32 flags);
+        static u32 compress_vertex0(const glm::ivec3& block_coords,
+                                   u32 local_position_id,
+                                   u32 face_id,
+                                   u32 face_corner_id,
+                                   u32 flags);
 
-        static void extract_vertex(u32 vertex,
-            glm::ivec3& block_coords,
-            u32& out_local_position_id,
-            u32& out_face_id,
-            u32& out_face_corner_id,
-            u32& out_flags);
+        static void extract_vertex0(u32 vertex,
+                                   glm::ivec3& block_coords,
+                                   u32& out_local_position_id,
+                                   u32& out_face_id,
+                                   u32& out_face_corner_id,
+                                   u32& out_flags);
+
+        static u32 compress_vertex1(u32 texture_uv_id, u32 light_level);
+        static void extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_light_level);
 
         static void allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
         static void reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
@@ -136,6 +141,9 @@ namespace minecraft {
         static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader);
         
         static void end();
+
+        static void wait_for_gpu_to_finish_work();
+        static void signal_gpu_for_work();
 
         static void swap_buffers();
 

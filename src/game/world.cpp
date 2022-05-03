@@ -46,6 +46,7 @@ namespace minecraft {
 
         this->loaded  = false;
         this->pending_for_load = true;
+        this->pending_for_light = true;
         this->pending_for_save = false;
 
         std::stringstream ss;
@@ -71,7 +72,7 @@ namespace minecraft {
 
         for (i32 i = 0; i < octaves; i++)
         {
-            f32 value = glm::simplex(sample * scales[i]);
+            f32 value = glm::perlin(sample * scales[i]);
             value = (value + 1.0f) / 2.0f;
             noise += value * weights[i];
         }
@@ -122,8 +123,8 @@ namespace minecraft {
         i32 right_edge_height_map[MC_CHUNK_DEPTH];
 
         constexpr i32 min_biome_height = 100;
-        constexpr i32 max_biome_height = 200;
-        constexpr i32 water_level = min_biome_height + 20;
+        constexpr i32 max_biome_height = 250;
+        constexpr i32 water_level = min_biome_height + 50;
         static_assert(water_level >= min_biome_height && water_level <= max_biome_height);
 
         const glm::ivec2 front_chunk_coords = { world_coords.x + 0, world_coords.y - 1 };
@@ -319,6 +320,94 @@ namespace minecraft {
         return this->get_block({ block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
+    std::array<Block*, 6> Chunk::get_neighbours(const glm::ivec3& block_coords)
+    {
+        std::array<Block*, 6> neighbours;
+
+        neighbours[BlockNeighbour_Up] = get_neighbour_block_from_top(block_coords);
+        neighbours[BlockNeighbour_Down] = get_neighbour_block_from_bottom(block_coords);
+        neighbours[BlockNeighbour_Left] = get_neighbour_block_from_left(block_coords);
+        neighbours[BlockNeighbour_Right] = get_neighbour_block_from_right(block_coords);
+        neighbours[BlockNeighbour_Front] = get_neighbour_block_from_front(block_coords);
+        neighbours[BlockNeighbour_Back] = get_neighbour_block_from_back(block_coords);
+
+        return neighbours;
+    }
+
+    void Chunk::calculate_lighting(u16 sky_light_level)
+    {
+        for (i32 z = 0; z < MC_CHUNK_DEPTH; z++)
+        {
+            for (i32 x = 0; x < MC_CHUNK_WIDTH; x++)
+            {
+                bool can_propagate = true;
+                for (i32 y = MC_CHUNK_HEIGHT - 1; y >= 0; y--)
+                {
+                    glm::ivec3 block_coords = { x, y, z };
+                    Block *block = this->get_block(block_coords);
+                    const Block_Info& info = World::block_infos[block->id];
+                    if (info.is_solid())
+                    {
+                        can_propagate = false;
+                        continue;
+                    }
+                    // todo(harlequin): use local chunk
+                    World::set_block_light_level(this, block_coords, can_propagate ? sky_light_level : 1);
+                }
+            }
+        }
+
+        for (i32 y = MC_CHUNK_HEIGHT - 1; y >= 0; y--)
+        {
+            bool found_any_sky_lights = false;
+            for (i32 z = 0; z < MC_CHUNK_DEPTH; z++)
+            {
+                for (i32 x = 0; x < MC_CHUNK_WIDTH; x++)
+                {
+                    glm::ivec3 block_coords = { x, y, z };
+                    Block* block = this->get_block(block_coords);
+                    const Block_Info& info = World::block_infos[block->id];
+                    if (info.is_solid())
+                    {
+                        if (info.is_light_source())
+                        {
+                            Block_Query_Result query;
+                            query.block = block;
+                            query.block_coords = block_coords;
+                            query.chunk = this;
+                            // todo(harlequin): use local chunk
+                            World::set_block_light_level(this, block_coords, 15);
+                            World::light_queue.push(query);
+                        }
+                        continue;
+                    }
+                    if (block->light_level == sky_light_level)
+                    {
+                        found_any_sky_lights = true;
+                        // todo(harlequin): use local chunk
+                        auto neighbours_query = World::get_neighbours(this, block_coords);
+                        for (i32 d = BlockNeighbour_Left; d < 6; d++)
+                        {
+                            Block *neighbour = neighbours_query[d].block;
+                            const Block_Info& neighbour_info = World::block_infos[neighbour->id];
+                            if (neighbour->light_level != sky_light_level && neighbour_info.is_transparent())
+                            {
+                                Block_Query_Result query;
+                                query.block = block;
+                                query.block_coords = block_coords;
+                                query.chunk = this;
+                                World::light_queue.push(query);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!found_any_sky_lights) break;
+        }
+    }
+
     bool World::initialize(const std::string& world_path)
     {
         namespace fs = std::filesystem;
@@ -394,9 +483,9 @@ namespace minecraft {
 
     void World::load_chunks_at_region(const World_Region_Bounds& region_bounds)
     {
-        for (i32 z = region_bounds.min.y; z <= region_bounds.max.y; ++z)
+        for (i32 z = region_bounds.min.y - 1; z <= region_bounds.max.y + 1; ++z)
         {
-            for (i32 x = region_bounds.min.x; x <= region_bounds.max.x; ++x)
+            for (i32 x = region_bounds.min.x - 1; x <= region_bounds.max.x + 1; ++x)
             {
                 glm::ivec2 chunk_coords = { x, z };
                 auto it = loaded_chunks.find(chunk_coords);
@@ -486,8 +575,22 @@ namespace minecraft {
 
     void World::set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id)
     {
+        chunk->pending_for_light = true;
+
         Block *block = chunk->get_block(block_coords);
         block->id = block_id;
+
+        i32 coord_direction[3] = { -1, 0, 1 };
+
+        for (i32 z_dir = 0; z_dir < 3; z_dir++)
+        {
+            for (i32 x_dir = 0; x_dir < 3; x_dir++)
+            {
+                glm::ivec2 neighbour_chunk_coords = { chunk->world_coords.x + coord_direction[x_dir], chunk->world_coords.y + coord_direction[z_dir] };
+                Chunk *neighbour_chunk = World::get_chunk(neighbour_chunk_coords);
+                if (neighbour_chunk) neighbour_chunk->pending_for_light = true;
+            }
+        }
 
         i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
         queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index);
@@ -519,6 +622,57 @@ namespace minecraft {
             Chunk *back_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
             assert(back_chunk);
             back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].id = block_id;
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, back_chunk, sub_chunk_index);
+        }
+
+        i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height - 1;
+
+        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != World::sub_chunk_count_per_chunk - 1)
+        {
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index + 1);
+        }
+        else if (block_coords.y == sub_chunk_start_y && sub_chunk_index != 0)
+        {
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index - 1);
+        }
+    }
+
+    void World::set_block_light_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level)
+    {
+        Block *block = chunk->get_block(block_coords);
+        block->light_level = light_level;
+
+        i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
+        queue_update_sub_chunk_job(update_sub_chunk_jobs, chunk, sub_chunk_index);
+
+        if (block_coords.x == 0)
+        {
+            Chunk *left_chunk = World::get_chunk({ chunk->world_coords.x - 1, chunk->world_coords.y });
+            assert(left_chunk);
+            left_chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_level = light_level;
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, left_chunk, sub_chunk_index);
+        }
+        else if (block_coords.x == MC_CHUNK_WIDTH - 1)
+        {
+            Chunk *right_chunk = World::get_chunk({ chunk->world_coords.x + 1, chunk->world_coords.y });
+            assert(right_chunk);
+            right_chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_level = light_level;
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, right_chunk, sub_chunk_index);
+        }
+
+        if (block_coords.z == 0)
+        {
+            Chunk *front_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y - 1 });
+            assert(front_chunk);
+            front_chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_level = light_level;
+            queue_update_sub_chunk_job(update_sub_chunk_jobs, front_chunk, sub_chunk_index);
+        }
+        else if (block_coords.z == MC_CHUNK_DEPTH - 1)
+        {
+            Chunk *back_chunk = World::get_chunk({ chunk->world_coords.x, chunk->world_coords.y + 1 });
+            assert(back_chunk);
+            back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_level = light_level;
             queue_update_sub_chunk_job(update_sub_chunk_jobs, back_chunk, sub_chunk_index);
         }
 
@@ -627,6 +781,18 @@ namespace minecraft {
         return result;
     }
 
+    std::array<Block_Query_Result, 6> World::get_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
+    {
+        std::array<Block_Query_Result, 6> neighbours;
+        neighbours[BlockNeighbour_Up]    = get_neighbour_block_from_top(chunk, block_coords);
+        neighbours[BlockNeighbour_Down]  = get_neighbour_block_from_bottom(chunk, block_coords);
+        neighbours[BlockNeighbour_Left]  = get_neighbour_block_from_left(chunk, block_coords);
+        neighbours[BlockNeighbour_Right] = get_neighbour_block_from_right(chunk, block_coords);
+        neighbours[BlockNeighbour_Front] = get_neighbour_block_from_front(chunk, block_coords);
+        neighbours[BlockNeighbour_Back]  = get_neighbour_block_from_back(chunk, block_coords);
+        return neighbours;
+    }
+
     const Block_Info World::block_infos[BlockId_Count] =
     {
         // Air
@@ -715,11 +881,11 @@ namespace minecraft {
         },
         // Glow Stone
         {
-            "oak_glow_stone",
+            "glow_stone",
             Texture_Id_glowstone,
             Texture_Id_glowstone,
             Texture_Id_glowstone,
-            BlockFlags_Is_Solid
+            BlockFlags_Is_Solid | BlockFlags_Is_Light_Source
         },
         // Cobble Stone
         {
@@ -876,6 +1042,8 @@ namespace minecraft {
     std::mutex World::chunk_pool_mutex;
     Free_List<Chunk, World::chunk_capacity> World::chunk_pool;
     std::vector<Update_Sub_Chunk_Job> World::update_sub_chunk_jobs;
+    std::queue<Block_Query_Result> World::light_queue;
+
 
     u16 World::block_to_place_id = BlockId_Stone;
     i32 World::chunk_radius = 8; // 8 for now so the game closes faster

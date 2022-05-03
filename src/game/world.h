@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <string>
 #include <unordered_map> // todo(harlequin): containers
+#include <array>
+#include <queue>
 
 #define MC_CHUNK_HEIGHT 256
 #define MC_CHUNK_DEPTH  16
@@ -69,7 +71,8 @@ namespace minecraft {
         BlockFlags_Is_Transparent = 2,
         BlockFlags_Should_Color_Top_By_Biome = 4,
         BlockFlags_Should_Color_Side_By_Biome = 8,
-        BlockFlags_Should_Color_Bottom_By_Biome = 16
+        BlockFlags_Should_Color_Bottom_By_Biome = 16,
+        BlockFlags_Is_Light_Source = 32,
     };
 
     struct Block_Info
@@ -88,6 +91,11 @@ namespace minecraft {
         inline bool is_transparent() const
         {
             return flags & BlockFlags_Is_Transparent;
+        }
+
+        inline bool is_light_source() const
+        {
+            return flags & BlockFlags_Is_Light_Source;
         }
 
         inline bool should_color_top_by_biome() const
@@ -109,6 +117,7 @@ namespace minecraft {
     struct Block
     {
         u16 id;
+        u16 light_level;
     };
 
     struct Sub_Chunk_Vertex
@@ -147,6 +156,16 @@ namespace minecraft {
         bool pending_for_update;
     };
 
+    enum BlockNeighbour
+    {
+        BlockNeighbour_Up = 0,
+        BlockNeighbour_Down = 1,
+        BlockNeighbour_Left = 2,
+        BlockNeighbour_Right = 3,
+        BlockNeighbour_Front = 4,
+        BlockNeighbour_Back = 5,
+    };
+
     struct Chunk
     {
         glm::ivec2 world_coords;
@@ -155,6 +174,7 @@ namespace minecraft {
         std::string file_path;
 
         bool pending_for_load;
+        bool pending_for_light;
         bool pending_for_save;
         bool loaded;
 
@@ -169,6 +189,7 @@ namespace minecraft {
         bool initialize(const glm::ivec2 &world_coords);
 
         void generate(i32 seed);
+        void calculate_lighting(u16 sky_light_level = 15);
 
         void serialize();
         void deserialize();
@@ -185,12 +206,14 @@ namespace minecraft {
 
         Block* get_block(const glm::ivec3& block_coords);
 
-        Block* Chunk::get_neighbour_block_from_right(const glm::ivec3& block_coords);
-        Block* Chunk::get_neighbour_block_from_left(const glm::ivec3& block_coords);
-        Block* Chunk::get_neighbour_block_from_top(const glm::ivec3& block_coords);
-        Block* Chunk::get_neighbour_block_from_bottom(const glm::ivec3& block_coords);
-        Block* Chunk::get_neighbour_block_from_front(const glm::ivec3& block_coords);
-        Block* Chunk::get_neighbour_block_from_back(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_right(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_left(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_top(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_bottom(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_front(const glm::ivec3& block_coords);
+        Block* get_neighbour_block_from_back(const glm::ivec3& block_coords);
+
+        std::array<Block*, 6> get_neighbours(const glm::ivec3& block_coords);
     };
 
     struct Chunk_Hash
@@ -223,7 +246,7 @@ namespace minecraft {
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
         static constexpr i64 max_chunk_radius = 30;
-        static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 2) * (max_chunk_radius + 2);
+        static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 3) * (max_chunk_radius + 3);
 
         static constexpr i64 sub_chunk_bucket_capacity = 3 * chunk_capacity;
         static constexpr i64 sub_chunk_bucket_face_count = 1024;
@@ -242,6 +265,7 @@ namespace minecraft {
         static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
         static std::vector<Update_Sub_Chunk_Job> update_sub_chunk_jobs;
+        static std::queue<Block_Query_Result> light_queue;
 
         static u16 block_to_place_id;
 
@@ -336,11 +360,14 @@ namespace minecraft {
         static Block_Query_Result get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords);
         static Block_Query_Result get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords);
 
+        static std::array<Block_Query_Result, 6> get_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
+
         static Block_Query_Result select_block(const glm::vec3& view_position,
                                                const glm::vec3& view_direction,
                                                u32 max_block_select_dist_in_cube_units,
                                                Ray_Cast_Result *out_ray_cast_result);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
+        static void set_block_light_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
     };
 }

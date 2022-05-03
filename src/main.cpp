@@ -23,26 +23,13 @@
 
 #include "game/math.h"
 #include "game/physics.h"
+#include "game/ecs.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
 #include <sstream>
-
-namespace minecraft {
-
-    struct Player
-    {
-        Transform transform;
-        Box_Collider collider;
-        Rigid_Body rb;
-        bool apply_jump_force;
-        bool in_middle_of_jump;
-        bool is_running;
-        f32 movment_speed;
-    };
-}
 
 int main()
 {
@@ -95,20 +82,40 @@ int main()
     std::string player_chunk_coords_text;
     std::string chunk_radius_text;
 
+    std::string block_facing_normal_chunk_coords_text;
+    std::string block_facing_normal_block_coords_text;
+    std::string block_facing_normal_sky_light_level_text;
+
     const auto& physics_delta_time = Physics::internal_data.delta_time;
     f32 physics_delta_time_accumulator = 0.0f;
 
     auto& camera = Game::get_camera();
     auto& loaded_chunks = World::loaded_chunks;
 
-    Player player = {};
-    player.transform = { { 0.0f, 200.0f, 0.0f }, { 0.9f, 2.9f, 0.9f }, { 0.0f, 0.0f, 0.0f } };
-    player.collider = { { 0.9f, 2.9f, 0.9f }, { 0.0f, 0.0f, 0.0f } };
+    Registry& registry = ECS::internal_data.registry;
 
-    glm::vec3 gravity = { 0.0f, 20.0f, 0.0f };
-    glm::vec3 terminal_velocity = { 50.0f, 50.0f, 50.0f };
-    f32 walk_speed = 5.0f;
-    f32 run_speed = 10.0f;
+    {
+        Entity player = registry.create_entity(EntityArchetype_Guy, EntityTag_Player);
+        Transform *transform = registry.add_component<Transform>(player);
+        Box_Collider *collider = registry.add_component<Box_Collider>(player);
+        Rigid_Body *rb = registry.add_component<Rigid_Body>(player);
+        Character_Controller *controller = registry.add_component<Character_Controller>(player);
+
+        transform->position    = { 0.0f, 257.0f, 0.0f };
+        transform->scale       = { 1.0f, 1.0f, 1.0f };
+        transform->orientation = { 0.0f, 0.0f, 0.0f };
+
+        collider->size   = { 0.55f, 1.8f, 0.55f };
+        collider->offset = { 0.0f, 0.0f, 0.0f };
+
+        controller->terminal_velocity = { 50.0f, 50.0f, 50.0f };
+        controller->walk_speed  = 4.0f;
+        controller->run_speed   = 9.0f;
+        controller->jump_force  = 7.6f;
+        controller->fall_force  = -25.0f;
+        controller->turn_speed  = 180.0f;
+        controller->sensetivity = 0.5f;
+    }
 
     while (Game::is_running())
     {
@@ -136,137 +143,169 @@ int main()
         World::load_chunks_at_region(player_region_bounds);
 
         glm::vec2 mouse_delta = Input::get_mouse_delta();
-        f32 turn_speed = 180.0f;
-        f32 sensetivity = 0.5f;
-        player.transform.orientation.y += mouse_delta.x * turn_speed * sensetivity * delta_time;
-        if (player.transform.orientation.y >= 360.0f) player.transform.orientation.y -= 360.0f;
-        if (player.transform.orientation.y <= -360.0f) player.transform.orientation.y += 360.0f;
 
-        glm::vec3 angles = glm::vec3(0.0f, glm::radians(-player.transform.orientation.y), 0.0f);
-        glm::quat orientation = glm::quat(angles);
-        glm::vec3 forward = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
-        glm::vec3 right = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
-
-        glm::vec3 movement = { 0.0f, 0.0f, 0.0f };
-
-        if (Input::get_key(MC_KEY_W))
+        auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
+        for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
         {
-            movement += forward;
-        }
+            auto [transform, rb, controller] = registry.get_components<Transform, Rigid_Body, Character_Controller>(entity);
 
-        if (Input::get_key(MC_KEY_S))
-        {
-            movement -= forward;
-        }
+            transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
+            if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
+            if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
 
-        if (Input::get_key(MC_KEY_D))
-        {
-            movement += right;
-        }
+            glm::vec3 angles = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
+            glm::quat orientation = glm::quat(angles);
+            glm::vec3 forward = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
+            glm::vec3 right = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
 
-        if (Input::get_key(MC_KEY_A))
-        {
-            movement -= right;
-        }
+            controller->movement = { 0.0f, 0.0f, 0.0f };
 
-        player.is_running = false;
-        player.movment_speed = walk_speed;
+            if (Input::get_key(MC_KEY_W))
+            {
+                controller->movement += forward;
+            }
 
-        if (Input::get_key(MC_KEY_LEFT_SHIFT))
-        {
-            player.is_running = true;
-            player.movment_speed = run_speed;
-        }
+            if (Input::get_key(MC_KEY_S))
+            {
+                controller->movement -= forward;
+            }
 
-        if (Input::is_key_pressed(MC_KEY_SPACE) && !player.in_middle_of_jump && player.rb.is_grounded)
-        {
-            player.rb.velocity.y = 7.6f;
-            player.in_middle_of_jump = true;
-            player.rb.is_grounded = false;
-        }
+            if (Input::get_key(MC_KEY_D))
+            {
+                controller->movement += right;
+            }
 
-        if (player.in_middle_of_jump && player.rb.velocity.y <= 0.0f)
-        {
-            player.rb.acceleration.y = -25.0f;
-            player.in_middle_of_jump = false;
+            if (Input::get_key(MC_KEY_A))
+            {
+                controller->movement -= right;
+            }
+
+            controller->is_running = false;
+            controller->movement_speed = controller->walk_speed;
+
+            if (Input::get_key(MC_KEY_LEFT_SHIFT))
+            {
+                controller->is_running = true;
+                controller->movement_speed = controller->run_speed;
+            }
+
+            if (Input::is_key_pressed(MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
+            {
+                rb->velocity.y = controller->jump_force;
+                controller->is_jumping = true;
+                controller->is_grounded = false;
+            }
+
+            if (controller->is_jumping && rb->velocity.y <= 0.0f)
+            {
+                rb->acceleration.y = controller->fall_force;
+                controller->is_jumping = false;
+            }
+
+            if (controller->movement.x != 0.0f &&
+                controller->movement.z != 0.0f &&
+                controller->movement.y != 0.0f)
+            {
+                controller->movement = glm::normalize(controller->movement);
+            }
         }
 
         if (Dropdown_Console::is_closed() && Game::should_update_camera())
         {
-            camera.position = player.transform.position + glm::vec3(0.0f, 1.0f, 0.0f);
-            camera.yaw = player.transform.orientation.y;
+            // todo(harlequin): follow entity and make the camera an entity
+            Entity player = registry.find_entity_by_tag(EntityTag_Player);
+
+            if (registry.is_entity_valid(player))
+            {
+                auto transform = registry.get_component<Transform>(player);
+                if (transform)
+                {
+                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
+                    camera.yaw = transform->orientation.y;
+                }
+            }
             camera.update(delta_time);
         }
 
         physics_delta_time_accumulator += delta_time;
+
         if (physics_delta_time_accumulator >= physics_delta_time)
         {
-            Transform& transform = player.transform;
-            Rigid_Body& rb = player.rb;
-            Box_Collider& bc = player.collider;
+            auto view = get_view<Transform, Box_Collider, Rigid_Body>(&registry);
 
-            if (movement.x != 0.0f && movement.z != 0.0f && movement.y != 0.0f)
+            for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
             {
-                movement = glm::normalize(movement);
-            }
+                auto [transform, box_collider, rb] = registry.get_components< Transform, Box_Collider, Rigid_Body >(entity);
 
-            rb.velocity.x = movement.x * player.movment_speed;
-            rb.velocity.z = movement.z * player.movment_speed;
+                Character_Controller *controller = registry.get_component< Character_Controller >(entity);
 
-            transform.position += rb.velocity * physics_delta_time;
-            rb.velocity += rb.acceleration * physics_delta_time;
-            rb.velocity -= gravity * physics_delta_time;
-            rb.velocity = glm::clamp(rb.velocity, -terminal_velocity, terminal_velocity);
-
-            glm::vec3 bc_half_size = bc.size * 0.5f;
-            glm::ivec3 min = glm::ceil(transform.position - bc_half_size);
-            glm::ivec3 max = glm::ceil(transform.position + bc_half_size);
-
-            bool collide = false;
-
-            for (i32 y = max.y; y >= min.y; --y)
-            {
-                for (i32 z = min.z; z <= max.z; ++z)
+                if (controller)
                 {
-                    for (i32 x = min.x; x <= max.x; ++x)
+                    rb->velocity.x = controller->movement.x * controller->movement_speed;
+                    rb->velocity.z = controller->movement.z * controller->movement_speed;
+                }
+
+                transform->position += rb->velocity * physics_delta_time;
+                rb->velocity += rb->acceleration * physics_delta_time;
+                rb->velocity -= Physics::internal_data.gravity * physics_delta_time;
+
+                if (controller) rb->velocity = glm::clamp(rb->velocity, -controller->terminal_velocity, controller->terminal_velocity);
+
+                glm::vec3 box_collider_half_size = box_collider->size * 0.5f;
+                glm::ivec3 min = glm::ceil(transform->position - box_collider_half_size);
+                glm::ivec3 max = glm::ceil(transform->position + box_collider_half_size);
+
+                bool collide = false;
+
+                for (i32 y = max.y; y >= min.y; --y)
+                {
+                    for (i32 z = min.z; z <= max.z; ++z)
                     {
-                        glm::vec3 block_pos = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f);
-                        auto query = World::query_block(block_pos);
-                        if (World::is_block_query_valid(query))
+                        for (i32 x = min.x; x <= max.x; ++x)
                         {
-                            const Block_Info& block_info = World::block_infos[query.block->id];
-                            if (block_info.is_solid())
+                            glm::vec3 block_pos = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f);
+                            auto query = World::query_block(block_pos);
+                            if (World::is_block_query_valid(query))
                             {
-                                Transform block_transform = {};
-                                block_transform.position = block_pos;
-                                block_transform.scale = { 1.0f, 1.0f, 1.0f };
-                                block_transform.orientation = { 0.0f, 0.0f, 0.0f };
-
-                                Box_Collider block_collider = {};
-                                block_collider.size = { 1.0f, 1.0f, 1.0f };
-
-                                if (Physics::box_vs_box(transform, bc, block_transform, block_collider))
+                                const Block_Info& block_info = World::block_infos[query.block->id];
+                                if (block_info.is_solid())
                                 {
-                                    Physics::resolve_dynamic_box_vs_static_box_collision(rb, transform, bc, block_transform, block_collider);
-                                    collide = true;
+                                    Transform block_transform = {};
+                                    block_transform.position = block_pos;
+                                    block_transform.scale = { 1.0f, 1.0f, 1.0f };
+                                    block_transform.orientation = { 0.0f, 0.0f, 0.0f };
+
+                                    Box_Collider block_collider = {};
+                                    block_collider.size = { 1.0f, 1.0f, 1.0f };
+
+                                    if (Physics::is_colliding(*transform, *box_collider, block_transform, block_collider))
+                                    {
+                                        Box_Vs_Box_Collision_Info info = Physics::resolve_dynamic_box_vs_static_box_collision(*rb,
+                                                                                                                              *transform,
+                                                                                                                              *box_collider,
+                                                                                                                              block_transform,
+                                                                                                                              block_collider);
+                                        if (controller) controller->is_grounded = controller->is_grounded || info.face == CollisionFace_Bottom;
+                                        collide = true;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            if (!collide && rb.is_grounded && rb.velocity.y > 0)
-            {
-                // If we're not colliding with any object it's impossible to be on the ground
-                rb.is_grounded = false;
+                if (!collide && controller && controller->is_grounded && rb->velocity.y > 0)
+                {
+                    // If we're not colliding with any object it's impossible to be on the ground
+                    controller->is_grounded = false;
+                }
             }
 
             physics_delta_time_accumulator -= physics_delta_time;
         }
 
         Ray_Cast_Result ray_cast_result = {};
-        u32 max_block_select_dist_in_cube_units = 10;
+        u32 max_block_select_dist_in_cube_units = 7;
         Block_Query_Result select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
 
         if (ray_cast_result.hit && World::is_block_query_valid(select_query))
@@ -277,7 +316,7 @@ int main()
             Block_Query_Result block_facing_normal_query = {};
 
             constexpr f32 eps = glm::epsilon<f32>();
-            glm::vec3& hit_point = ray_cast_result.point;
+            const glm::vec3& hit_point = ray_cast_result.point;
 
             if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
                 block_facing_normal_query = World::get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
@@ -292,11 +331,46 @@ int main()
             else if (glm::epsilonEqual(hit_point.z, block_position.z + 0.5f, eps)) // back face
                 block_facing_normal_query = World::get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
 
-            bool can_place_block = Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) &&
-                                   World::is_block_query_valid(block_facing_normal_query) &&
-                                   block_facing_normal_query.block->id == BlockId_Air;
+            bool block_facing_normal_is_valid = World::is_block_query_valid(block_facing_normal_query);
 
+            Entity player = registry.find_entity_by_tag(EntityTag_Player);
+            bool is_block_facing_normal_colliding_with_player = false;
+
+            if (player && block_facing_normal_is_valid)
+            {
+                auto player_transform = registry.get_component< Transform >(player);
+                auto player_box_collider = registry.get_component< Box_Collider >(player);
+
+                Transform block_transform = {};
+                block_transform.position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                block_transform.scale = { 1.0f, 1.0f, 1.0f };
+                block_transform.orientation = { 0.0f, 0.0f, 0.0f };
+
+                Box_Collider block_collider = {};
+                block_collider.size = { 0.9f, 0.9f, 0.9f };
+
+                is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
+                                                                                   block_collider,
+                                                                                   *player_transform,
+                                                                                   *player_box_collider);
+            }
+
+            bool can_place_block = block_facing_normal_is_valid &&
+                                   block_facing_normal_query.block->id == BlockId_Air &&
+                                   !is_block_facing_normal_colliding_with_player;
             if (can_place_block)
+            {
+                glm::vec3 block_facing_normal_position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
+                glm::ivec3 block_coords = block_facing_normal_query.block_coords;
+
+                Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f });
+                block_facing_normal_chunk_coords_text = "chunk: (" + std::to_string(chunk_coords.x) + ", " + std::to_string(chunk_coords.y) + ")";
+                block_facing_normal_block_coords_text = "block: (" + std::to_string(block_coords.x) + ", " + std::to_string(block_coords.y) + ", " + std::to_string(block_coords.z) + ")";
+                block_facing_normal_sky_light_level_text = "light level: " + std::to_string(block_facing_normal_query.block->light_level);
+            }
+
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && can_place_block)
             {
                 // @todo(harlequin): inventory system
                 World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, World::block_to_place_id);
@@ -308,11 +382,75 @@ int main()
             }
         }
 
-        World::schedule_update_sub_chunk_jobs();
+        for (i32 z = player_region_bounds.min.y; z <= player_region_bounds.max.y; ++z)
+        {
+            for (i32 x = player_region_bounds.min.x; x <= player_region_bounds.max.x; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                assert(it != loaded_chunks.end());
+                Chunk* chunk = it->second;
+                if (chunk->loaded && chunk->pending_for_light)
+                {
+                    u16 sky_light_level = 4;
+                    // Calculate_Chunk_Lighting_Job job;
+                    // job.chunk = chunk;
+                    // job.sky_light_level = sky_light_level;
+                    // Job_System::schedule(job);
+                    chunk->calculate_lighting(sky_light_level);
+                    chunk->pending_for_light = false;
+                }
+            }
+        }
+
+        auto& light_queue = World::light_queue;
+        while (!light_queue.empty())
+        {
+            auto block_query = light_queue.front();
+            light_queue.pop();
+            if (!World::is_block_query_valid(block_query)) continue;
+            Block* block = block_query.block;
+            const Block_Info& info = World::block_infos[block->id];
+            if (info.is_solid() && !info.is_light_source()) continue;
+            auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+            for (i32 d = 0; d < 6; d++)
+            {
+                auto& neighbour_query = neighbours_query[d];
+                if (World::is_block_query_valid(neighbour_query))
+                {
+                    Block* neighbour = neighbour_query.block;
+                    const Block_Info& neighbour_info = World::block_infos[neighbour->id];
+                    i8 neighbour_light_level = (i16)neighbour->light_level;
+                    if (neighbour_info.is_transparent() && neighbour_light_level <= (i16)block->light_level - 2)
+                    {
+                        World::set_block_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->light_level - 1);
+                        light_queue.push(neighbour_query);
+                    }
+                }
+            }
+        }
+
+        Opengl_Renderer::wait_for_gpu_to_finish_work();
+        auto& update_sub_chunk_jobs = World::update_sub_chunk_jobs;
+
+        if (update_sub_chunk_jobs.size())
+        {
+            for (const auto& job : update_sub_chunk_jobs)
+            {
+                const Update_Sub_Chunk_Job* data = &job;
+                Chunk* chunk = data->chunk;
+                i32 sub_chunk_index = data->sub_chunk_index;
+                Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+                Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
+                render_data.pending_for_update = false;
+            }
+
+            update_sub_chunk_jobs.resize(0);
+        }
 
         f32 normalize_color_factor = 1.0f / 255.0f;
         glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
-        glm::vec4 clear_color = sky_color * normalize_color_factor;
+        glm::vec4 clear_color = sky_color * normalize_color_factor * 0.1f;
 
         Opengl_Renderer::begin(clear_color, &camera, &chunk_shader);
 
@@ -344,6 +482,7 @@ int main()
         }
 
         Opengl_Renderer::end();
+        Opengl_Renderer::signal_gpu_for_work();
 
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
@@ -432,7 +571,7 @@ int main()
             UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
             UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
 
-            UI::rect(frame_buffer_size * glm::vec2(0.35f, 1.0f) - glm::vec2(0.0f, 20.0f));
+            UI::rect(frame_buffer_size * glm::vec2(0.33f, 1.0f) - glm::vec2(0.0f, 20.0f));
             UI::set_cursor({ 10.0f, 10.0f });
 
             UI::text(player_position_text);
@@ -448,6 +587,10 @@ int main()
             UI::text(sub_chunk_bucket_total_memory_text);
             UI::text(sub_chunk_bucket_allocated_memory_text);
             UI::text(sub_chunk_bucket_used_memory_text);
+
+            UI::text(block_facing_normal_chunk_coords_text);
+            UI::text(block_facing_normal_block_coords_text);
+            UI::text(block_facing_normal_sky_light_level_text);
 
             UI::end();
         }

@@ -24,12 +24,21 @@ namespace minecraft {
             chunk->deserialize();
         }
 
+        chunk->pending_for_load = false;
+
         for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
         {
             Opengl_Renderer::upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
         }
+    }
 
-        chunk->pending_for_load = false;
+    void Calculate_Chunk_Lighting_Job::execute(void* job_data)
+    {
+        Calculate_Chunk_Lighting_Job* data = (Calculate_Chunk_Lighting_Job*)job_data;
+        Chunk* chunk = data->chunk;
+        u16 sky_light_level = data->sky_light_level;
+        chunk->calculate_lighting(sky_light_level);
+        chunk->pending_for_light = false;
     }
 
     void Update_Sub_Chunk_Job::execute(void* job_data)

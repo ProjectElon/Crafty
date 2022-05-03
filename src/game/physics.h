@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "game/components.h"
 #include <glm/glm.hpp>
 
 namespace minecraft {
@@ -22,28 +23,9 @@ namespace minecraft {
         CollisionFace face;
     };
 
-    struct Transform
-    {
-        glm::vec3 position;
-        glm::vec3 scale;
-        glm::vec3 orientation;
-    };
-
-    struct Box_Collider
-    {
-        glm::vec3 size;
-        glm::vec3 offset;
-    };
-
-    struct Rigid_Body
-    {
-        glm::vec3 acceleration;
-        glm::vec3 velocity;
-        bool is_grounded;
-    };
-
     struct Physics_Data
     {
+        glm::vec3 gravity = { 0.0f, 20.0f, 0.0f };
         i32 update_rate;
         f32 delta_time;
     };
@@ -56,12 +38,13 @@ namespace minecraft {
         static void shutdown();
 
         static bool box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
-        static Box_Vs_Box_Collision_Info get_box_vs_box_static_collision_information(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
+        static bool is_colliding(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
+        static Box_Vs_Box_Collision_Info get_static_collision_information(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
 
-        static void resolve_dynamic_box_vs_static_box_collision(Rigid_Body& rb,
-                                                                Transform& t0,
-                                                                Box_Collider& bc0,
-                                                                const Transform& t1,
-                                                                const Box_Collider& bc1);
+        static Box_Vs_Box_Collision_Info resolve_dynamic_box_vs_static_box_collision(Rigid_Body& rb,
+                                                                                     Transform& t0,
+                                                                                     Box_Collider& bc0,
+                                                                                     const Transform& t1,
+                                                                                     const Box_Collider& bc1);
     };
 }

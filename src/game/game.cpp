@@ -182,7 +182,8 @@ namespace minecraft {
             return false;
         }
 
-        if (!ECS::initialize())
+        const u32 max_entity_count = 1024;
+        if (!ECS::initialize(max_entity_count))
         {
             fprintf(stderr, "[ERROR] failed to initialize ecs\n");
             return false;

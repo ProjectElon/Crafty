@@ -19,11 +19,24 @@ namespace minecraft {
 
     bool Physics::box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
     {
-        glm::vec3 min0 = t0.position - c0.size * 0.5f;
-        glm::vec3 max0 = t0.position + c0.size * 0.5f;
+        glm::vec3 min0 = t0.position - (c0.size * 0.5f);
+        glm::vec3 max0 = t0.position + (c0.size * 0.5f);
 
-        glm::vec3 min1 = t1.position - c1.size * 0.5f;
-        glm::vec3 max1 = t1.position + c1.size * 0.5f;
+        glm::vec3 min1 = t1.position - (c1.size * 0.5f);
+        glm::vec3 max1 = t1.position + (c1.size * 0.5f);
+
+        return (min0.x <= max1.x && max0.x >= min1.x) &&
+               (min0.y <= max1.y && max0.y >= min1.y) &&
+               (min0.z <= max1.z && max0.z >= min1.z);
+    }
+
+    bool Physics::is_colliding(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
+    {
+        glm::vec3 min0 = t0.position - (c0.size * 0.5f);
+        glm::vec3 max0 = t0.position + (c0.size * 0.5f);
+
+        glm::vec3 min1 = t1.position - (c1.size * 0.5f);
+        glm::vec3 max1 = t1.position + (c1.size * 0.5f);
 
         if ((min1.x <= max0.x) && (min0.x <= max1.x))
         {
@@ -46,7 +59,7 @@ namespace minecraft {
         return true;
     }
 
-    static f32 get_box_vs_box_collision_direction(CollisionFace face)
+    static f32 get_collision_direction(CollisionFace face)
     {
         switch (face)
         {
@@ -73,9 +86,9 @@ namespace minecraft {
                                     CollisionFace z_face,
                                     Box_Vs_Box_Collision_Info* out_info)
     {
-        f32 x_dir = get_box_vs_box_collision_direction(x_face);
-        f32 y_dir = get_box_vs_box_collision_direction(y_face);
-        f32 z_dir = get_box_vs_box_collision_direction(z_face);
+        f32 x_dir = get_collision_direction(x_face);
+        f32 y_dir = get_collision_direction(y_face);
+        f32 z_dir = get_collision_direction(z_face);
 
         glm::vec3 expended_size_by_dir = { b1_expanded.size.x * x_dir, b1_expanded.size.y * y_dir, b1_expanded.size.z * z_dir };
         glm::vec3 quadrant = (expended_size_by_dir * 0.5f) + t1.position;
@@ -99,7 +112,7 @@ namespace minecraft {
         }
     }
 
-    Box_Vs_Box_Collision_Info Physics::get_box_vs_box_static_collision_information(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
+    Box_Vs_Box_Collision_Info Physics::get_static_collision_information(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
     {
         Box_Vs_Box_Collision_Info collision_info;
 
@@ -145,18 +158,18 @@ namespace minecraft {
     }
 
 
-    void Physics::resolve_dynamic_box_vs_static_box_collision(Rigid_Body& rb,
-                                                              Transform& t0,
-                                                              Box_Collider& bc0,
-                                                              const Transform& t1,
-                                                              const Box_Collider& bc1)
+    Box_Vs_Box_Collision_Info Physics::resolve_dynamic_box_vs_static_box_collision(Rigid_Body& rb,
+                                                                                   Transform& t0,
+                                                                                   Box_Collider& bc0,
+                                                                                   const Transform& t1,
+                                                                                   const Box_Collider& bc1)
     {
-        Box_Vs_Box_Collision_Info collision_info = Physics::get_box_vs_box_static_collision_information(t0, bc0, t1, bc1);
+        Box_Vs_Box_Collision_Info collision_info = Physics::get_static_collision_information(t0, bc0, t1, bc1);
         f32 dot = glm::dot(glm::normalize(collision_info.overlap), glm::normalize(rb.velocity));
         // We're already moving out of the collision, don't do anything
         if (dot < 0.0f)
         {
-            return;
+            return collision_info;
         }
         t0.position -= collision_info.overlap;
         switch (collision_info.face)
@@ -182,8 +195,7 @@ namespace minecraft {
                 rb.velocity.z = 0.0f;
             } break;
         }
-
-        rb.is_grounded = rb.is_grounded || collision_info.face == CollisionFace_Bottom;
+        return collision_info;
     }
 
     Physics_Data Physics::internal_data;

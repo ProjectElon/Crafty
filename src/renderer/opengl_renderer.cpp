@@ -19,6 +19,7 @@ namespace minecraft {
 #define LOCAL_POSITION_ID_MASK 7 // 3 bits
 #define FACE_ID_MASK 7 // 3 bits
 #define FACE_CORNER_ID_MASK 3 // 2 bits
+#define LIGHT_LEVEL_MASK 15 // 4 bits
 
     static void APIENTRY gl_debug_output(GLenum source,
                                          GLenum type,
@@ -184,12 +185,38 @@ namespace minecraft {
         glViewport(0, 0, width, height);
 
         internal_data.sub_chunk_used_memory = 0;
+        internal_data.sky_light_level = 15;
 
         return true;
     }
 
     void Opengl_Renderer::shutdown()
     {
+    }
+
+    static GLsync gSync;
+
+    void Opengl_Renderer::wait_for_gpu_to_finish_work()
+    {
+        if (gSync)
+        {
+            while (true)
+            {
+                GLenum wait_return = glClientWaitSync(gSync, GL_SYNC_FLUSH_COMMANDS_BIT, 1);
+                if (wait_return == GL_ALREADY_SIGNALED || wait_return == GL_CONDITION_SATISFIED)
+                    return;
+            }
+        }
+    }
+
+    void Opengl_Renderer::signal_gpu_for_work()
+    {
+        if (gSync)
+        {
+            glDeleteSync(gSync);
+        }
+
+        gSync = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
     }
 
     bool Opengl_Renderer::on_resize(const Event* event, void *sender)
@@ -202,11 +229,11 @@ namespace minecraft {
         return false;
     }
 
-    u32 Opengl_Renderer::compress_vertex(const glm::ivec3& block_coords,
-                               u32 local_position_id,
-                               u32 face_id,
-                               u32 face_corner_id,
-                               u32 flags)
+    u32 Opengl_Renderer::compress_vertex0(const glm::ivec3& block_coords,
+                                          u32 local_position_id,
+                                          u32 face_id,
+                                          u32 face_corner_id,
+                                          u32 flags)
     {
         u32 result = 0;
 
@@ -221,12 +248,12 @@ namespace minecraft {
         return result;
     }
 
-    void Opengl_Renderer::extract_vertex(u32 vertex,
-        glm::ivec3& block_coords,
-        u32 &out_local_position_id,
-        u32 &out_face_id,
-        u32 &out_face_corner_id,
-        u32 &out_flags)
+    void Opengl_Renderer::extract_vertex0(u32 vertex,
+                                          glm::ivec3& block_coords,
+                                          u32 &out_local_position_id,
+                                          u32 &out_face_id,
+                                          u32 &out_face_corner_id,
+                                          u32 &out_flags)
     {
         block_coords.x = vertex & BLOCK_X_MASK;
         block_coords.y = (vertex >> 4) & BLOCK_Y_MASK;
@@ -235,6 +262,20 @@ namespace minecraft {
         out_face_id = (vertex >> 19) & FACE_ID_MASK;
         out_face_corner_id = (vertex >> 22) & FACE_CORNER_ID_MASK;
         out_flags = (vertex >> 24);
+    }
+
+    u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 light_level)
+    {
+        u32 result = 0;
+        result |= light_level;
+        result |= texture_uv_id << 4;
+        return result;
+    }
+
+    void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_light_level)
+    {
+        out_light_level = vertex & LIGHT_LEVEL_MASK;
+        out_texture_uv_id = vertex >> 4;
     }
 
     void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
@@ -358,21 +399,13 @@ namespace minecraft {
         bool is_solid = block_info.is_solid();
         bool is_transparent = block_info.is_transparent();
 
-        if ((is_solid && block_facing_normal_info.is_transparent()) || (is_transparent && block_facing_normal->id != block->id))
+        if ((is_solid && block_facing_normal_info.is_transparent()) ||
+            (is_transparent && block_facing_normal->id == BlockId_Air))
         {
             const u32& block_flags = block_info.flags;
 
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            Sub_Chunk_Bucket *bucket = nullptr;
-
-            if (is_transparent)
-            {
-                bucket = &sub_chunk_render_data.transparent_bucket;
-            }
-            else
-            {
-                bucket = &sub_chunk_render_data.opaque_bucket;
-            }
+            Sub_Chunk_Bucket *bucket = is_transparent ? &sub_chunk_render_data.transparent_bucket : &sub_chunk_render_data.opaque_bucket;
 
             if (!bucket->is_allocated())
             {
@@ -381,18 +414,23 @@ namespace minecraft {
 
             assert(bucket->face_count + 1 <= World::sub_chunk_bucket_face_count);
 
-            u32 data00 = Opengl_Renderer::compress_vertex(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
-            u32 data01 = Opengl_Renderer::compress_vertex(block_coords, p1, face, BlockFaceCornerId_BottomLeft,  block_flags);
-            u32 data02 = Opengl_Renderer::compress_vertex(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
-            u32 data03 = Opengl_Renderer::compress_vertex(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
+            u32 data00 = Opengl_Renderer::compress_vertex0(block_coords, p0, face, BlockFaceCornerId_BottomRight, block_flags);
+            u32 data01 = Opengl_Renderer::compress_vertex0(block_coords, p1, face, BlockFaceCornerId_BottomLeft,  block_flags);
+            u32 data02 = Opengl_Renderer::compress_vertex0(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
+            u32 data03 = Opengl_Renderer::compress_vertex0(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            *bucket->current_vertex++ = { data00, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2 };
-            *bucket->current_vertex++ = { data01, texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2 };
-            *bucket->current_vertex++ = { data02, texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2 };
-            *bucket->current_vertex++ = { data03, texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2 };
+            u16 light_level = block_facing_normal->light_level;
+            u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, light_level);
+            u32 data11 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2, light_level);
+            u32 data12 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2, light_level);
+            u32 data13 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2, light_level);
+
+            *bucket->current_vertex++ = { data00, data10 };
+            *bucket->current_vertex++ = { data01, data11 };
+            *bucket->current_vertex++ = { data02, data12 };
+            *bucket->current_vertex++ = { data03, data13 };
 
             bucket->face_count++;
-
             sub_chunk_render_data.face_count++;
 
             return true;
@@ -405,7 +443,7 @@ namespace minecraft {
     {
         const Block_Info& block_info = World::block_infos[block->id];
 
-        u32 submit_count = 0;
+        u32 submitted_face_count = 0;
 
          /*
           1----------2
@@ -430,7 +468,7 @@ namespace minecraft {
         */
 
         Block* top_block = chunk->get_neighbour_block_from_top(block_coords);
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, top_block, block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, top_block, block_coords, block_info.top_texture_id, BlockFaceId_Top, 0, 1, 2, 3);
 
         /*
             bottom face
@@ -445,7 +483,7 @@ namespace minecraft {
         */
 
         Block* bottom_block = chunk->get_neighbour_block_from_bottom(block_coords);
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, bottom_block, block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, bottom_block, block_coords, block_info.bottom_texture_id, BlockFaceId_Bottom, 5, 4, 7, 6);
 
         /*
             left face
@@ -468,7 +506,7 @@ namespace minecraft {
         {
             left_block = chunk->get_neighbour_block_from_left(block_coords);
         }
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, left_block, block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, left_block, block_coords, block_info.side_texture_id, BlockFaceId_Left, 5, 6, 2, 1);
 
         /*
             right face
@@ -492,7 +530,7 @@ namespace minecraft {
         {
             right_block = chunk->get_neighbour_block_from_right(block_coords);
         }
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, right_block, block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, right_block, block_coords, block_info.side_texture_id, BlockFaceId_Right, 7, 4, 0, 3);
 
         /*
             front face
@@ -515,7 +553,7 @@ namespace minecraft {
         {
             front_block = chunk->get_neighbour_block_from_front(block_coords);
         }
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
 
         /*
             back face
@@ -540,9 +578,9 @@ namespace minecraft {
             back_block = chunk->get_neighbour_block_from_back(block_coords);
         }
 
-        submit_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, back_block, block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0);
+        submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, back_block, block_coords, block_info.side_texture_id, BlockFaceId_Back, 4, 5, 1, 0);
 
-        if (submit_count > 0)
+        if (submitted_face_count > 0)
         {
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
             glm::vec3 block_position = chunk->get_block_position(block_coords);
@@ -556,6 +594,10 @@ namespace minecraft {
     void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
     {
         assert(chunk->loaded);
+
+        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        internal_data.sub_chunk_used_memory -= render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
+        render_data.face_count = 0;
 
         i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
         i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height;
@@ -576,8 +618,6 @@ namespace minecraft {
                 }
             }
         }
-
-        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         if (render_data.face_count > 0)
         {
@@ -682,12 +722,13 @@ namespace minecraft {
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.transparent_command_count, internal_data.transparent_command_buffer);
 
         glDepthMask(GL_FALSE);
-
+        glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
 
+        glEnable(GL_CULL_FACE);
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
     }
