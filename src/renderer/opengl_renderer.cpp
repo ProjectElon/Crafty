@@ -19,7 +19,9 @@ namespace minecraft {
 #define LOCAL_POSITION_ID_MASK 7 // 3 bits
 #define FACE_ID_MASK 7 // 3 bits
 #define FACE_CORNER_ID_MASK 3 // 2 bits
-#define LIGHT_LEVEL_MASK 15 // 4 bits
+
+#define SKY_LIGHT_LEVEL_MASK 15 // 4 bits
+#define LIGHT_SOURCE_LEVEL_MASK 15 // 4 bits
 
     static void APIENTRY gl_debug_output(GLenum source,
                                          GLenum type,
@@ -264,18 +266,20 @@ namespace minecraft {
         out_flags = (vertex >> 24);
     }
 
-    u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 light_level)
+    u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level)
     {
         u32 result = 0;
-        result |= light_level;
-        result |= texture_uv_id << 4;
+        result |= sky_light_level;
+        result |= light_source_level << 4;
+        result |= texture_uv_id << 8;
         return result;
     }
 
-    void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_light_level)
+    void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level)
     {
-        out_light_level = vertex & LIGHT_LEVEL_MASK;
-        out_texture_uv_id = vertex >> 4;
+        out_sky_light_level = vertex & SKY_LIGHT_LEVEL_MASK;
+        out_light_source_level = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
+        out_texture_uv_id = (vertex >> 8);
     }
 
     void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
@@ -419,11 +423,13 @@ namespace minecraft {
             u32 data02 = Opengl_Renderer::compress_vertex0(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
             u32 data03 = Opengl_Renderer::compress_vertex0(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            u16 light_level = block_facing_normal->light_level;
-            u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, light_level);
-            u32 data11 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2, light_level);
-            u32 data12 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2, light_level);
-            u32 data13 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2, light_level);
+            u32 sky_light_level = block_facing_normal->sky_light_level;
+            u32 light_source_level = block_facing_normal->light_source_level;
+
+            u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, sky_light_level, light_source_level);
+            u32 data11 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2, sky_light_level, light_source_level);
+            u32 data12 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2, sky_light_level, light_source_level);
+            u32 data13 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2, sky_light_level, light_source_level);
 
             *bucket->current_vertex++ = { data00, data10 };
             *bucket->current_vertex++ = { data01, data11 };
@@ -593,8 +599,6 @@ namespace minecraft {
 
     void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
     {
-        assert(chunk->loaded);
-
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
         internal_data.sub_chunk_used_memory -= render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
         render_data.face_count = 0;
@@ -676,7 +680,7 @@ namespace minecraft {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->use();
-        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
+        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / ((World::chunk_radius - 1) * 16.0f));
         shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
         shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
@@ -697,6 +701,8 @@ namespace minecraft {
         internal_data.block_sprite_sheet.bind(0);
 
         shader->set_uniform_i32("u_uvs", 1);
+        shader->set_uniform_i32("u_sky_light_level", World::sky_light_level);
+
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
 

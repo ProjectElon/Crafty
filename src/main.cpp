@@ -81,10 +81,13 @@ int main()
     std::string player_position_text;
     std::string player_chunk_coords_text;
     std::string chunk_radius_text;
+    std::string global_sky_light_level_text;
 
     std::string block_facing_normal_chunk_coords_text;
     std::string block_facing_normal_block_coords_text;
     std::string block_facing_normal_sky_light_level_text;
+    std::string block_facing_normal_light_source_level_text;
+    std::string block_facing_normal_light_level_text;
 
     const auto& physics_delta_time = Physics::internal_data.delta_time;
     f32 physics_delta_time_accumulator = 0.0f;
@@ -117,6 +120,28 @@ int main()
         controller->sensetivity = 0.5f;
     }
 
+    glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+    World_Region_Bounds player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
+    World::load_chunks_at_region(player_region_bounds);
+
+    for (i32 z = player_region_bounds.min.y + 1; z <= player_region_bounds.max.y - 1; ++z)
+    {
+        for (i32 x = player_region_bounds.min.x + 1; x <= player_region_bounds.max.x - 1; ++x)
+        {
+            glm::ivec2 chunk_coords = { x, z };
+            auto it = loaded_chunks.find(chunk_coords);
+            assert(it != loaded_chunks.end());
+            Chunk* chunk = it->second;
+            if (chunk->pending_for_lighting)
+            {
+                chunk->calculate_lighting();
+                chunk->pending_for_lighting = false;
+            }
+        }
+    }
+
+    f32 day_night_cycle_timer = 0;
+
     while (Game::is_running())
     {
         f32 delta_time = current_time - last_time;
@@ -135,19 +160,39 @@ int main()
             frames_per_second = 0;
         }
 
+        day_night_cycle_timer += (delta_time / 24.0f);
+        World::sky_light_level = (i32)glm::ceil(glm::abs(glm::sin(day_night_cycle_timer)) * 15.0f);
+        global_sky_light_level_text = "global sky light level: " + std::to_string(World::sky_light_level);
+
         platform.pump_messages();
         Input::update();
 
-        glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        World_Region_Bounds player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
+        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+        player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
         World::load_chunks_at_region(player_region_bounds);
+
+        for (i32 z = player_region_bounds.min.y + 1; z <= player_region_bounds.max.y - 1; ++z)
+        {
+            for (i32 x = player_region_bounds.min.x + 1; x <= player_region_bounds.max.x - 1; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                assert(it != loaded_chunks.end());
+                Chunk* chunk = it->second;
+                if (chunk->pending_for_lighting)
+                {
+                    chunk->calculate_lighting();
+                    chunk->pending_for_lighting = false;
+                }
+            }
+        }
 
         glm::vec2 mouse_delta = Input::get_mouse_delta();
 
         auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
         for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
         {
-            auto [transform, rb, controller] = registry.get_components<Transform, Rigid_Body, Character_Controller>(entity);
+            auto [transform, rb, controller] = registry.get_components< Transform, Rigid_Body, Character_Controller >(entity);
 
             transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
             if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
@@ -364,10 +409,20 @@ int main()
                 glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
                 glm::ivec3 block_coords = block_facing_normal_query.block_coords;
 
-                Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f });
+                if (Game::show_debug_status_hud())
+                {
+                    Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f });
+                }
+
                 block_facing_normal_chunk_coords_text = "chunk: (" + std::to_string(chunk_coords.x) + ", " + std::to_string(chunk_coords.y) + ")";
                 block_facing_normal_block_coords_text = "block: (" + std::to_string(block_coords.x) + ", " + std::to_string(block_coords.y) + ", " + std::to_string(block_coords.z) + ")";
-                block_facing_normal_sky_light_level_text = "light level: " + std::to_string(block_facing_normal_query.block->light_level);
+
+                i32 sky_light_factor = World::sky_light_level - 15;
+                i32 sky_light_level = glm::max((i32)block_facing_normal_query.block->sky_light_level + sky_light_factor, 1);
+
+                block_facing_normal_sky_light_level_text = "sky light level: " + std::to_string(sky_light_level);
+                block_facing_normal_light_source_level_text = "light source level: " + std::to_string(block_facing_normal_query.block->light_source_level);
+                block_facing_normal_light_level_text = "light level: " + std::to_string(glm::max(sky_light_level, (i32)block_facing_normal_query.block->light_source_level));
             }
 
             if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && can_place_block)
@@ -382,37 +437,17 @@ int main()
             }
         }
 
-        for (i32 z = player_region_bounds.min.y; z <= player_region_bounds.max.y; ++z)
-        {
-            for (i32 x = player_region_bounds.min.x; x <= player_region_bounds.max.x; ++x)
-            {
-                glm::ivec2 chunk_coords = { x, z };
-                auto it = loaded_chunks.find(chunk_coords);
-                assert(it != loaded_chunks.end());
-                Chunk* chunk = it->second;
-                if (chunk->loaded && chunk->pending_for_light)
-                {
-                    u16 sky_light_level = 4;
-                    // Calculate_Chunk_Lighting_Job job;
-                    // job.chunk = chunk;
-                    // job.sky_light_level = sky_light_level;
-                    // Job_System::schedule(job);
-                    chunk->calculate_lighting(sky_light_level);
-                    chunk->pending_for_light = false;
-                }
-            }
-        }
-
         auto& light_queue = World::light_queue;
+
         while (!light_queue.empty())
         {
             auto block_query = light_queue.front();
             light_queue.pop();
-            if (!World::is_block_query_valid(block_query)) continue;
+
             Block* block = block_query.block;
             const Block_Info& info = World::block_infos[block->id];
-            if (info.is_solid() && !info.is_light_source()) continue;
             auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+
             for (i32 d = 0; d < 6; d++)
             {
                 auto& neighbour_query = neighbours_query[d];
@@ -420,26 +455,34 @@ int main()
                 {
                     Block* neighbour = neighbour_query.block;
                     const Block_Info& neighbour_info = World::block_infos[neighbour->id];
-                    i8 neighbour_light_level = (i16)neighbour->light_level;
-                    if (neighbour_info.is_transparent() && neighbour_light_level <= (i16)block->light_level - 2)
+                    if (neighbour_info.is_transparent())
                     {
-                        World::set_block_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->light_level - 1);
-                        light_queue.push(neighbour_query);
+                        if ((i16)neighbour->sky_light_level <= (i16)block->sky_light_level - 2)
+                        {
+                            World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->sky_light_level - 1);
+                            light_queue.push(neighbour_query);
+                        }
+
+                        if ((i16)neighbour->light_source_level <= (i16)block->light_source_level - 2)
+                        {
+                            World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->light_source_level - 1);
+                            light_queue.push(neighbour_query);
+                        }
                     }
                 }
             }
         }
 
         Opengl_Renderer::wait_for_gpu_to_finish_work();
+
         auto& update_sub_chunk_jobs = World::update_sub_chunk_jobs;
 
         if (update_sub_chunk_jobs.size())
         {
-            for (const auto& job : update_sub_chunk_jobs)
+            for (auto& job : update_sub_chunk_jobs)
             {
-                const Update_Sub_Chunk_Job* data = &job;
-                Chunk* chunk = data->chunk;
-                i32 sub_chunk_index = data->sub_chunk_index;
+                Chunk* chunk = job.chunk;
+                i32 sub_chunk_index = job.sub_chunk_index;
                 Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
                 Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
                 render_data.pending_for_update = false;
@@ -450,7 +493,7 @@ int main()
 
         f32 normalize_color_factor = 1.0f / 255.0f;
         glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
-        glm::vec4 clear_color = sky_color * normalize_color_factor * 0.1f;
+        glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)World::sky_light_level / 15.0f);
 
         Opengl_Renderer::begin(clear_color, &camera, &chunk_shader);
 
@@ -577,6 +620,7 @@ int main()
             UI::text(player_position_text);
             UI::text(player_chunk_coords_text);
             UI::text(chunk_radius_text);
+            UI::text("");
 
             UI::text(frames_per_second_text);
             UI::text(frame_time_text);
@@ -587,10 +631,15 @@ int main()
             UI::text(sub_chunk_bucket_total_memory_text);
             UI::text(sub_chunk_bucket_allocated_memory_text);
             UI::text(sub_chunk_bucket_used_memory_text);
+            UI::text(global_sky_light_level_text);
+            UI::text("");
 
+            UI::text("debug block");
             UI::text(block_facing_normal_chunk_coords_text);
             UI::text(block_facing_normal_block_coords_text);
             UI::text(block_facing_normal_sky_light_level_text);
+            UI::text(block_facing_normal_light_source_level_text);
+            UI::text(block_facing_normal_light_level_text);
 
             UI::end();
         }

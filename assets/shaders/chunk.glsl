@@ -74,7 +74,7 @@ void main()
     float distance_relative_to_camera = length(u_camera_position - position);
     a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
-    int uv_index = int(in_data1 >> 4);
+    int uv_index = int(in_data1 >> 8);
     float u = texelFetch(u_uvs, uv_index).r;
     float v = texelFetch(u_uvs, uv_index + 1).r;
     a_uv = vec2(u, v);
@@ -127,6 +127,7 @@ in vec4 a_biome_color;
 in float a_fog_factor;
 
 uniform vec4 u_sky_color;
+uniform int u_sky_light_level;
 uniform sampler2D u_block_sprite_sheet;
 
 vec3 light_dir = normalize(vec3(0.0f, 1.0f, 0.0f));
@@ -138,7 +139,8 @@ vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
 #define LOCAL_POSITION_ID_MASK 7
 #define FACE_ID_MASK 7
 #define FACE_CORNER_ID_MASK 3
-#define LIGHT_LEVEL_MASK 15
+#define SKY_LIGHT_LEVEL_MASK 15
+#define LIGHT_SOURCE_LEVEL_MASK 15
 
 #define Top_Face_ID    0
 #define Bottom_Face_ID 1
@@ -165,8 +167,12 @@ vec3 face_normal[6] = vec3[](
 void main()
 {
     uint face_id = (a_data0 >> 19) & FACE_ID_MASK;
-    uint light_level = a_data1 & LIGHT_LEVEL_MASK;
-    float light_level_factor = light_level / 15.0f;
+
+    int sky_light_level = int(a_data1 & SKY_LIGHT_LEVEL_MASK);
+    int sky_light_factor = u_sky_light_level - 15;
+    int sky_light = max(sky_light_level + sky_light_factor, 1);
+    int light_source = int((a_data1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
+    float light_level_factor = float(max(sky_light, light_source)) / 15.0f;
 
     // uint face_corner_id = (a_data0 >> 22) & FACE_CORNER_ID_MASK;
     // uint flags = a_data0 >> 24;
@@ -183,5 +189,5 @@ void main()
     // out_color = vec4(ambient + diffuse, 1.0f) * color;
     // out_color = mix(out_color, u_sky_color, a_fog_factor);
 
-    out_color = mix(color, u_sky_color, a_fog_factor) * light_level_factor;
+    out_color = mix(vec4(color.rgb * light_level_factor, color.a), u_sky_color, a_fog_factor);
 }

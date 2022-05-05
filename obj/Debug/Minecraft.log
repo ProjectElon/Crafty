@@ -1,32 +1,20 @@
-﻿  console_commands.cpp
-  game.cpp
-  jobs.cpp
-  world.cpp
-  main.cpp
-  opengl_2d_renderer.cpp
-  opengl_renderer.cpp
-  dropdown_console.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(218,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
-C:\dev\cpp\Crafty\src\game\console_commands.cpp(113,61): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file main.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file main.cpp)
-C:\dev\cpp\Crafty\src\main.cpp(423,46): warning C4244: 'initializing': conversion from 'i16' to 'i8', possible loss of data
-C:\dev\cpp\Crafty\src\game\world.cpp(468,79): warning C4244: 'argument': conversion from 'u32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file main.cpp)
+﻿  main.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\main.cpp(476,46): warning C4244: 'initializing': conversion from 'i16' to 'i8', possible loss of data
+C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
 C:\dev\cpp\Crafty\src\main.cpp(99): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file main.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
 C:\dev\cpp\Crafty\src\game\ecs.h(125): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
-          ] (compiling source file main.cpp)
-C:\dev\cpp\Crafty\src\main.cpp(150): message : see reference to function template instantiation 'std::tuple<T *,minecraft::Rigid_Body *,minecraft::Character_Controller *> minecraft::Registry::get_components<minecraft::Transform,minecraft::Rigid_Body,minecraft::Character_Controller>(minecraft::Entity)' being compiled
+          ]
+C:\dev\cpp\Crafty\src\main.cpp(197): message : see reference to function template instantiation 'std::tuple<T *,minecraft::Rigid_Body *,minecraft::Character_Controller *> minecraft::Registry::get_components<minecraft::Transform,minecraft::Rigid_Body,minecraft::Character_Controller>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform

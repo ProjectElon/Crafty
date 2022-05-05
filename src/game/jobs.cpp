@@ -36,9 +36,9 @@ namespace minecraft {
     {
         Calculate_Chunk_Lighting_Job* data = (Calculate_Chunk_Lighting_Job*)job_data;
         Chunk* chunk = data->chunk;
-        u16 sky_light_level = data->sky_light_level;
-        chunk->calculate_lighting(sky_light_level);
-        chunk->pending_for_light = false;
+        
+        chunk->calculate_lighting();
+        chunk->pending_for_lighting = false;
     }
 
     void Update_Sub_Chunk_Job::execute(void* job_data)

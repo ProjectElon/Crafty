@@ -16,6 +16,7 @@
 #include <unordered_map> // todo(harlequin): containers
 #include <array>
 #include <queue>
+#include <atomic>
 
 #define MC_CHUNK_HEIGHT 256
 #define MC_CHUNK_DEPTH  16
@@ -117,7 +118,8 @@ namespace minecraft {
     struct Block
     {
         u16 id;
-        u16 light_level;
+        u8 sky_light_level;
+        u8 light_source_level;
     };
 
     struct Sub_Chunk_Vertex
@@ -173,10 +175,10 @@ namespace minecraft {
 
         std::string file_path;
 
-        bool pending_for_load;
-        bool pending_for_light;
-        bool pending_for_save;
-        bool loaded;
+        std::atomic<bool> pending_for_load;
+        std::atomic<bool> pending_for_save;
+        std::atomic<bool> loaded;
+        std::atomic<bool> pending_for_lighting;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
@@ -189,7 +191,7 @@ namespace minecraft {
         bool initialize(const glm::ivec2 &world_coords);
 
         void generate(i32 seed);
-        void calculate_lighting(u16 sky_light_level = 15);
+        void calculate_lighting();
 
         void serialize();
         void deserialize();
@@ -254,6 +256,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
         static i32 chunk_radius;
+        static i32 sky_light_level;
 
         static Block null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
@@ -265,6 +268,9 @@ namespace minecraft {
         static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
         static std::vector<Update_Sub_Chunk_Job> update_sub_chunk_jobs;
+
+        static std::mutex chunk_mutex;
+        static std::mutex light_queue_mutex;
         static std::queue<Block_Query_Result> light_queue;
 
         static u16 block_to_place_id;
@@ -368,6 +374,8 @@ namespace minecraft {
                                                Ray_Cast_Result *out_ray_cast_result);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
-        static void set_block_light_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
+
+        static void set_block_sky_light_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
+        static void set_block_light_source_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
     };
 }

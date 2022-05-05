@@ -15,7 +15,6 @@ namespace minecraft {
     struct Calculate_Chunk_Lighting_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk* chunk;
-        u16 sky_light_level;
         static void execute(void* job_data);
     };
 

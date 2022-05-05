@@ -92,14 +92,30 @@ namespace minecraft {
 
     void Job_System::wait_for_jobs_to_finish()
     {
-        for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
+        // for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
+        // {
+        //     Job_Queue *queue = internal_data.queues + queue_index;
+        //     if (queue->job_index != queue->tail_job_index)
+        //     {
+        //         std::unique_lock lock(queue->work_condition_mutex);
+        //         queue->work_condition.wait(lock, [queue]() -> bool { return queue->job_index == queue->tail_job_index; });
+        //     }
+        // }
+
+        while (true)
         {
-            Job_Queue *queue = internal_data.queues + queue_index;
-            if (queue->job_index != queue->tail_job_index) 
+            bool all = true;
+
+            for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
             {
-                std::unique_lock lock(queue->work_condition_mutex);
-                queue->work_condition.wait(lock, [queue]() -> bool { return queue->job_index == queue->tail_job_index; });
+                Job_Queue *queue = internal_data.queues + queue_index;
+                if (queue->job_index != queue->tail_job_index)
+                {
+                    all = false;
+                }
             }
+
+            if (all) break;
         }
     }
 

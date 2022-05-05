@@ -4,6 +4,7 @@
 
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <condition_variable>
 
 namespace minecraft {
@@ -21,10 +22,9 @@ namespace minecraft {
     {
         std::mutex work_condition_mutex;
         std::condition_variable work_condition;
-        bool running;
-
-        u32 job_index;
-        u32 tail_job_index;
+        std::atomic<bool> running;
+        std::atomic<u32> job_index;
+        std::atomic<u32> tail_job_index;
         Job jobs[MC_MAX_JOB_COUNT_PER_PATCH];
     };
 
