@@ -8,11 +8,11 @@ namespace minecraft {
         {
             if (queue->job_index == queue->tail_job_index)
             {
-                std::unique_lock lock(queue->work_condition_mutex);
-                queue->work_condition.notify_one();
+                std::unique_lock<std::mutex> lock(queue->work_condition_mutex);
+                // queue->work_condition.notify_one();
                 queue->work_condition.wait(lock, [queue]() -> bool { return queue->job_index != queue->tail_job_index || !queue->running; });
             }
-            
+
             if (!queue->running && queue->job_index == queue->tail_job_index)
             {
                 break;
@@ -36,7 +36,7 @@ namespace minecraft {
             return false;
         }
 
-        internal_data.thread_count = concurrent_thread_count - 1;
+        internal_data.thread_count = concurrent_thread_count - 2;
         if (internal_data.thread_count > MC_MAX_THREAD_COUNT) internal_data.thread_count = MC_MAX_THREAD_COUNT;
 
         internal_data.job_queue_index = 0;

@@ -1,6 +1,7 @@
 #include "opengl_debug_renderer.h"
 #include "opengl_shader.h"
 #include "camera.h"
+#include "game/game.h"
 
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -142,35 +143,39 @@ namespace minecraft {
                line_vbo_id,
                line_vertices] = internal_data;
 
-        if (line_vertices.size() == 0) return;
-
-        glDepthMask(GL_FALSE);
-
-        glBindVertexArray(line_vao_id);
-        glBindBuffer(GL_ARRAY_BUFFER, line_vbo_id);
-
-        u32 patch_count = (u32)glm::ceil((f32)line_vertices.size() / (f32)MC_LINE_COUNT_PER_PATCH);
-
-        for (u32 i = 0; i < patch_count; i++) 
+        if (line_vertices.size())
         {
-            u32 offset = i * MC_LINE_COUNT_PER_PATCH;
-            u32 count = MC_LINE_COUNT_PER_PATCH;
-            u32 remaining = line_vertices.size() - offset;
-            if (remaining < count)
-            {
-                count = remaining;
+            if (Game::show_debug_status_hud()) {
+                int x;
             }
-            glBufferSubData(GL_ARRAY_BUFFER,
-                            0,
-                            count * 2 * sizeof(Line_Vertex),
-                            &line_vertices[offset]);
+            glDepthMask(GL_FALSE);
 
-            glDrawArrays(GL_LINES, 0, count * 2);
+            glBindVertexArray(line_vao_id);
+            glBindBuffer(GL_ARRAY_BUFFER, line_vbo_id);
+
+            u32 patch_count = (u32)glm::ceil((f32)line_vertices.size() / (f32)MC_LINE_COUNT_PER_PATCH);
+
+            for (u32 i = 0; i < patch_count; i++)
+            {
+                u32 offset = i * MC_LINE_COUNT_PER_PATCH;
+                u32 count = MC_LINE_COUNT_PER_PATCH;
+                u32 remaining = line_vertices.size() - offset;
+                if (remaining < count)
+                {
+                    count = remaining;
+                }
+                glBufferSubData(GL_ARRAY_BUFFER,
+                                0,
+                                count * sizeof(Line_Vertex),
+                                &line_vertices[offset]);
+
+                glDrawArrays(GL_LINES, 0, count);
+            }
+
+            glDepthMask(GL_TRUE);
+
+            line_vertices.resize(0);
         }
-
-        glDepthMask(GL_TRUE);
-
-        line_vertices.resize(0);
     }
 
     Opengl_Debug_Renderer_Data Opengl_Debug_Renderer::internal_data;

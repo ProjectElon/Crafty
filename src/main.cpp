@@ -28,6 +28,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/compatibility.hpp>
 
 #include <sstream>
 
@@ -61,10 +62,6 @@ int main()
     Opengl_Texture button_texture;
     button_texture.load_from_file("../assets/textures/ui/buttonLong_blue.png", TextureUsage_UI);
 
-    auto& platform = Game::get_platform();
-    f32 current_time = platform.get_current_time();
-    f32 last_time = current_time;
-
     f32 frame_timer = 0;
     u32 frames_per_second = 0;
 
@@ -81,6 +78,8 @@ int main()
     std::string player_position_text;
     std::string player_chunk_coords_text;
     std::string chunk_radius_text;
+
+    std::string game_time_text;
     std::string global_sky_light_level_text;
 
     std::string block_facing_normal_chunk_coords_text;
@@ -124,27 +123,25 @@ int main()
     World_Region_Bounds player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
     World::load_chunks_at_region(player_region_bounds);
 
-    for (i32 z = player_region_bounds.min.y + 1; z <= player_region_bounds.max.y - 1; ++z)
-    {
-        for (i32 x = player_region_bounds.min.x + 1; x <= player_region_bounds.max.x - 1; ++x)
-        {
-            glm::ivec2 chunk_coords = { x, z };
-            auto it = loaded_chunks.find(chunk_coords);
-            assert(it != loaded_chunks.end());
-            Chunk* chunk = it->second;
-            if (chunk->pending_for_lighting)
-            {
-                chunk->calculate_lighting();
-                chunk->pending_for_lighting = false;
-            }
-        }
-    }
+    auto& platform = Game::get_platform();
+    f32 current_time = platform.get_current_time();
+    f32 last_time = current_time;
 
-    f32 day_night_cycle_timer = 0;
+    f32 game_time_rate = 1.0f / 1000.0f;
+    f32 game_timer = 0.0f;
+    i32 game_time = 0;
+
+    f32 min_delta_time = 1.0f / 60.0f;
 
     while (Game::is_running())
     {
         f32 delta_time = current_time - last_time;
+        if (delta_time >= min_delta_time)
+        {
+            fprintf(stderr, "frame drop delta time is %.2f ms\n", delta_time * 1024.0f);
+            delta_time = min_delta_time;
+        }
+
         last_time = current_time;
         current_time = platform.get_current_time();
 
@@ -154,40 +151,256 @@ int main()
         if (frame_timer >= 1.0f)
         {
             frame_timer -= 1.0f;
-            std::stringstream ss;
-            ss << "FPS: " << frames_per_second;
-            frames_per_second_text = ss.str();
+
+            if (Game::show_debug_status_hud())
+            {
+                std::stringstream ss;
+                ss << "FPS: " << frames_per_second;
+                frames_per_second_text = ss.str();
+            }
+
             frames_per_second = 0;
         }
 
-        day_night_cycle_timer += (delta_time / 24.0f);
-        World::sky_light_level = (i32)glm::ceil(glm::abs(glm::sin(day_night_cycle_timer)) * 15.0f);
-        global_sky_light_level_text = "global sky light level: " + std::to_string(World::sky_light_level);
+        game_timer += delta_time;
+
+        while (game_timer >= game_time_rate)
+        {
+            game_time++;
+            if (game_time >= 86400) game_time -= 86400;
+            game_timer -= game_time_rate;
+        }
+
+        // night time
+        if (game_time >= 0 && game_time <= 43200)
+        {
+            f32 t = (f32)game_time / 43200.0f;
+            World::sky_light_level = (i32)glm::lerp(1.0f, 15.0f, t);
+        } // day time
+        else if (game_time >= 43200 && game_time <= 86400)
+        {
+            f32 t = ((f32)game_time - 43200.0f) / 43200.0f;
+            World::sky_light_level = (i32)glm::lerp(15.0f, 1.0f, t);
+        }
 
         platform.pump_messages();
         Input::update();
 
-        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
         World::load_chunks_at_region(player_region_bounds);
 
-        for (i32 z = player_region_bounds.min.y + 1; z <= player_region_bounds.max.y - 1; ++z)
+        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+        player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
+
+        glm::vec2 mouse_delta = Input::get_mouse_delta();
+
+        Ray_Cast_Result ray_cast_result = {};
+        u32 max_block_select_dist_in_cube_units = 7;
+        Block_Query_Result select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
+
+        if (ray_cast_result.hit && World::is_block_query_valid(select_query))
         {
-            for (i32 x = player_region_bounds.min.x + 1; x <= player_region_bounds.max.x - 1; ++x)
+            glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
+            Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+            Block_Query_Result block_facing_normal_query = {};
+
+            constexpr f32 eps = glm::epsilon<f32>();
+            const glm::vec3& hit_point = ray_cast_result.point;
+
+            if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
+                block_facing_normal_query = World::get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
+            else if (glm::epsilonEqual(hit_point.y, block_position.y - 0.5f, eps)) // bottom face
+                block_facing_normal_query = World::get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
+            else if (glm::epsilonEqual(hit_point.x, block_position.x + 0.5f, eps)) // right face
+                block_facing_normal_query = World::get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
+            else if (glm::epsilonEqual(hit_point.x, block_position.x - 0.5f, eps)) // left face
+                block_facing_normal_query = World::get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
+            else if (glm::epsilonEqual(hit_point.z, block_position.z - 0.5f, eps)) // front face
+                block_facing_normal_query = World::get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
+            else if (glm::epsilonEqual(hit_point.z, block_position.z + 0.5f, eps)) // back face
+                block_facing_normal_query = World::get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
+
+            bool block_facing_normal_is_valid = World::is_block_query_valid(block_facing_normal_query);
+
+            Entity player = registry.find_entity_by_tag(EntityTag_Player);
+            bool is_block_facing_normal_colliding_with_player = false;
+
+            if (player && block_facing_normal_is_valid)
             {
-                glm::ivec2 chunk_coords = { x, z };
-                auto it = loaded_chunks.find(chunk_coords);
-                assert(it != loaded_chunks.end());
-                Chunk* chunk = it->second;
-                if (chunk->pending_for_lighting)
+                auto player_transform = registry.get_component< Transform >(player);
+                auto player_box_collider = registry.get_component< Box_Collider >(player);
+
+                Transform block_transform = {};
+                block_transform.position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                block_transform.scale = { 1.0f, 1.0f, 1.0f };
+                block_transform.orientation = { 0.0f, 0.0f, 0.0f };
+
+                Box_Collider block_collider = {};
+                block_collider.size = { 0.9f, 0.9f, 0.9f };
+
+                is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
+                                                                                   block_collider,
+                                                                                   *player_transform,
+                                                                                   *player_box_collider);
+            }
+
+            bool can_place_block = block_facing_normal_is_valid &&
+                                   block_facing_normal_query.block->id == BlockId_Air &&
+                                   !is_block_facing_normal_colliding_with_player;
+
+            if (can_place_block)
+            {
+                glm::vec3 block_facing_normal_position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
+                glm::ivec3 block_coords = block_facing_normal_query.block_coords;
+
+                if (Game::internal_data.show_debug_stats_hud)
                 {
-                    chunk->calculate_lighting();
-                    chunk->pending_for_lighting = false;
+                    Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f });
                 }
+
+                block_facing_normal_chunk_coords_text = "chunk: (" + std::to_string(chunk_coords.x) + ", " + std::to_string(chunk_coords.y) + ")";
+                block_facing_normal_block_coords_text = "block: (" + std::to_string(block_coords.x) + ", " + std::to_string(block_coords.y) + ", " + std::to_string(block_coords.z) + ")";
+
+                i32 sky_light_level = block_facing_normal_query.block->get_sky_light_level();
+                block_facing_normal_sky_light_level_text = "sky light level: " + std::to_string(sky_light_level);
+                block_facing_normal_light_source_level_text = "light source level: " + std::to_string(block_facing_normal_query.block->light_source_level);
+                block_facing_normal_light_level_text = "light level: " + std::to_string(glm::max(sky_light_level, (i32)block_facing_normal_query.block->light_source_level));
+            }
+
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && can_place_block)
+            {
+                // @todo(harlequin): inventory system
+                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, World::block_to_place_id);
+            }
+
+            if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            {
+                World::set_block_id(select_query.chunk, select_query.block_coords, BlockId_Air);
             }
         }
 
-        glm::vec2 mouse_delta = Input::get_mouse_delta();
+        // for (i32 z = player_region_bounds.min.y + 1; z <= player_region_bounds.max.y - 1; ++z)
+        // {
+        //     for (i32 x = player_region_bounds.min.x + 1; x <= player_region_bounds.max.x - 1; ++x)
+        //     {
+        //         glm::ivec2 chunk_coords = { x, z };
+        //         auto it = loaded_chunks.find(chunk_coords);
+        //         assert(it != loaded_chunks.end());
+        //         Chunk* chunk = it->second;
+        //         if (chunk->loaded && chunk->pending_for_lighting)
+        //         {
+        //             Calculate_Chunk_Lighting_Job job;
+        //             job.chunk = chunk;
+        //             Job_System::schedule(job);
+        //             // chunk->calculate_lighting();
+        //             // chunk->pending_for_lighting = false;
+        //         }
+        //     }
+        // }
+
+        // auto& light_queue = World::light_queue;
+
+        // while (!light_queue.empty())
+        // {
+        //     auto block_query = light_queue.front();
+        //     light_queue.pop();
+
+        //     Block* block = block_query.block;
+        //     const auto& info = block->get_info();
+        //     auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+
+        //     for (i32 d = 0; d < 6; d++)
+        //     {
+        //         auto& neighbour_query = neighbours_query[d];
+        //         if (World::is_block_query_valid(neighbour_query))
+        //         {
+        //             Block* neighbour = neighbour_query.block;
+        //             const auto& neighbour_info = neighbour->get_info();
+        //             if (neighbour_info.is_transparent())
+        //             {
+        //                 if ((i16)neighbour->sky_light_level <= (i16)block->sky_light_level - 2)
+        //                 {
+        //                     World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->sky_light_level - 1);
+        //                     light_queue.push(neighbour_query);
+        //                 }
+
+        //                 if ((i16)neighbour->light_source_level <= (i16)block->light_source_level - 2)
+        //                 {
+        //                     World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->light_source_level - 1);
+        //                     light_queue.push(neighbour_query);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        static World_Region_Bounds lighting_region;
+        lighting_region = player_region_bounds;
+        Calculate_Chunks_Lighting_Job calc_lighting_job;
+        calc_lighting_job.region = &lighting_region;
+        Job_System::schedule(calc_lighting_job);
+
+        // Update_Chunks_Job update_chunks_job;
+        // Job_System::schedule(update_chunks_job);
+
+        // auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
+
+        // while (!update_chunk_jobs_queue.empty())
+        // {
+        //     World::update_chunk_mutex.lock();
+        //     const auto& job = update_chunk_jobs_queue.front();
+        //     update_chunk_jobs_queue.pop();
+        //     World::update_chunk_mutex.unlock();
+
+        //     Chunk *chunk = job.chunk;
+
+        //     for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+        //     {
+        //         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        //         if (render_data.pending_for_update)
+        //         {
+        //             Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
+        //             render_data.pending_for_update = false;
+        //         }
+        //     }
+
+        //     chunk->pending_for_update = false;
+        // }
+
+        // Job_System::wait_for_jobs_to_finish();
+        // auto& update_chunk_jobs = World::update_chunk_jobs;
+
+        // i32 job_count = (i32)update_chunk_jobs.size();
+        // i32 job_count_for_main_thread = job_count / Job_System::internal_data.thread_count;
+
+        // if (job_count)
+        // {
+        //     for (i32 i = 0; i < job_count - job_count_for_main_thread; i++)
+        //     {
+        //         const auto& job = update_chunk_jobs[i];
+        //         Job_System::schedule(job);
+        //     }
+
+        //     for (i32 i = job_count - job_count_for_main_thread; i < job_count; i++)
+        //     {
+        //         const auto& job = update_chunk_jobs[i];
+        //         Chunk *chunk = job.chunk;
+
+        //         for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+        //         {
+        //             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+        //             if (render_data.pending_for_update)
+        //             {
+        //                 Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
+        //                 render_data.pending_for_update = false;
+        //             }
+        //         }
+
+        //         chunk->pending_for_update = false;
+        //     }
+        //     update_chunk_jobs.resize(0);
+        // }
 
         auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
         for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
@@ -253,23 +466,6 @@ int main()
             {
                 controller->movement = glm::normalize(controller->movement);
             }
-        }
-
-        if (Dropdown_Console::is_closed() && Game::should_update_camera())
-        {
-            // todo(harlequin): follow entity and make the camera an entity
-            Entity player = registry.find_entity_by_tag(EntityTag_Player);
-
-            if (registry.is_entity_valid(player))
-            {
-                auto transform = registry.get_component<Transform>(player);
-                if (transform)
-                {
-                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                    camera.yaw = transform->orientation.y;
-                }
-            }
-            camera.update(delta_time);
         }
 
         physics_delta_time_accumulator += delta_time;
@@ -349,147 +545,25 @@ int main()
             physics_delta_time_accumulator -= physics_delta_time;
         }
 
-        Ray_Cast_Result ray_cast_result = {};
-        u32 max_block_select_dist_in_cube_units = 7;
-        Block_Query_Result select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
-
-        if (ray_cast_result.hit && World::is_block_query_valid(select_query))
+        if (Dropdown_Console::is_closed() && Game::should_update_camera())
         {
-            glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
-            Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-            Block_Query_Result block_facing_normal_query = {};
-
-            constexpr f32 eps = glm::epsilon<f32>();
-            const glm::vec3& hit_point = ray_cast_result.point;
-
-            if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
-                block_facing_normal_query = World::get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
-            else if (glm::epsilonEqual(hit_point.y, block_position.y - 0.5f, eps)) // bottom face
-                block_facing_normal_query = World::get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
-            else if (glm::epsilonEqual(hit_point.x, block_position.x + 0.5f, eps)) // right face
-                block_facing_normal_query = World::get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
-            else if (glm::epsilonEqual(hit_point.x, block_position.x - 0.5f, eps)) // left face
-                block_facing_normal_query = World::get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
-            else if (glm::epsilonEqual(hit_point.z, block_position.z - 0.5f, eps)) // front face
-                block_facing_normal_query = World::get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
-            else if (glm::epsilonEqual(hit_point.z, block_position.z + 0.5f, eps)) // back face
-                block_facing_normal_query = World::get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
-
-            bool block_facing_normal_is_valid = World::is_block_query_valid(block_facing_normal_query);
-
+            // todo(harlequin): follow entity and make the camera an entity
             Entity player = registry.find_entity_by_tag(EntityTag_Player);
-            bool is_block_facing_normal_colliding_with_player = false;
 
-            if (player && block_facing_normal_is_valid)
+            if (registry.is_entity_valid(player))
             {
-                auto player_transform = registry.get_component< Transform >(player);
-                auto player_box_collider = registry.get_component< Box_Collider >(player);
-
-                Transform block_transform = {};
-                block_transform.position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
-                block_transform.scale = { 1.0f, 1.0f, 1.0f };
-                block_transform.orientation = { 0.0f, 0.0f, 0.0f };
-
-                Box_Collider block_collider = {};
-                block_collider.size = { 0.9f, 0.9f, 0.9f };
-
-                is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
-                                                                                   block_collider,
-                                                                                   *player_transform,
-                                                                                   *player_box_collider);
-            }
-
-            bool can_place_block = block_facing_normal_is_valid &&
-                                   block_facing_normal_query.block->id == BlockId_Air &&
-                                   !is_block_facing_normal_colliding_with_player;
-            if (can_place_block)
-            {
-                glm::vec3 block_facing_normal_position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
-                glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
-                glm::ivec3 block_coords = block_facing_normal_query.block_coords;
-
-                if (Game::show_debug_status_hud())
+                auto transform = registry.get_component<Transform>(player);
+                if (transform)
                 {
-                    Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, { 0.0f, 1.0f, 0.0f, 1.0f });
-                }
-
-                block_facing_normal_chunk_coords_text = "chunk: (" + std::to_string(chunk_coords.x) + ", " + std::to_string(chunk_coords.y) + ")";
-                block_facing_normal_block_coords_text = "block: (" + std::to_string(block_coords.x) + ", " + std::to_string(block_coords.y) + ", " + std::to_string(block_coords.z) + ")";
-
-                i32 sky_light_factor = World::sky_light_level - 15;
-                i32 sky_light_level = glm::max((i32)block_facing_normal_query.block->sky_light_level + sky_light_factor, 1);
-
-                block_facing_normal_sky_light_level_text = "sky light level: " + std::to_string(sky_light_level);
-                block_facing_normal_light_source_level_text = "light source level: " + std::to_string(block_facing_normal_query.block->light_source_level);
-                block_facing_normal_light_level_text = "light level: " + std::to_string(glm::max(sky_light_level, (i32)block_facing_normal_query.block->light_source_level));
-            }
-
-            if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && can_place_block)
-            {
-                // @todo(harlequin): inventory system
-                World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, World::block_to_place_id);
-            }
-
-            if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
-            {
-                World::set_block_id(select_query.chunk, select_query.block_coords, BlockId_Air);
-            }
-        }
-
-        auto& light_queue = World::light_queue;
-
-        while (!light_queue.empty())
-        {
-            auto block_query = light_queue.front();
-            light_queue.pop();
-
-            Block* block = block_query.block;
-            const Block_Info& info = World::block_infos[block->id];
-            auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
-
-            for (i32 d = 0; d < 6; d++)
-            {
-                auto& neighbour_query = neighbours_query[d];
-                if (World::is_block_query_valid(neighbour_query))
-                {
-                    Block* neighbour = neighbour_query.block;
-                    const Block_Info& neighbour_info = World::block_infos[neighbour->id];
-                    if (neighbour_info.is_transparent())
-                    {
-                        if ((i16)neighbour->sky_light_level <= (i16)block->sky_light_level - 2)
-                        {
-                            World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->sky_light_level - 1);
-                            light_queue.push(neighbour_query);
-                        }
-
-                        if ((i16)neighbour->light_source_level <= (i16)block->light_source_level - 2)
-                        {
-                            World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i16)block->light_source_level - 1);
-                            light_queue.push(neighbour_query);
-                        }
-                    }
+                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
+                    camera.yaw = transform->orientation.y;
                 }
             }
+
+            camera.update_transform(delta_time);
         }
 
-        Opengl_Renderer::wait_for_gpu_to_finish_work();
-
-        auto& update_sub_chunk_jobs = World::update_sub_chunk_jobs;
-
-        if (update_sub_chunk_jobs.size())
-        {
-            for (auto& job : update_sub_chunk_jobs)
-            {
-                Chunk* chunk = job.chunk;
-                i32 sub_chunk_index = job.sub_chunk_index;
-                Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-                Opengl_Renderer::update_sub_chunk(chunk, sub_chunk_index);
-                render_data.pending_for_update = false;
-            }
-
-            update_sub_chunk_jobs.resize(0);
-        }
+        camera.update();
 
         f32 normalize_color_factor = 1.0f / 255.0f;
         glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
@@ -511,11 +585,15 @@ int main()
                     for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                     {
                         Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-                        bool should_render_sub_chunks = !render_data.pending_for_update &&
-                                                        render_data.uploaded_to_gpu &&
-                                                        render_data.face_count > 0 &&
-                                                        camera.frustum.is_aabb_visible(render_data.aabb);
-                        if (should_render_sub_chunks)
+
+                        Sub_Chunk_Bucket& opaque_bucket = render_data.opaque_buckets[render_data.bucket_index];
+                        Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[render_data.bucket_index];
+                        i64 face_count = (i64)opaque_bucket.face_count + (i64)transparent_bucket.face_count;
+
+                        bool should_render_sub_chunk = face_count > 0 &&
+                                                       camera.frustum.is_aabb_visible(render_data.aabb[render_data.bucket_index]);
+
+                        if (should_render_sub_chunk)
                         {
                             Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, &chunk_shader);
                         }
@@ -525,7 +603,7 @@ int main()
         }
 
         Opengl_Renderer::end();
-        Opengl_Renderer::signal_gpu_for_work();
+        World::free_chunks_out_of_region(player_region_bounds);
 
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
@@ -577,7 +655,6 @@ int main()
                 std::stringstream ss;
                 ss.precision(2);
                 ss << "buckets allocated memory: " << std::fixed << total_size << " mbs";
-
                 sub_chunk_bucket_allocated_memory_text = ss.str();
             }
 
@@ -608,6 +685,18 @@ int main()
                 chunk_radius_text = ss.str();
             }
 
+            {
+                global_sky_light_level_text = "global sky light level: " + std::to_string(World::sky_light_level);
+            }
+
+            {
+                std::stringstream ss;
+                i32 hours = game_time / (60 * 60);
+                i32 minutes = (game_time % (60 * 60)) / 60;
+                ss << "game time: " << ((hours < 10) ? "0" : "") << hours << ":" << ((minutes < 10) ? "0" : "") << minutes;
+                game_time_text = ss.str();
+            }
+
             UI::begin();
 
             UI::set_offset({ 10.0f, 10.0f });
@@ -631,7 +720,12 @@ int main()
             UI::text(sub_chunk_bucket_total_memory_text);
             UI::text(sub_chunk_bucket_allocated_memory_text);
             UI::text(sub_chunk_bucket_used_memory_text);
+
+            UI::text("");
+
+            UI::text(game_time_text);
             UI::text(global_sky_light_level_text);
+
             UI::text("");
 
             UI::text("debug block");
@@ -661,8 +755,6 @@ int main()
         Opengl_2D_Renderer::end();
 
         Opengl_Renderer::swap_buffers();
-
-        World::free_chunks_out_of_region(player_region_bounds);
     }
 
     for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)

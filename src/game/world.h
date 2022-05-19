@@ -120,6 +120,15 @@ namespace minecraft {
         u16 id;
         u8 sky_light_level;
         u8 light_source_level;
+
+        u8 get_sky_light_level();
+
+        inline u8 get_light_level()
+        {
+            return glm::max(get_sky_light_level(), light_source_level);
+        }
+
+        const Block_Info& get_info();
     };
 
     struct Sub_Chunk_Vertex
@@ -146,26 +155,27 @@ namespace minecraft {
     {
         i32 face_count;
 
-        Sub_Chunk_Bucket opaque_bucket;
-        Sub_Chunk_Bucket transparent_bucket;
+        std::atomic<i32> bucket_index;
+        Sub_Chunk_Bucket opaque_buckets[2];
+        Sub_Chunk_Bucket transparent_buckets[2];
 
         i32 instance_memory_id;
         Sub_Chunk_Instance *base_instance;
 
-        AABB aabb;
+        AABB aabb[2];
 
-        bool uploaded_to_gpu;
-        bool pending_for_update;
+        std::atomic<bool> uploaded_to_gpu;
+        std::atomic<bool> pending_for_update;
     };
 
     enum BlockNeighbour
     {
-        BlockNeighbour_Up = 0,
-        BlockNeighbour_Down = 1,
-        BlockNeighbour_Left = 2,
+        BlockNeighbour_Up    = 0,
+        BlockNeighbour_Down  = 1,
+        BlockNeighbour_Left  = 2,
         BlockNeighbour_Right = 3,
         BlockNeighbour_Front = 4,
-        BlockNeighbour_Back = 5,
+        BlockNeighbour_Back  = 5,
     };
 
     struct Chunk
@@ -177,8 +187,9 @@ namespace minecraft {
 
         std::atomic<bool> pending_for_load;
         std::atomic<bool> pending_for_save;
-        std::atomic<bool> loaded;
         std::atomic<bool> pending_for_lighting;
+        std::atomic<bool> pending_for_update;
+        std::atomic<bool> loaded;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
@@ -250,8 +261,8 @@ namespace minecraft {
         static constexpr i64 max_chunk_radius = 30;
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 3) * (max_chunk_radius + 3);
 
-        static constexpr i64 sub_chunk_bucket_capacity = 3 * chunk_capacity;
-        static constexpr i64 sub_chunk_bucket_face_count = 1024;
+        static constexpr i64 sub_chunk_bucket_capacity = 4 * chunk_capacity;
+        static constexpr i64 sub_chunk_bucket_face_count = 900;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
@@ -267,13 +278,13 @@ namespace minecraft {
 
         static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
-        static std::vector<Update_Sub_Chunk_Job> update_sub_chunk_jobs;
+        static std::mutex update_chunk_mutex;
+        static std::queue<Update_Chunk_Job> update_chunk_jobs_queue;
 
-        static std::mutex chunk_mutex;
-        static std::mutex light_queue_mutex;
+        static std::mutex world_mutex;
+        static std::mutex light_mutex;
         static std::queue<Block_Query_Result> light_queue;
-
-        static u16 block_to_place_id;
+        static u16 block_to_place_id; // todo(harlequin): inventory system
 
         static bool initialize(const std::string& path);
         static void shutdown();

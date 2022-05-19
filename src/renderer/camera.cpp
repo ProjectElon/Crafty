@@ -24,7 +24,7 @@ namespace minecraft {
         this->frustum.initialize(this->projection * this->view);
     }
 
-    void Camera::update(f32 delta_time)
+    void Camera::update_transform(f32 delta_time)
     {
         // if (Input::get_key(MC_KEY_LEFT_SHIFT))
         // {
@@ -78,7 +78,10 @@ namespace minecraft {
         if (this->pitch <= -360.0f) this->pitch += 360.0f;
 
         this->pitch = glm::clamp(this->pitch, -89.0f, 89.0f);
+    }
 
+    void Camera::update()
+    {
         update_view();
         update_projection();
         this->frustum.update(this->projection * this->view);

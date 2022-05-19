@@ -13,6 +13,7 @@
 
 namespace minecraft {
 
+// vertex0 masks
 #define BLOCK_X_MASK 15 // 4 bits
 #define BLOCK_Y_MASK 255 // 8 bits
 #define BLOCK_Z_MASK 15 // 4 bits
@@ -20,8 +21,10 @@ namespace minecraft {
 #define FACE_ID_MASK 7 // 3 bits
 #define FACE_CORNER_ID_MASK 3 // 2 bits
 
+// vertex1 masks
 #define SKY_LIGHT_LEVEL_MASK 15 // 4 bits
 #define LIGHT_SOURCE_LEVEL_MASK 15 // 4 bits
+#define AMBIENT_OCCLUSION_LEVEL_MASK 3 // 2bits
 
     static void APIENTRY gl_debug_output(GLenum source,
                                          GLenum type,
@@ -53,6 +56,7 @@ namespace minecraft {
         }
 #endif
 #endif
+
         // depth testing
         glEnable(GL_DEPTH_TEST);
 
@@ -266,20 +270,22 @@ namespace minecraft {
         out_flags = (vertex >> 24);
     }
 
-    u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level)
+    u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level, u32 ambient_occlusion_level)
     {
         u32 result = 0;
         result |= sky_light_level;
         result |= light_source_level << 4;
-        result |= texture_uv_id << 8;
+        result |= ambient_occlusion_level << 8;
+        result |= texture_uv_id << 10;
         return result;
     }
 
-    void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level)
+    void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level, u32 &out_ambient_occlusion_level)
     {
         out_sky_light_level = vertex & SKY_LIGHT_LEVEL_MASK;
         out_light_source_level = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
-        out_texture_uv_id = (vertex >> 8);
+        out_ambient_occlusion_level = (vertex >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK;
+        out_texture_uv_id = (vertex >> 10);
     }
 
     void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
@@ -314,7 +320,6 @@ namespace minecraft {
     i32 Opengl_Renderer::allocate_sub_chunk_instance()
     {
         assert(internal_data.free_buckets.size());
-
         internal_data.free_instances_mutex.lock();
         i32 instance_memory_id = internal_data.free_instances.back();
         internal_data.free_instances.pop_back();
@@ -333,8 +338,6 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        internal_data.sub_chunk_used_memory -= render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
-
         if (render_data.instance_memory_id != -1)
         {
             free_sub_chunk_instance(render_data.instance_memory_id);
@@ -342,50 +345,559 @@ namespace minecraft {
             render_data.base_instance = nullptr;
         }
 
-        if (render_data.opaque_bucket.memory_id != -1)
+        for (i32 i = 0; i < 2; i++)
         {
-            free_sub_chunk_bucket(&render_data.opaque_bucket);
-        }
+            if (render_data.opaque_buckets[i].memory_id != -1)
+            {
+                internal_data.sub_chunk_used_memory -= render_data.opaque_buckets[i].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+                free_sub_chunk_bucket(&render_data.opaque_buckets[i]);
+            }
 
-        if (render_data.transparent_bucket.memory_id != -1)
-        {
-            free_sub_chunk_bucket(&render_data.transparent_bucket);
+            if (render_data.transparent_buckets[i].memory_id != -1)
+            {
+                internal_data.sub_chunk_used_memory -= render_data.transparent_buckets[i].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+                free_sub_chunk_bucket(&render_data.transparent_buckets[i]);
+            }
+
+            constexpr f32 infinity = std::numeric_limits<f32>::max();
+            render_data.aabb[i] = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
         }
 
         render_data.face_count = 0;
         render_data.uploaded_to_gpu = false;
-
-        constexpr f32 infinity = std::numeric_limits<f32>::max();
-        render_data.aabb = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
     }
 
     void Opengl_Renderer::update_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (render_data.opaque_bucket.is_allocated())
+        i32 bucket_index = render_data.bucket_index + 1;
+        if (bucket_index == 2) bucket_index = 0;
+
+        Sub_Chunk_Bucket& opqaue_bucket = render_data.opaque_buckets[bucket_index];
+        Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[bucket_index];
+
+        if (render_data.opaque_buckets[bucket_index].is_allocated())
         {
-            reset_sub_chunk_bucket(&render_data.opaque_bucket);
+            reset_sub_chunk_bucket(&render_data.opaque_buckets[bucket_index]);
+            internal_data.sub_chunk_used_memory -= render_data.opaque_buckets[bucket_index].face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
 
-        if (render_data.transparent_bucket.is_allocated())
+        if (render_data.transparent_buckets[bucket_index].is_allocated())
         {
-            reset_sub_chunk_bucket(&render_data.transparent_bucket);
+            reset_sub_chunk_bucket(&render_data.transparent_buckets[bucket_index]);
+            internal_data.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
 
         render_data.uploaded_to_gpu = false;
 
         upload_sub_chunk_to_gpu(chunk, sub_chunk_index);
 
-        if (render_data.opaque_bucket.face_count == 0 && render_data.opaque_bucket.is_allocated())
+        if (render_data.opaque_buckets[bucket_index].face_count == 0 && render_data.opaque_buckets[bucket_index].is_allocated())
         {
-            free_sub_chunk_bucket(&render_data.opaque_bucket);
+            free_sub_chunk_bucket(&render_data.opaque_buckets[bucket_index]);
         }
 
-        if (render_data.transparent_bucket.face_count == 0 && render_data.transparent_bucket.is_allocated())
+        if (render_data.transparent_buckets[bucket_index].face_count == 0 && render_data.transparent_buckets[bucket_index].is_allocated())
         {
-            free_sub_chunk_bucket(&render_data.transparent_bucket);
+            free_sub_chunk_bucket(&render_data.transparent_buckets[bucket_index]);
         }
+
+        render_data.bucket_index = bucket_index;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto top_query = World::get_neighbour_block_from_top(chunk, block_coords);
+
+        auto left_query  = World::is_block_query_valid(top_query) ? World::get_neighbour_block_from_left(top_query.chunk,  top_query.block_coords)  : null_query;
+        auto right_query = World::is_block_query_valid(top_query) ? World::get_neighbour_block_from_right(top_query.chunk, top_query.block_coords)  : null_query;
+        auto front_query = World::is_block_query_valid(top_query) ? World::get_neighbour_block_from_front(top_query.chunk, top_query.block_coords)  : null_query;
+        auto back_query  = World::is_block_query_valid(top_query) ? World::get_neighbour_block_from_back(top_query.chunk,  top_query.block_coords)  : null_query;
+
+        auto front_right_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_right(front_query.chunk, front_query.block_coords) : null_query;
+        auto front_left_query  = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_left(front_query.chunk, front_query.block_coords)  : null_query;
+        auto back_right_query  = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_right(back_query.chunk, back_query.block_coords)   : null_query;
+        auto back_left_query   = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_left(back_query.chunk, back_query.block_coords)    : null_query;
+
+        neighbours[0] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 1:
+            {
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+            } break;
+
+            case 2:
+            case 3:
+            {
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 3:
+            {
+                neighbours[2] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+            } break;
+
+            case 1:
+            case 2:
+            {
+                neighbours[2] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            {
+                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query.block : nullptr;
+            } break;
+
+            case 1:
+            {
+                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query.block : nullptr;
+            } break;
+
+            case 2:
+            {
+                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query.block : nullptr;
+            } break;
+
+            case 3:
+            {
+                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_bottom(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto bottom_query = World::get_neighbour_block_from_bottom(chunk, block_coords);
+
+        auto left_query  = World::is_block_query_valid(bottom_query) ? World::get_neighbour_block_from_left(bottom_query.chunk, bottom_query.block_coords)  : null_query;
+        auto right_query = World::is_block_query_valid(bottom_query) ? World::get_neighbour_block_from_right(bottom_query.chunk, bottom_query.block_coords) : null_query;
+        auto front_query = World::is_block_query_valid(bottom_query) ? World::get_neighbour_block_from_front(bottom_query.chunk, bottom_query.block_coords) : null_query;
+        auto back_query  = World::is_block_query_valid(bottom_query) ? World::get_neighbour_block_from_back(bottom_query.chunk, bottom_query.block_coords)  : null_query;
+
+        auto front_right_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_right(front_query.chunk, front_query.block_coords) : null_query;
+        auto front_left_query  = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_left(front_query.chunk, front_query.block_coords)  : null_query;
+        auto back_right_query  = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_right(back_query.chunk, back_query.block_coords)   : null_query;
+        auto back_left_query   = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_left(back_query.chunk, back_query.block_coords)    : null_query;
+
+        neighbours[0] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 4:
+            case 5:
+            {
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+            } break;
+
+            case 6:
+            case 7:
+            {
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 4:
+            case 7:
+            {
+                neighbours[2] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+            } break;
+
+            case 5:
+            case 6:
+            {
+                neighbours[2] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 4:
+            {
+                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query.block : nullptr;
+            } break;
+
+            case 5:
+            {
+                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query.block : nullptr;
+            } break;
+
+            case 6:
+            {
+                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query.block : nullptr;
+            } break;
+
+            case 7:
+            {
+                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_right(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto right_query = World::get_neighbour_block_from_right(chunk, block_coords);
+
+        auto top_query = World::is_block_query_valid(right_query) ? World::get_neighbour_block_from_top(right_query.chunk, right_query.block_coords)  : null_query;
+        auto bottom_query = World::is_block_query_valid(right_query) ? World::get_neighbour_block_from_bottom(right_query.chunk, right_query.block_coords) : null_query;
+        auto front_query = World::is_block_query_valid(right_query) ? World::get_neighbour_block_from_front(right_query.chunk, right_query.block_coords) : null_query;
+        auto back_query = World::is_block_query_valid(right_query) ? World::get_neighbour_block_from_back(right_query.chunk, right_query.block_coords) : null_query;
+
+        auto front_top_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_top(front_query.chunk, front_query.block_coords) : null_query;
+        auto front_bottom_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_bottom(front_query.chunk, front_query.block_coords)  : null_query;
+        auto back_top_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_top(back_query.chunk, back_query.block_coords)   : null_query;
+        auto back_bottom_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_bottom(back_query.chunk, back_query.block_coords) : null_query;
+
+        neighbours[0] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 4:
+            {
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+            } break;
+
+            case 3:
+            case 7:
+            {
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 3:
+            {
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+            } break;
+
+            case 4:
+            case 7:
+            {
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            {
+                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query.block : nullptr;
+            } break;
+
+            case 3:
+            {
+                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query.block : nullptr;
+            } break;
+
+            case 4:
+            {
+                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query.block : nullptr;
+            } break;
+
+            case 7:
+            {
+                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_left(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto left_query = World::get_neighbour_block_from_left(chunk, block_coords);
+
+        auto top_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_top(left_query.chunk, left_query.block_coords)  : null_query;
+        auto bottom_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_bottom(left_query.chunk, left_query.block_coords) : null_query;
+        auto front_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_front(left_query.chunk, left_query.block_coords) : null_query;
+        auto back_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_back(left_query.chunk, left_query.block_coords) : null_query;
+
+        auto front_top_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_top(front_query.chunk, front_query.block_coords) : null_query;
+        auto front_bottom_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_bottom(front_query.chunk, front_query.block_coords)  : null_query;
+        auto back_top_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_top(back_query.chunk, back_query.block_coords)   : null_query;
+        auto back_bottom_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_bottom(back_query.chunk, back_query.block_coords) : null_query;
+
+        neighbours[0] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 1:
+            case 5:
+            {
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+            } break;
+
+            case 2:
+            case 6:
+            {
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 1:
+            case 2:
+            {
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+            } break;
+
+            case 5:
+            case 6:
+            {
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 1:
+            {
+                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query.block : nullptr;
+            } break;
+
+            case 2:
+            {
+                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query.block : nullptr;
+            } break;
+
+            case 5:
+            {
+                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query.block : nullptr;
+            } break;
+
+            case 6:
+            {
+                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_back(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto back_query = World::get_neighbour_block_from_back(chunk, block_coords);
+
+        auto top_query = World::is_block_query_valid(back_query) ? World::get_neighbour_block_from_top(back_query.chunk, back_query.block_coords)  : null_query;
+        auto bottom_query = World::is_block_query_valid(back_query) ? World::get_neighbour_block_from_bottom(back_query.chunk, back_query.block_coords) : null_query;
+        auto left_query = World::is_block_query_valid(back_query) ? World::get_neighbour_block_from_left(back_query.chunk, back_query.block_coords) : null_query;
+        auto right_query = World::is_block_query_valid(back_query) ? World::get_neighbour_block_from_right(back_query.chunk, back_query.block_coords) : null_query;
+
+        auto left_top_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_top(left_query.chunk, left_query.block_coords) : null_query;
+        auto left_bottom_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_bottom(left_query.chunk, left_query.block_coords)  : null_query;
+        auto right_top_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_top(right_query.chunk, right_query.block_coords)   : null_query;
+        auto right_bottom_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_bottom(right_query.chunk, right_query.block_coords) : null_query;
+
+        neighbours[0] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 4:
+            {
+                neighbours[1] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+            } break;
+
+            case 1:
+            case 5:
+            {
+                neighbours[1] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            case 1:
+            {
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+            } break;
+
+            case 4:
+            case 5:
+            {
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 0:
+            {
+                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query.block : nullptr;
+            } break;
+
+            case 1:
+            {
+                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query.block : nullptr;
+            } break;
+
+            case 4:
+            {
+                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query.block : nullptr;
+            } break;
+
+            case 5:
+            {
+                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours_from_front(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        std::array< Block*, 4 > neighbours = {};
+        Block_Query_Result null_query = {};
+        auto front_query = World::get_neighbour_block_from_front(chunk, block_coords);
+
+        auto top_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_top(front_query.chunk, front_query.block_coords)  : null_query;
+        auto bottom_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_bottom(front_query.chunk, front_query.block_coords) : null_query;
+        auto left_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_left(front_query.chunk, front_query.block_coords) : null_query;
+        auto right_query = World::is_block_query_valid(front_query) ? World::get_neighbour_block_from_right(front_query.chunk, front_query.block_coords) : null_query;
+
+        auto left_top_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_top(left_query.chunk, left_query.block_coords) : null_query;
+        auto left_bottom_query = World::is_block_query_valid(left_query) ? World::get_neighbour_block_from_bottom(left_query.chunk, left_query.block_coords)  : null_query;
+        auto right_top_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_top(right_query.chunk, right_query.block_coords)   : null_query;
+        auto right_bottom_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_bottom(right_query.chunk, right_query.block_coords) : null_query;
+
+        neighbours[0] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+
+        switch (vertex_id)
+        {
+            case 3:
+            case 7:
+            {
+                neighbours[1] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+            } break;
+
+            case 2:
+            case 6:
+            {
+                neighbours[1] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 3:
+            case 2:
+            {
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+            } break;
+
+            case 7:
+            case 6:
+            {
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+            } break;
+        }
+
+        switch (vertex_id)
+        {
+            case 3:
+            {
+                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query.block : nullptr;
+            } break;
+
+            case 2:
+            {
+                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query.block : nullptr;
+            } break;
+
+            case 7:
+            {
+                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query.block : nullptr;
+            } break;
+
+            case 6:
+            {
+                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query.block : nullptr;
+            } break;
+        }
+
+        return neighbours;
+    }
+
+    std::array< Block*, 4 > get_vertex_neighbours(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    {
+        /*
+          1----------2
+          |\         |\
+          | 0--------|-3
+          | |        | |
+          5-|--------6 |
+           \|         \|
+            4----------7
+        */
+
+        std::array< Block*, 4 > neighbours = {};
+
+        switch (face)
+        {
+            case BlockFaceId_Top:
+            {
+                return get_vertex_neighbours_from_top(chunk, block_coords, face, vertex_id);
+            } break;
+
+            case BlockFaceId_Bottom:
+            {
+                return get_vertex_neighbours_from_bottom(chunk, block_coords, face, vertex_id);
+            } break;
+
+            case BlockFaceId_Right:
+            {
+                return get_vertex_neighbours_from_right(chunk, block_coords, face, vertex_id);
+            } break;
+
+            case BlockFaceId_Left:
+            {
+                return get_vertex_neighbours_from_left(chunk, block_coords, face, vertex_id);
+            } break;
+
+            case BlockFaceId_Back:
+            {
+                return get_vertex_neighbours_from_back(chunk, block_coords, face, vertex_id);
+            } break;
+
+            case BlockFaceId_Front:
+            {
+                return get_vertex_neighbours_from_front(chunk, block_coords, face, vertex_id);
+            } break;
+        }
+
+        return neighbours;
     }
 
     static bool submit_block_face_to_sub_chunk_render_data(Chunk *chunk,
@@ -397,8 +909,8 @@ namespace minecraft {
                                                            u16 face,
                                                            u32 p0, u32 p1, u32 p2, u32 p3)
     {
-        const Block_Info& block_info = World::block_infos[block->id];
-        const Block_Info& block_facing_normal_info = World::block_infos[block_facing_normal->id];
+        const auto& block_info = block->get_info();
+        const auto& block_facing_normal_info = block_facing_normal->get_info();
 
         bool is_solid = block_info.is_solid();
         bool is_transparent = block_info.is_transparent();
@@ -409,7 +921,9 @@ namespace minecraft {
             const u32& block_flags = block_info.flags;
 
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            Sub_Chunk_Bucket *bucket = is_transparent ? &sub_chunk_render_data.transparent_bucket : &sub_chunk_render_data.opaque_bucket;
+            i32 bucket_index = sub_chunk_render_data.bucket_index + 1;
+            if (bucket_index == 2) bucket_index = 0;
+            Sub_Chunk_Bucket *bucket = is_transparent ? &sub_chunk_render_data.transparent_buckets[bucket_index] : &sub_chunk_render_data.opaque_buckets[bucket_index];
 
             if (!bucket->is_allocated())
             {
@@ -423,13 +937,60 @@ namespace minecraft {
             u32 data02 = Opengl_Renderer::compress_vertex0(block_coords, p2, face, BlockFaceCornerId_TopLeft,     block_flags);
             u32 data03 = Opengl_Renderer::compress_vertex0(block_coords, p3, face, BlockFaceCornerId_TopRight,    block_flags);
 
-            u32 sky_light_level = block_facing_normal->sky_light_level;
-            u32 light_source_level = block_facing_normal->light_source_level;
+            glm::ivec4 sky_light_levels    = {};
+            glm::ivec4 light_source_levels = {};
+            glm::ivec4 ambient_occlusions  = {};
+            glm::ivec4 vertices = { p0, p1, p2, p3 };
 
-            u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, sky_light_level, light_source_level);
-            u32 data11 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2, sky_light_level, light_source_level);
-            u32 data12 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2, sky_light_level, light_source_level);
-            u32 data13 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2, sky_light_level, light_source_level);
+            for (i32 i = 0; i < 4; i++)
+            {
+                u32 count = 0;
+
+                auto neighbours = get_vertex_neighbours(chunk, block_coords, face, vertices[i]);
+
+                for (i32 j = 0; j < (i32)neighbours.size() - 1; ++j)
+                {
+                    Block *neighbour = neighbours[j];
+                    if (neighbour)
+                    {
+                        const auto& neighbour_info = neighbour->get_info();
+                        if (neighbour_info.is_transparent())
+                        {
+                            sky_light_levels[i]    += neighbour->sky_light_level;
+                            light_source_levels[i] += neighbour->light_source_level;
+                            ++count;
+                        }
+                    }
+                }
+
+                Block *side0  = neighbours[1];
+                Block *side1  = neighbours[2];
+                Block *corner = neighbours[3];
+
+                bool has_side0  = side0  && !(side0->get_info().is_transparent());
+                bool has_side1  = side1  && !(side1->get_info().is_transparent());
+                bool has_corner = corner && !(corner->get_info().is_transparent());
+
+                if (corner && corner->get_info().is_transparent() && (!has_side0 || !has_side1))
+                {
+                    sky_light_levels[i]    += corner->sky_light_level;
+                    light_source_levels[i] += corner->light_source_level;
+                    ++count;
+                }
+
+                if (count)
+                {
+                    sky_light_levels[i] /= count;
+                    light_source_levels[i] /= count;
+                }
+
+                ambient_occlusions[i] = (has_side0 && has_side1) ? 0 : (3 - (has_side0 + has_side1 + has_corner));
+            }
+
+            u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, sky_light_levels[0], light_source_levels[0], ambient_occlusions[0]);
+            u32 data11 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomLeft  * 2, sky_light_levels[1], light_source_levels[1], ambient_occlusions[1]);
+            u32 data12 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopLeft     * 2, sky_light_levels[2], light_source_levels[2], ambient_occlusions[2]);
+            u32 data13 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_TopRight    * 2, sky_light_levels[3], light_source_levels[3], ambient_occlusions[3]);
 
             *bucket->current_vertex++ = { data00, data10 };
             *bucket->current_vertex++ = { data01, data11 };
@@ -559,18 +1120,19 @@ namespace minecraft {
         {
             front_block = chunk->get_neighbour_block_from_front(block_coords);
         }
+
         submitted_face_count += submit_block_face_to_sub_chunk_render_data(chunk, sub_chunk_index, block, front_block, block_coords, block_info.side_texture_id, BlockFaceId_Front, 6, 7, 3, 2);
 
         /*
             back face
 
-            (22) 1 ----- 0 (23)
-                |      /  |
-                |     /   |
-                |    /    |
-                |   /     |
-                |  /      |
-            (21) 5 ----- 4 (20)
+              1 ----- 0
+             |      /  |
+             |     /   |
+             |    /    |
+             |   /     |
+             |  /      |
+              5 ----- 4
         */
 
         Block* back_block = nullptr;
@@ -592,16 +1154,22 @@ namespace minecraft {
             glm::vec3 block_position = chunk->get_block_position(block_coords);
             glm::vec3 min = block_position - glm::vec3(0.5f, 0.5f, 0.5f);
             glm::vec3 max = block_position + glm::vec3(0.5f, 0.5f, 0.5f);
-            sub_chunk_render_data.aabb.min = glm::min(sub_chunk_render_data.aabb.min, min);
-            sub_chunk_render_data.aabb.max = glm::max(sub_chunk_render_data.aabb.max, max);
+            i32 bucket_index = sub_chunk_render_data.bucket_index + 1;
+            if (bucket_index == 2) bucket_index = 0;
+            sub_chunk_render_data.aabb[bucket_index].min = glm::min(sub_chunk_render_data.aabb[bucket_index].min, min);
+            sub_chunk_render_data.aabb[bucket_index].max = glm::max(sub_chunk_render_data.aabb[bucket_index].max, max);
         }
     }
 
     void Opengl_Renderer::upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-        internal_data.sub_chunk_used_memory -= render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
-        render_data.face_count = 0;
+
+        i32 bucket_index = render_data.bucket_index + 1;
+        if (bucket_index == 2) bucket_index = 0;
+
+        constexpr f32 infinity = std::numeric_limits<f32>::max();
+        render_data.aabb[bucket_index] = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
 
         i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
         i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height;
@@ -614,10 +1182,12 @@ namespace minecraft {
                 {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = chunk->get_block(block_coords);
+
                     if (block->id == BlockId_Air)
                     {
                         continue;
                     }
+
                     submit_block_to_sub_chunk_render_data(chunk, sub_chunk_index, block, block_coords);
                 }
             }
@@ -632,7 +1202,11 @@ namespace minecraft {
                 render_data.base_instance->chunk_coords = chunk->world_coords;
             }
 
-            internal_data.sub_chunk_used_memory += render_data.face_count * 4 * sizeof(Sub_Chunk_Vertex);
+            Sub_Chunk_Bucket& opqaue_bucket = render_data.opaque_buckets[bucket_index];
+            Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[bucket_index];
+
+            internal_data.sub_chunk_used_memory += opqaue_bucket.face_count * 4 * sizeof(Sub_Chunk_Vertex);
+            internal_data.sub_chunk_used_memory += transparent_bucket.face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
 
         render_data.uploaded_to_gpu = true;
@@ -642,32 +1216,32 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (render_data.opaque_bucket.face_count > 0)
+        if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
         {
             Draw_Elements_Indirect_Command& command = internal_data.opaque_command_buffer[internal_data.opaque_command_count];
             internal_data.opaque_command_count++;
 
-            command.count = render_data.opaque_bucket.face_count * 6;
+            command.count = render_data.opaque_buckets[render_data.bucket_index].face_count * 6;
             command.firstIndex = 0;
             command.instanceCount = 1;
-            command.baseVertex = render_data.opaque_bucket.memory_id * World::sub_chunk_bucket_vertex_count;
+            command.baseVertex = render_data.opaque_buckets[render_data.bucket_index].memory_id * World::sub_chunk_bucket_vertex_count;
             command.baseInstance = render_data.instance_memory_id;
         }
 
-        if (render_data.transparent_bucket.face_count > 0)
+        if (render_data.transparent_buckets[render_data.bucket_index].face_count > 0)
         {
             Draw_Elements_Indirect_Command& command = internal_data.transparent_command_buffer[internal_data.transparent_command_count];
             internal_data.transparent_command_count++;
 
-            command.count = render_data.transparent_bucket.face_count * 6;
+            command.count = render_data.transparent_buckets[render_data.bucket_index].face_count * 6;
             command.firstIndex = 0;
             command.instanceCount = 1;
-            command.baseVertex = render_data.transparent_bucket.memory_id * World::sub_chunk_bucket_vertex_count;
+            command.baseVertex = render_data.transparent_buckets[render_data.bucket_index].memory_id * World::sub_chunk_bucket_vertex_count;
             command.baseInstance = render_data.instance_memory_id;
         }
 
         auto& stats = internal_data.stats;
-        stats.face_count += render_data.face_count;
+        stats.face_count += render_data.opaque_buckets[render_data.bucket_index].face_count + render_data.transparent_buckets[render_data.bucket_index].face_count;
         stats.sub_chunk_count++;
     }
 
@@ -680,7 +1254,7 @@ namespace minecraft {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         shader->use();
-        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / ((World::chunk_radius - 1) * 16.0f));
+        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
         shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
         shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));

@@ -41,7 +41,8 @@ namespace minecraft {
         Frustum frustum;
 
         void initialize(const glm::vec3& position, f32 fov = 45.0f, f32 aspect_ratio = 16.0f / 9.0f, f32 near = 0.01f, f32 far = 1000.0f);
-        void update(f32 delta_time);
+        void update_transform(f32 delta_time);
+        void update();
 
         void update_view();
         void update_projection();

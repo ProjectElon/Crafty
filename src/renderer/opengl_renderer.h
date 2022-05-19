@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include <mutex>
+#include <atomic>
 
 namespace minecraft {
 
@@ -87,7 +88,7 @@ namespace minecraft {
         u32 uv_texture_id;
 
         Opengl_Renderer_Stats stats;
-        i64 sub_chunk_used_memory;
+        std::atomic<u64> sub_chunk_used_memory;
 
         u16 sky_light_level;
 
@@ -118,8 +119,8 @@ namespace minecraft {
                                    u32& out_face_corner_id,
                                    u32& out_flags);
 
-        static u32 compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level);
-        static void extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level);
+        static u32 compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level, u32 ambient_occlusion_level);
+        static void extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level, u32 &out_ambient_occlusion_level);
 
         static void allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
         static void reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
