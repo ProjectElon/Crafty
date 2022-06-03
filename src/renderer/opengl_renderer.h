@@ -136,6 +136,7 @@ namespace minecraft {
 
         static void begin(
             const glm::vec4& clear_color,
+            const glm::vec4& tint_color,
             Camera *camera,
             Opengl_Shader *shader);
 

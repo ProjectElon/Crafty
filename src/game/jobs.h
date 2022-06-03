@@ -2,6 +2,7 @@
 
 #include "core/common.h"
 #include <thread>
+#include <glm/glm.hpp>
 
 namespace minecraft {
 
@@ -10,6 +11,7 @@ namespace minecraft {
 
     struct Load_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
+        glm::ivec2 chunk_coords;
         Chunk* chunk;
         static void execute(void* job_data);
     };
@@ -20,14 +22,9 @@ namespace minecraft {
         static void execute(void* job_data);
     };
 
-    struct Update_Chunks_Job alignas(std::hardware_constructive_interference_size)
+    struct Calculate_Chunk_Lighting_Job
     {
-        static void execute(void* job_data);
-    };
-
-    struct Calculate_Chunk_Lighting_Job alignas(std::hardware_constructive_interference_size)
-    {
-        Chunk *chunk;
+        Chunk* chunk;
         static void execute(void* job_data);
     };
 
@@ -37,24 +34,15 @@ namespace minecraft {
         static void execute(void* job_data);
     };
 
-    struct Update_Sub_Chunk_Job alignas(std::hardware_constructive_interference_size)
-    {
-        Chunk* chunk;
-        i32 sub_chunk_index;
-        static void execute(void* job_data);
-    };
-
     struct Serialize_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk* chunk;
-
         static void execute(void* job_data);
     };
 
     struct Serialize_And_Free_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk* chunk;
-
         static void execute(void* job_data);
     };
 }

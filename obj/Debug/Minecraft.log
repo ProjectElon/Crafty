@@ -1,4 +1,4 @@
-﻿  opengl_debug_renderer.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(162,62): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(149,21): warning C4101: 'x': unreferenced local variable
+﻿  platform_win32.cpp
+  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(194,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

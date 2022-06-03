@@ -18,6 +18,8 @@
 #include "ui/ui.h"
 #include "ui/dropdown_console.h"
 
+#include "game/profiler.h"
+
 namespace minecraft {
 
     static bool on_quit(const Event *event, void *sender)
@@ -186,6 +188,12 @@ namespace minecraft {
         if (!ECS::initialize(max_entity_count))
         {
             fprintf(stderr, "[ERROR] failed to initialize ecs\n");
+            return false;
+        }
+
+        if (!Profiler::initialize(60))
+        {
+            fprintf(stderr, "[ERROR] failed to initialize profiler\n");
             return false;
         }
 

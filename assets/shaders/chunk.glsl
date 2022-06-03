@@ -19,7 +19,7 @@ uniform mat4  u_view;
 uniform mat4  u_projection;
 uniform float u_one_over_chunk_radius;
 uniform vec3  u_camera_position;
-uniform int u_sky_light_level;
+uniform float u_sky_light_level;
 
 #define BLOCK_X_MASK 15
 #define BLOCK_Y_MASK 255
@@ -88,13 +88,13 @@ void main()
     a_data1 = in_data1;
     a_biome_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-    int sky_light_level = int(in_data1 & SKY_LIGHT_LEVEL_MASK);
-    int sky_light_factor = u_sky_light_level - 15;
-    int sky_light = max(sky_light_level + sky_light_factor, 1);
-    int light_source = int((in_data1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
+    float sky_light_level = float(in_data1 & SKY_LIGHT_LEVEL_MASK);
+    float sky_light_factor = u_sky_light_level - 15.0f;
+    float sky_light = max(sky_light_level + sky_light_factor, 1.0f);
+    float light_source = float((in_data1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
 
     a_light_level = float(max(sky_light, light_source)) / 15.0f;
-    float ambient_factor = 0.1f + a_light_level;
+    float ambient_factor = 0.5f + a_light_level * 1.5f;
     float ambient_occlusion = (float((in_data1 >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK) + ambient_factor) / (3.0f + ambient_factor);
 
     if ((flags & BlockFlags_Is_Light_Source) == 0)
@@ -102,7 +102,6 @@ void main()
         a_light_level *= ambient_occlusion;
     }
 
-    // @todo(harlequin): do this in cpu side
     switch (face_id)
     {
         case Top_Face_ID:
@@ -148,6 +147,7 @@ in float a_fog_factor;
 in float a_light_level;
 
 uniform vec4 u_sky_color;
+uniform vec4 u_tint_color;
 uniform sampler2D u_block_sprite_sheet;
 
 vec3 light_dir = normalize(vec3(0.0f, 1.0f, 0.0f));
@@ -201,5 +201,5 @@ void main()
     // out_color = vec4(ambient + diffuse, 1.0f) * color;
     // out_color = mix(out_color, u_sky_color, a_fog_factor);
 
-    out_color = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor);
+    out_color = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor) * u_tint_color;
 }

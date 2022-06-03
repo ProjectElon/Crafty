@@ -84,18 +84,19 @@ project("Minecraft")
     includedirs
 	{
 		"src",
-        "lib/include"
+        "lib/include",
 	}
 
 	libdirs
 	{
-		"lib"
+		"lib",
 	}
 
     links
     {
         "opengl32.lib",
-        "glfw3dll.lib"
+        "glfw3dll.lib",
+        "OptickCore.lib"
     }
 
     defines

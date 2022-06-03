@@ -191,7 +191,7 @@ namespace minecraft {
         glViewport(0, 0, width, height);
 
         internal_data.sub_chunk_used_memory = 0;
-        internal_data.sky_light_level = 15;
+        internal_data.sky_light_level = 15.0f;
 
         return true;
     }
@@ -984,7 +984,7 @@ namespace minecraft {
                     light_source_levels[i] /= count;
                 }
 
-                ambient_occlusions[i] = (has_side0 && has_side1) ? 0 : (3 - (has_side0 + has_side1 + has_corner));
+                ambient_occlusions[i] = (has_side0 && has_side1) ? 0 : (3 - ((i32)has_side0 + (i32)has_side1 + (i32)has_corner));
             }
 
             u32 data10 = Opengl_Renderer::compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCornerId_BottomRight * 2, sky_light_levels[0], light_source_levels[0], ambient_occlusions[0]);
@@ -1247,6 +1247,7 @@ namespace minecraft {
 
     void Opengl_Renderer::begin(
         const glm::vec4& clear_color,
+        const glm::vec4& tint_color,
         Camera *camera,
         Opengl_Shader *shader)
     {
@@ -1257,6 +1258,7 @@ namespace minecraft {
         shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
         shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
         shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        shader->set_uniform_vec4("u_tint_color", tint_color.r, tint_color.g, tint_color.b, tint_color.a);
         shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
         shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
 
@@ -1275,7 +1277,7 @@ namespace minecraft {
         internal_data.block_sprite_sheet.bind(0);
 
         shader->set_uniform_i32("u_uvs", 1);
-        shader->set_uniform_i32("u_sky_light_level", World::sky_light_level);
+        shader->set_uniform_f32("u_sky_light_level", World::sky_light_level);
 
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);

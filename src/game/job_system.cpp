@@ -2,27 +2,46 @@
 
 namespace minecraft {
 
-    static void execute_jobs(Job_Queue *queue)
+    static void execute_jobs(bool *running, Job_Queue *high_priority_queue, Job_Queue *low_priority_queue)
     {
-        while (queue->running || queue->job_index != queue->tail_job_index)
+        while (*running || !high_priority_queue->is_empty() || !low_priority_queue->is_empty())
         {
-            if (queue->job_index == queue->tail_job_index)
             {
-                std::unique_lock<std::mutex> lock(queue->work_condition_mutex);
-                // queue->work_condition.notify_one();
-                queue->work_condition.wait(lock, [queue]() -> bool { return queue->job_index != queue->tail_job_index || !queue->running; });
+                std::unique_lock lock(Job_System::internal_data.work_mutex);
+                Job_System::internal_data.work_cv.wait(lock, [&] { return !high_priority_queue->is_empty() || !low_priority_queue->is_empty(); });
             }
 
-            if (!queue->running && queue->job_index == queue->tail_job_index)
+            i32 job_index = high_priority_queue->job_index;
+            i32 next_job_index = high_priority_queue->job_index + 1;
+            if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
+
+            Job *high_priority_job = nullptr;
+
+            if (high_priority_queue->job_index != high_priority_queue->tail_job_index)
             {
-                break;
+                if (high_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
+                {
+                    Job *job = high_priority_queue->jobs + job_index;
+                    job->execute(job->data);
+                    high_priority_job = job;
+                }
             }
 
-            Job& job = queue->jobs[queue->job_index];
-            job.execute(job.data);
+            if (!high_priority_job)
+            {
+                i32 job_index = low_priority_queue->job_index;
+                i32 next_job_index = low_priority_queue->job_index + 1;
+                if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
 
-            queue->job_index++;
-            if (queue->job_index == MC_MAX_JOB_COUNT_PER_PATCH) queue->job_index = 0;
+                if (low_priority_queue->job_index != low_priority_queue->tail_job_index)
+                {
+                    if (low_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
+                    {
+                        Job* job = low_priority_queue->jobs + job_index;
+                        job->execute(job->data);
+                    }
+                }
+            }
         }
     }
 
@@ -39,16 +58,19 @@ namespace minecraft {
         internal_data.thread_count = concurrent_thread_count - 2;
         if (internal_data.thread_count > MC_MAX_THREAD_COUNT) internal_data.thread_count = MC_MAX_THREAD_COUNT;
 
-        internal_data.job_queue_index = 0;
+        internal_data.high_priority_queue.job_index = 0;
+        internal_data.high_priority_queue.tail_job_index = 0;
+        memset(internal_data.high_priority_queue.jobs, 0, sizeof(Job) * MC_MAX_JOB_COUNT_PER_QUEUE);
 
-        for (u32 queue_index = 0; queue_index < internal_data.thread_count; queue_index++)
+        internal_data.low_priority_queue.job_index = 0;
+        internal_data.low_priority_queue.tail_job_index = 0;
+        memset(internal_data.low_priority_queue.jobs, 0, sizeof(Job) * MC_MAX_JOB_COUNT_PER_QUEUE);
+
+        internal_data.running = true;
+
+        for (u32 i = 0; i < internal_data.thread_count; i++)
         {
-            Job_Queue* queue = internal_data.queues + queue_index;
-            queue->running = true;
-            queue->job_index = 0;
-            queue->tail_job_index = 0;
-            memset(queue->jobs, 0, sizeof(Job) * MC_MAX_JOB_COUNT_PER_PATCH);
-            internal_data.threads[queue_index] = std::thread(execute_jobs, queue);
+            internal_data.threads[i] = std::thread(execute_jobs, &internal_data.running, &internal_data.high_priority_queue, &internal_data.low_priority_queue);
         }
 
         return true;
@@ -56,66 +78,62 @@ namespace minecraft {
 
     void Job_System::shutdown()
     {
+        internal_data.running = false;
+
         for (u32 thread_index = 0; thread_index < internal_data.thread_count; thread_index++)
         {
-            Job_Queue* queue = internal_data.queues + thread_index;
-
-            {
-                std::unique_lock lock(queue->work_condition_mutex);
-                queue->running = false;
-                queue->work_condition.notify_one();
-            }
-
             internal_data.threads[thread_index].join();
         }
     }
 
-    void Job_System::dispatch(const Job& job)
+    void Job_System::dispatch(const Job& job, bool high_prority)
     {
-        Job_Queue *queue = internal_data.queues + internal_data.job_queue_index;
-        queue->jobs[queue->tail_job_index] = job;
-
-        bool notifiy = queue->job_index == queue->tail_job_index;
-
-        queue->tail_job_index++;
-        if (queue->tail_job_index == MC_MAX_JOB_COUNT_PER_PATCH) queue->tail_job_index = 0;
-
-        if (notifiy)
-        {
-            std::unique_lock lock(queue->work_condition_mutex);
-            queue->work_condition.notify_one();
-        }
-
-        internal_data.job_queue_index++;
-        if (internal_data.job_queue_index == internal_data.thread_count) internal_data.job_queue_index = 0;
+        Job_Queue *queue = high_prority ? &internal_data.high_priority_queue : &internal_data.low_priority_queue;
+        i32 tail_job_index = queue->tail_job_index;
+        i32 next_tail_job_index = tail_job_index + 1;
+        if (next_tail_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_tail_job_index = 0;
+        queue->jobs[tail_job_index] = job;
+        queue->tail_job_index = next_tail_job_index;
     }
 
     void Job_System::wait_for_jobs_to_finish()
     {
-        // for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
-        // {
-        //     Job_Queue *queue = internal_data.queues + queue_index;
-        //     if (queue->job_index != queue->tail_job_index)
-        //     {
-        //         std::unique_lock lock(queue->work_condition_mutex);
-        //         queue->work_condition.wait(lock, [queue]() -> bool { return queue->job_index == queue->tail_job_index; });
-        //     }
-        // }
+        Job_Queue* high_priority_queue = &internal_data.high_priority_queue;
+        Job_Queue* low_priority_queue = &internal_data.low_priority_queue;
 
-        while (true)
+        while (!high_priority_queue->is_empty() || !low_priority_queue->is_empty())
         {
-            bool all = true;
+            // i32 job_index = high_priority_queue->job_index;
+            // i32 next_job_index = high_priority_queue->job_index + 1;
+            // if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
 
-            for (u32 queue_index = 0; queue_index < MC_MAX_THREAD_COUNT; ++queue_index)
-            {
-                Job_Queue *queue = internal_data.queues + queue_index;
-                if (queue->job_index != queue->tail_job_index)
-                {
-                    all = false;
-                }
-            }
+            // Job *high_priority_job = nullptr;
 
-            if (all) break;
+            // if (high_priority_queue->job_index != high_priority_queue->tail_job_index)
+            // {
+            //     if (high_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
+            //     {
+            //         Job *job = high_priority_queue->jobs + job_index;
+            //         job->execute(job->data);
+            //         high_priority_job = job;
+            //     }
+            // }
+
+            // if (!high_priority_job)
+            // {
+            //     i32 job_index = low_priority_queue->job_index;
+            //     i32 next_job_index = low_priority_queue->job_index + 1;
+            //     if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
+
+            //     if (low_priority_queue->job_index != low_priority_queue->tail_job_index)
+            //     {
+            //         if (low_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
+            //         {
+            //             Job* job = low_priority_queue->jobs + job_index;
+            //             job->execute(job->data);
+            //         }
+            //     }
+            // }
         }
     }
 

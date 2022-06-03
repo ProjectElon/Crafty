@@ -10,7 +10,7 @@
 namespace minecraft {
 
     #define MC_MAX_THREAD_COUNT 64
-    #define MC_MAX_JOB_COUNT_PER_PATCH 4096
+    #define MC_MAX_JOB_COUNT_PER_QUEUE 65536
 
     struct Job
     {
@@ -20,21 +20,25 @@ namespace minecraft {
 
     struct Job_Queue
     {
-        std::mutex work_condition_mutex;
-        std::condition_variable work_condition;
-        std::atomic<bool> running;
-        std::atomic<u32> job_index;
-        std::atomic<u32> tail_job_index;
-        Job jobs[MC_MAX_JOB_COUNT_PER_PATCH];
+        std::atomic<i32> job_index;
+        std::atomic<i32> tail_job_index;
+        Job jobs[MC_MAX_JOB_COUNT_PER_QUEUE];
+
+        inline bool is_empty() { return job_index == tail_job_index; }
     };
 
     struct Job_System_Data
     {
+        bool running;
+
         u32 thread_count;
         std::thread threads[MC_MAX_THREAD_COUNT];
 
-        u32 job_queue_index;
-        Job_Queue queues[MC_MAX_THREAD_COUNT];
+        std::mutex work_mutex;
+        std::condition_variable work_cv;
+
+        Job_Queue high_priority_queue;
+        Job_Queue low_priority_queue;
     };
 
     struct Job_System
@@ -44,23 +48,31 @@ namespace minecraft {
         static bool initialize();
         static void shutdown();
 
-        static void dispatch(const Job& job);
+        static void dispatch(const Job& job, bool high_prority);
 
         template<typename T>
-        static void schedule(const T& job_data)
+        static void schedule(const T& job_data, bool high_prority = true)
         {
-            static std::vector<T> job_data_pool(MC_MAX_THREAD_COUNT * MC_MAX_JOB_COUNT_PER_PATCH);
+            static std::vector<T> job_data_pool(MC_MAX_JOB_COUNT_PER_QUEUE);
             static u32 job_data_index = 0;
+
+            bool should_notifiy_worker_threads = internal_data.high_priority_queue.is_empty() && internal_data.low_priority_queue.is_empty();
 
             job_data_pool[job_data_index] = job_data;
 
             Job job;
-            job.data = &job_data_pool[job_data_index];
+            job.data    = &job_data_pool[job_data_index];
             job.execute = &T::execute;
-            dispatch(job);
+            dispatch(job, high_prority);
 
             job_data_index++;
-            if (job_data_index == MC_MAX_THREAD_COUNT * MC_MAX_JOB_COUNT_PER_PATCH) job_data_index = 0;
+            if (job_data_index == MC_MAX_JOB_COUNT_PER_QUEUE) job_data_index = 0;
+
+            if (should_notifiy_worker_threads)
+            {
+                std::unique_lock lock(internal_data.work_mutex);
+                internal_data.work_cv.notify_all();
+            }
         }
 
         static void wait_for_jobs_to_finish();

@@ -190,6 +190,7 @@ namespace minecraft {
     void Platform::opengl_swap_buffers()
     {
         glfwSwapBuffers(window_handle);
+        // glfwSwapInterval(1);
     }
 
     void Platform::pump_messages()
@@ -272,9 +273,9 @@ namespace minecraft {
         }
     }
 
-    f32 Platform::get_current_time()
+    f64 Platform::get_current_time()
     {
-        return (f32)glfwGetTime();
+        return glfwGetTime();
     }
 
     void Platform::shutdown()

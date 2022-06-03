@@ -25,7 +25,7 @@ namespace minecraft {
         void switch_to_window_mode(WindowMode new_window_mode);
         void center_window();
 
-        f32 get_current_time();
+        f64 get_current_time();
 
         void shutdown();
     };

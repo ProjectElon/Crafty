@@ -7,6 +7,8 @@
 #include "game/math.h"
 #include "game/jobs.h"
 #include "game/console_commands.h"
+#include "containers/robin_hood.h"
+#include "containers/queue.h"
 
 #include <glm/glm.hpp>
 
@@ -25,7 +27,7 @@
 #define MC_BLOCK_COUNT_PER_CHUNK MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
 #define MC_INDEX_COUNT_PER_CHUNK MC_BLOCK_COUNT_PER_CHUNK * 36
 
-#define MC_SUB_CHUNK_HEIGHT 16
+#define MC_SUB_CHUNK_HEIGHT 8
 #define MC_BLOCK_COUNT_PER_SUB_CHUNK  MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_SUB_CHUNK_HEIGHT
 #define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
 #define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
@@ -178,20 +180,40 @@ namespace minecraft {
         BlockNeighbour_Back  = 5,
     };
 
+    enum ChunkNeighbour
+    {
+        ChunkNeighbour_Front      = 0,
+        ChunkNeighbour_Back       = 1,
+        ChunkNeighbour_Left       = 2,
+        ChunkNeighbour_Right      = 3,
+        ChunkNeighbour_FrontRight = 4,
+        ChunkNeighbour_FrontLeft  = 5,
+        ChunkNeighbour_BackRight  = 6,
+        ChunkNeighbour_BackLeft   = 7,
+        ChunkNeighbour_Count      = 8
+    };
+
+    std::array< glm::ivec2, ChunkNeighbour_Count > get_chunk_neighbour_directions();
+
     struct Chunk
     {
         glm::ivec2 world_coords;
         glm::vec3 position;
+        std::string file_path; // @todo(harlequin): replace std::string
 
-        std::string file_path;
+        Chunk* neighbours[ChunkNeighbour_Count];
 
         std::atomic<bool> pending_for_load;
-        std::atomic<bool> pending_for_save;
-        std::atomic<bool> pending_for_lighting;
-        std::atomic<bool> pending_for_update;
         std::atomic<bool> loaded;
+        std::atomic<bool> neighbours_loaded;
+        std::atomic<bool> pending_for_lighting;
+        std::atomic<bool> calculating_lighting;
+        std::atomic<bool> pending_for_update;
+        std::atomic<bool> pending_for_save;
+        std::atomic<bool> unload;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
+
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
         Block back_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
         Block left_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
@@ -202,7 +224,7 @@ namespace minecraft {
         bool initialize(const glm::ivec2 &world_coords);
 
         void generate(i32 seed);
-        void calculate_lighting();
+        void calculate_lighting(Circular_FIFO_Queue<struct Block_Query_Result> *queue);
 
         void serialize();
         void deserialize();
@@ -231,7 +253,7 @@ namespace minecraft {
 
     struct Chunk_Hash
     {
-        std::size_t operator ()(const glm::ivec2& coord) const
+        std::size_t operator()(const glm::ivec2& coord) const
         {
             return (size_t)coord.x | ((size_t)coord.y << (size_t)32);
         }
@@ -262,35 +284,36 @@ namespace minecraft {
         static constexpr i64 chunk_capacity = 4 * (max_chunk_radius + 3) * (max_chunk_radius + 3);
 
         static constexpr i64 sub_chunk_bucket_capacity = 4 * chunk_capacity;
-        static constexpr i64 sub_chunk_bucket_face_count = 900;
+        static constexpr i64 sub_chunk_bucket_face_count = 1024;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
         static i32 chunk_radius;
-        static i32 sky_light_level;
+        static f32 sky_light_level;
 
         static Block null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
-        static std::unordered_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
+        static robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
         static std::string path;
         static i32 seed;
 
-        static std::mutex chunk_pool_mutex;
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
-        static std::mutex update_chunk_mutex;
-        static std::queue<Update_Chunk_Job> update_chunk_jobs_queue;
+        static std::vector<Chunk*> pending_free_chunks;
 
-        static std::mutex world_mutex;
+        static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue0;
+        static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue1;
+
         static std::mutex light_mutex;
-        static std::queue<Block_Query_Result> light_queue;
+        static Circular_FIFO_Queue<Block_Query_Result> light_queue;
+        static Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job> calculate_chunk_lighting_queue;
+
         static u16 block_to_place_id; // todo(harlequin): inventory system
 
         static bool initialize(const std::string& path);
         static void shutdown();
 
         static void load_chunks_at_region(const World_Region_Bounds& region_bounds);
-        static void schedule_update_sub_chunk_jobs();
         static void free_chunks_out_of_region(const World_Region_Bounds& region_bounds);
 
         static inline glm::ivec2 world_position_to_chunk_coords(const glm::vec3& position)
@@ -363,6 +386,14 @@ namespace minecraft {
                    query.block_coords.z >= 0 && query.block_coords.z < MC_CHUNK_DEPTH;
         }
 
+        static inline bool is_block_query_in_world_region(const Block_Query_Result& query, const World_Region_Bounds& bounds)
+        {
+            return query.chunk->world_coords.x >= bounds.min.x &&
+                   query.chunk->world_coords.x <= bounds.max.x &&
+                   query.chunk->world_coords.y >= bounds.min.y &&
+                   query.chunk->world_coords.y <= bounds.max.y;
+        }
+
         static inline i32 get_sub_chunk_index(const glm::ivec3& block_coords)
         {
             return block_coords.y / sub_chunk_height;
@@ -382,7 +413,7 @@ namespace minecraft {
         static Block_Query_Result select_block(const glm::vec3& view_position,
                                                const glm::vec3& view_direction,
                                                u32 max_block_select_dist_in_cube_units,
-                                               Ray_Cast_Result *out_ray_cast_result);
+                                               Ray_Cast_Result *out_ray_cast_result = nullptr);
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
 

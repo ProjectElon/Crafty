@@ -21,6 +21,7 @@ namespace minecraft {
     {
         glm::vec3 acceleration;
         glm::vec3 velocity;
+        bool is_under_water;
     };
 
     struct Character_Controller
