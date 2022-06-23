@@ -58,6 +58,7 @@ namespace minecraft {
 
             bool should_notifiy_worker_threads = internal_data.high_priority_queue.is_empty() && internal_data.low_priority_queue.is_empty();
 
+            std::unique_lock lock(internal_data.work_mutex);
             job_data_pool[job_data_index] = job_data;
 
             Job job;
@@ -70,7 +71,6 @@ namespace minecraft {
 
             if (should_notifiy_worker_threads)
             {
-                std::unique_lock lock(internal_data.work_mutex);
                 internal_data.work_cv.notify_all();
             }
         }

@@ -11,18 +11,11 @@ namespace minecraft {
 
     struct Load_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
-        glm::ivec2 chunk_coords;
         Chunk* chunk;
         static void execute(void* job_data);
     };
 
-    struct Calculate_Chunks_Lighting_Job alignas(std::hardware_constructive_interference_size)
-    {
-        World_Region_Bounds *region;
-        static void execute(void* job_data);
-    };
-
-    struct Calculate_Chunk_Lighting_Job
+    struct Calculate_Chunk_Lighting_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk* chunk;
         static void execute(void* job_data);

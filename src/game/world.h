@@ -301,11 +301,7 @@ namespace minecraft {
         static minecraft::Free_List< minecraft::Chunk, chunk_capacity > chunk_pool;
         static std::vector<Chunk*> pending_free_chunks;
 
-        static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue0;
-        static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue1;
-
-        static std::mutex light_mutex;
-        static Circular_FIFO_Queue<Block_Query_Result> light_queue;
+        static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue;
         static Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job> calculate_chunk_lighting_queue;
 
         static u16 block_to_place_id; // todo(harlequin): inventory system

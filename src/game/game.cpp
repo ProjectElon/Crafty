@@ -290,16 +290,18 @@ namespace minecraft {
 
     void Game::shutdown()
     {
+        Job_System::wait_for_jobs_to_finish();
+
         internal_data.is_running = false;
+        Job_System::shutdown();
 
         ECS::shutdown();
-        Physics::shutdown();
 
-        Job_System::wait_for_jobs_to_finish();
-        Job_System::shutdown();
+        Physics::shutdown();
 
         Dropdown_Console::shutdown();
         UI::shutdown();
+
         Opengl_2D_Renderer::shutdown();
         Opengl_Debug_Renderer::shutdown();
         Opengl_Renderer::shutdown();

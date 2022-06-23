@@ -2,13 +2,20 @@
 
 namespace minecraft {
 
-    static void execute_jobs(bool *running, Job_Queue *high_priority_queue, Job_Queue *low_priority_queue)
+    static void execute_jobs()
     {
-        while (*running || !high_priority_queue->is_empty() || !low_priority_queue->is_empty())
+        auto& work_mutex = Job_System::internal_data.work_mutex;
+        auto& work_cv = Job_System::internal_data.work_cv;
+
+        Job_Queue* high_priority_queue = &Job_System::internal_data.high_priority_queue;
+        Job_Queue* low_priority_queue  = &Job_System::internal_data.low_priority_queue;
+        bool& running = Job_System::internal_data.running;
+
+        while (running || !high_priority_queue->is_empty() || !low_priority_queue->is_empty())
         {
             {
-                std::unique_lock lock(Job_System::internal_data.work_mutex);
-                Job_System::internal_data.work_cv.wait(lock, [&] { return !high_priority_queue->is_empty() || !low_priority_queue->is_empty(); });
+                std::unique_lock lock(work_mutex);
+                work_cv.wait(lock, [&] { return !running || !high_priority_queue->is_empty() || !low_priority_queue->is_empty(); });
             }
 
             i32 job_index = high_priority_queue->job_index;
@@ -70,7 +77,7 @@ namespace minecraft {
 
         for (u32 i = 0; i < internal_data.thread_count; i++)
         {
-            internal_data.threads[i] = std::thread(execute_jobs, &internal_data.running, &internal_data.high_priority_queue, &internal_data.low_priority_queue);
+            internal_data.threads[i] = std::thread(execute_jobs);
         }
 
         return true;
@@ -78,7 +85,15 @@ namespace minecraft {
 
     void Job_System::shutdown()
     {
+        auto& work_mutex = Job_System::internal_data.work_mutex;
+        auto& work_cv = Job_System::internal_data.work_cv;
+
         internal_data.running = false;
+
+        {
+            std::unique_lock lock(work_mutex);
+            work_cv.notify_all();
+        }
 
         for (u32 thread_index = 0; thread_index < internal_data.thread_count; thread_index++)
         {
@@ -99,41 +114,11 @@ namespace minecraft {
     void Job_System::wait_for_jobs_to_finish()
     {
         Job_Queue* high_priority_queue = &internal_data.high_priority_queue;
-        Job_Queue* low_priority_queue = &internal_data.low_priority_queue;
+        Job_Queue* low_priority_queue  = &internal_data.low_priority_queue;
 
         while (!high_priority_queue->is_empty() || !low_priority_queue->is_empty())
         {
-            // i32 job_index = high_priority_queue->job_index;
-            // i32 next_job_index = high_priority_queue->job_index + 1;
-            // if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
-
-            // Job *high_priority_job = nullptr;
-
-            // if (high_priority_queue->job_index != high_priority_queue->tail_job_index)
-            // {
-            //     if (high_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
-            //     {
-            //         Job *job = high_priority_queue->jobs + job_index;
-            //         job->execute(job->data);
-            //         high_priority_job = job;
-            //     }
-            // }
-
-            // if (!high_priority_job)
-            // {
-            //     i32 job_index = low_priority_queue->job_index;
-            //     i32 next_job_index = low_priority_queue->job_index + 1;
-            //     if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
-
-            //     if (low_priority_queue->job_index != low_priority_queue->tail_job_index)
-            //     {
-            //         if (low_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
-            //         {
-            //             Job* job = low_priority_queue->jobs + job_index;
-            //             job->execute(job->data);
-            //         }
-            //     }
-            // }
+            // execute_jobs();
         }
     }
 

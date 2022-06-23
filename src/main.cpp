@@ -33,6 +33,73 @@
 #include <sstream>
 #include "game/profiler.h"
 
+static void do_light_thread_work(minecraft::World_Region_Bounds *player_region_bounds)
+{
+    using namespace minecraft;
+    auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
+    auto& update_chunk_jobs_queue       = World::update_chunk_jobs_queue;
+
+    Circular_FIFO_Queue<Block_Query_Result> light_queue;
+    light_queue.initialize();
+
+    while (Job_System::internal_data.running ||
+           !calculate_chunk_lighting_queue.is_empty() ||
+           !light_queue.is_empty())
+    {
+        if (!calculate_chunk_lighting_queue.is_empty())
+        {
+            Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
+            Chunk *chunk = job.chunk;
+            chunk->calculate_lighting(&light_queue);
+            chunk->calculating_lighting = false;
+            continue;
+        }
+
+        while (!light_queue.is_empty())
+        {
+            auto block_query = light_queue.pop();
+
+            Block* block = block_query.block;
+            const auto& info = block->get_info();
+            auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+
+            for (i32 d = 0; d < 6; d++)
+            {
+                auto& neighbour_query = neighbours_query[d];
+
+                if (World::is_block_query_valid(neighbour_query) &&
+                    World::is_block_query_in_world_region(neighbour_query, *player_region_bounds))
+                {
+                    Block* neighbour = neighbour_query.block;
+                    const auto& neighbour_info = neighbour->get_info();
+                    if (neighbour_info.is_transparent())
+                    {
+                        if ((i32)neighbour->sky_light_level <= (i32)block->sky_light_level - 2)
+                        {
+                            World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->sky_light_level - 1);
+                            light_queue.push(neighbour_query);
+                        }
+
+                        if ((i32)neighbour->light_source_level <= (i32)block->light_source_level - 2)
+                        {
+                            World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->light_source_level - 1);
+                            light_queue.push(neighbour_query);
+                        }
+                    }
+                }
+            }
+        }
+
+        auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
+
+        while (!update_chunk_jobs_queue.is_empty())
+        {
+            auto job = update_chunk_jobs_queue.pop();
+            Job_System::schedule(job);
+        }
+    }
+}
+
 int main()
 {
     using namespace minecraft;
@@ -96,7 +163,7 @@ int main()
     auto& camera = Game::get_camera();
     auto& loaded_chunks = World::loaded_chunks;
 
-    Registry& registry = ECS::internal_data.registry;
+    Registry& registry = ECS::internal_data.registry; // republic - aflaton;
 
     {
         Entity player = registry.create_entity(EntityArchetype_Guy, EntityTag_Player);
@@ -131,94 +198,7 @@ int main()
     glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
     World_Region_Bounds player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
 
-    std::thread light_thread([&]()
-    {
-        auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
-        auto& light_queue = World::light_queue;
-
-        while (Game::is_running())
-        {
-            if (!calculate_chunk_lighting_queue.is_empty())
-            {
-                Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
-                Chunk *chunk = job.chunk;
-                chunk->calculate_lighting(&World::light_queue);
-                chunk->calculating_lighting = false;
-
-                while (!light_queue.is_empty())
-                {
-                    auto block_query = light_queue.pop();
-
-                    Block* block = block_query.block;
-                    const auto& info = block->get_info();
-                    auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
-
-                    for (i32 d = 0; d < 6; d++)
-                    {
-                        auto& neighbour_query = neighbours_query[d];
-
-                        if (World::is_block_query_valid(neighbour_query) &&
-                            World::is_block_query_in_world_region(neighbour_query, player_region_bounds))
-                        {
-                            Block* neighbour = neighbour_query.block;
-                            const auto& neighbour_info = neighbour->get_info();
-                            if (neighbour_info.is_transparent())
-                            {
-                                if ((i32)neighbour->sky_light_level <= (i32)block->sky_light_level - 2)
-                                {
-                                    World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->sky_light_level - 1);
-                                    light_queue.push(neighbour_query);
-                                }
-
-                                if ((i32)neighbour->light_source_level <= (i32)block->light_source_level - 2)
-                                {
-                                    World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->light_source_level - 1);
-                                    light_queue.push(neighbour_query);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                auto *high_priority_queue = &Job_System::internal_data.high_priority_queue;
-                auto *low_priority_queue = &Job_System::internal_data.low_priority_queue;
-
-                i32 job_index = high_priority_queue->job_index;
-                i32 next_job_index = high_priority_queue->job_index + 1;
-                if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
-
-                Job *high_priority_job = nullptr;
-
-                if (high_priority_queue->job_index != high_priority_queue->tail_job_index)
-                {
-                    if (high_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
-                    {
-                        Job *job = high_priority_queue->jobs + job_index;
-                        job->execute(job->data);
-                        high_priority_job = job;
-                    }
-                }
-
-                if (!high_priority_job)
-                {
-                    i32 job_index = low_priority_queue->job_index;
-                    i32 next_job_index = low_priority_queue->job_index + 1;
-                    if (next_job_index == MC_MAX_JOB_COUNT_PER_QUEUE) next_job_index = 0;
-
-                    if (low_priority_queue->job_index != low_priority_queue->tail_job_index)
-                    {
-                        if (low_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
-                        {
-                            Job* job = low_priority_queue->jobs + job_index;
-                            job->execute(job->data);
-                        }
-                    }
-                }
-            }
-        }
-    });
+    std::thread light_thread(do_light_thread_work, &player_region_bounds);
 
     while (Game::is_running())
     {
@@ -425,41 +405,19 @@ int main()
                     assert(it != loaded_chunks.end());
                     Chunk* chunk = it->second;
 
-                    if (chunk->loaded && chunk->neighbours_loaded && chunk->pending_for_lighting)
+                    if (chunk->loaded &&
+                        chunk->neighbours_loaded &&
+                        chunk->pending_for_lighting &&
+                        !chunk->calculating_lighting)
                     {
+                        chunk->pending_for_lighting = false;
+                        chunk->calculating_lighting = true;
+
                         Calculate_Chunk_Lighting_Job job;
                         job.chunk = chunk;
                         calculate_chunk_lighting_queue.push(job);
-                        chunk->pending_for_lighting = false;
-                        chunk->calculating_lighting = true;
                     }
                 }
-            }
-        }
-
-        // static World_Region_Bounds lighting_region;
-        // lighting_region = player_region_bounds;
-        // Calculate_Chunks_Lighting_Job calculate_lighting_job;
-        // calculate_lighting_job.region = &lighting_region;
-        // Job_System::schedule(calculate_lighting_job);
-
-        {
-            PROFILE_BLOCK("schedule update chunk jobs");
-
-            auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue0;
-
-            while (!update_chunk_jobs_queue.is_empty())
-            {
-                auto job = update_chunk_jobs_queue.pop();
-                Job_System::schedule(job);
-            }
-
-            auto& update_chunk_jobs_queue1 = World::update_chunk_jobs_queue1;
-
-            while (!update_chunk_jobs_queue1.is_empty())
-            {
-                auto job = update_chunk_jobs_queue1.pop();
-                Job_System::schedule(job);
             }
         }
 
@@ -683,7 +641,6 @@ int main()
                     auto it = loaded_chunks.find(chunk_coords);
                     assert(it != loaded_chunks.end());
                     Chunk* chunk = it->second;
-                    if (!chunk) continue;
                     if (!chunk->pending_for_load && chunk->loaded)
                     {
                         for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
@@ -709,12 +666,6 @@ int main()
             {
                 PROFILE_BLOCK("rendering::end");
                 Opengl_Renderer::end();
-            }
-
-
-            {
-                PROFILE_BLOCK("signal_gpu_for_work");
-                Opengl_Renderer::signal_gpu_for_work();
             }
         }
 
@@ -870,6 +821,11 @@ int main()
 
             Opengl_2D_Renderer::begin(&ui_shader);
             Opengl_2D_Renderer::end();
+        }
+
+        {
+            PROFILE_BLOCK("signal_gpu_for_work");
+            Opengl_Renderer::signal_gpu_for_work();
         }
 
         World::free_chunks_out_of_region(player_region_bounds);

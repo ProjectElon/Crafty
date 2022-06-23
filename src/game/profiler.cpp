@@ -12,9 +12,11 @@ namespace minecraft {
 
     Profile_Timer::~Profile_Timer()
     {
+        Profiler::internal_data.m.lock();
         auto& platform = Game::get_platform();
         this->profile.elapsed_time = platform.get_current_time() - this->start_time;
         Profiler::internal_data.profiles.emplace_back(std::move(this->profile));
+        Profiler::internal_data.m.unlock();
     }
 
     bool Profiler::initialize(u32 target_frame_rate)
@@ -42,6 +44,8 @@ namespace minecraft {
             {
                 fprintf(stderr, "%s ---- %.2fms\n", profile.name, profile.elapsed_time * 1000.0f);
             }
+
+            fprintf(stderr, "=====================================================\n");
         }
         internal_data.profiles.resize(0);
     }

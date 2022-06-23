@@ -190,7 +190,7 @@ namespace minecraft {
     void Platform::opengl_swap_buffers()
     {
         glfwSwapBuffers(window_handle);
-        // glfwSwapInterval(1);
+        glfwSwapInterval(0);
     }
 
     void Platform::pump_messages()

@@ -1,4 +1,16 @@
-﻿  platform_win32.cpp
-  opengl_renderer.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(194,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data
+﻿  main.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\main.cpp(170): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
+          with
+          [
+              T=minecraft::Transform
+          ]
+C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\main.cpp(327): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+          with
+          [
+              T=minecraft::Transform
+          ]
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
