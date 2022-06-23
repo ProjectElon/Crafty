@@ -1,4 +1,5 @@
 #include "job_system.h"
+#include "world.h"
 
 namespace minecraft {
 
@@ -52,6 +53,72 @@ namespace minecraft {
         }
     }
 
+    static void do_light_thread_work()
+    {
+        auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
+        auto& update_chunk_jobs_queue       = World::update_chunk_jobs_queue;
+
+        Circular_FIFO_Queue<Block_Query_Result> light_queue;
+        light_queue.initialize();
+
+        while (Job_System::internal_data.running ||
+               !calculate_chunk_lighting_queue.is_empty() ||
+               !light_queue.is_empty())
+        {
+            if (!calculate_chunk_lighting_queue.is_empty())
+            {
+                Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
+                Chunk *chunk = job.chunk;
+                chunk->calculate_lighting(&light_queue);
+                chunk->calculating_lighting = false;
+                continue;
+            }
+
+            while (!light_queue.is_empty())
+            {
+                auto block_query = light_queue.pop();
+
+                Block* block = block_query.block;
+                const auto& info = block->get_info();
+                auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+
+                for (i32 d = 0; d < 6; d++)
+                {
+                    auto& neighbour_query = neighbours_query[d];
+
+                    if (World::is_block_query_valid(neighbour_query) &&
+                        World::is_block_query_in_world_region(neighbour_query, World::player_region_bounds))
+                    {
+                        Block* neighbour = neighbour_query.block;
+                        const auto& neighbour_info = neighbour->get_info();
+                        if (neighbour_info.is_transparent())
+                        {
+                            if ((i32)neighbour->sky_light_level <= (i32)block->sky_light_level - 2)
+                            {
+                                World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->sky_light_level - 1);
+                                light_queue.push(neighbour_query);
+                            }
+
+                            if ((i32)neighbour->light_source_level <= (i32)block->light_source_level - 2)
+                            {
+                                World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->light_source_level - 1);
+                                light_queue.push(neighbour_query);
+                            }
+                        }
+                    }
+                }
+            }
+
+            auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
+
+            while (!update_chunk_jobs_queue.is_empty())
+            {
+                auto job = update_chunk_jobs_queue.pop();
+                Job_System::schedule(job);
+            }
+        }
+    }
+
     bool Job_System::initialize()
     {
         u32 concurrent_thread_count = std::thread::hardware_concurrency();
@@ -80,6 +147,7 @@ namespace minecraft {
             internal_data.threads[i] = std::thread(execute_jobs);
         }
 
+        internal_data.light_thread = std::thread(do_light_thread_work);
         return true;
     }
 
@@ -99,6 +167,8 @@ namespace minecraft {
         {
             internal_data.threads[thread_index].join();
         }
+
+        internal_data.light_thread.join();
     }
 
     void Job_System::dispatch(const Job& job, bool high_prority)

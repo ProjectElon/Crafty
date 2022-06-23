@@ -33,73 +33,6 @@
 #include <sstream>
 #include "game/profiler.h"
 
-static void do_light_thread_work(minecraft::World_Region_Bounds *player_region_bounds)
-{
-    using namespace minecraft;
-    auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
-    auto& update_chunk_jobs_queue       = World::update_chunk_jobs_queue;
-
-    Circular_FIFO_Queue<Block_Query_Result> light_queue;
-    light_queue.initialize();
-
-    while (Job_System::internal_data.running ||
-           !calculate_chunk_lighting_queue.is_empty() ||
-           !light_queue.is_empty())
-    {
-        if (!calculate_chunk_lighting_queue.is_empty())
-        {
-            Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
-            Chunk *chunk = job.chunk;
-            chunk->calculate_lighting(&light_queue);
-            chunk->calculating_lighting = false;
-            continue;
-        }
-
-        while (!light_queue.is_empty())
-        {
-            auto block_query = light_queue.pop();
-
-            Block* block = block_query.block;
-            const auto& info = block->get_info();
-            auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
-
-            for (i32 d = 0; d < 6; d++)
-            {
-                auto& neighbour_query = neighbours_query[d];
-
-                if (World::is_block_query_valid(neighbour_query) &&
-                    World::is_block_query_in_world_region(neighbour_query, *player_region_bounds))
-                {
-                    Block* neighbour = neighbour_query.block;
-                    const auto& neighbour_info = neighbour->get_info();
-                    if (neighbour_info.is_transparent())
-                    {
-                        if ((i32)neighbour->sky_light_level <= (i32)block->sky_light_level - 2)
-                        {
-                            World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->sky_light_level - 1);
-                            light_queue.push(neighbour_query);
-                        }
-
-                        if ((i32)neighbour->light_source_level <= (i32)block->light_source_level - 2)
-                        {
-                            World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block->light_source_level - 1);
-                            light_queue.push(neighbour_query);
-                        }
-                    }
-                }
-            }
-        }
-
-        auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
-
-        while (!update_chunk_jobs_queue.is_empty())
-        {
-            auto job = update_chunk_jobs_queue.pop();
-            Job_System::schedule(job);
-        }
-    }
-}
-
 int main()
 {
     using namespace minecraft;
@@ -195,10 +128,7 @@ int main()
     f32 game_timer = 0.0f;
     i32 game_time = 43200;
 
-    glm::ivec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-    World_Region_Bounds player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
-
-    std::thread light_thread(do_light_thread_work, &player_region_bounds);
+    World_Region_Bounds& player_region_bounds = World::player_region_bounds;
 
     while (Game::is_running())
     {
@@ -258,8 +188,8 @@ int main()
             Input::update();
         }
 
-        player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-        player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
+        glm::vec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
+        World::player_region_bounds = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
 
         World::load_chunks_at_region(player_region_bounds);
         glm::vec2 mouse_delta = Input::get_mouse_delta();
@@ -849,7 +779,6 @@ int main()
     }
 
     Game::shutdown();
-    light_thread.join();
 
     return 0;
 }

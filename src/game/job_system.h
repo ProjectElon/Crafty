@@ -34,6 +34,8 @@ namespace minecraft {
         u32 thread_count;
         std::thread threads[MC_MAX_THREAD_COUNT];
 
+        std::thread light_thread;
+
         std::mutex work_mutex;
         std::condition_variable work_cv;
 

@@ -290,6 +290,7 @@ namespace minecraft {
 
         static i32 chunk_radius;
         static f32 sky_light_level;
+        static World_Region_Bounds player_region_bounds;
 
         static Block null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool

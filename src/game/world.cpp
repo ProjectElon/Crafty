@@ -1152,6 +1152,7 @@ namespace minecraft {
     robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > World::loaded_chunks;
     std::string World::path;
     i32 World::seed;
+    World_Region_Bounds World::player_region_bounds;
 
     Free_List<Chunk, World::chunk_capacity> World::chunk_pool;
     std::vector<Chunk*> World::pending_free_chunks;
