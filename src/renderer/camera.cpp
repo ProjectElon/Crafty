@@ -74,7 +74,7 @@ namespace minecraft {
 
         this->pitch += mouse_delta.y * this->rotation_speed * this->sensetivity * delta_time;
 
-        if (this->pitch >= 360.0f) this->pitch -= 360.0f;
+        if (this->pitch >= 360.0f) this->pitch  -= 360.0f;
         if (this->pitch <= -360.0f) this->pitch += 360.0f;
 
         this->pitch = glm::clamp(this->pitch, -89.0f, 89.0f);

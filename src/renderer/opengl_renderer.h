@@ -141,7 +141,10 @@ namespace minecraft {
             Opengl_Shader *shader);
 
         static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader);
-        
+        static void render_terrain(World_Region_Bounds *player_region_bounds,
+                                         Camera *camera,
+                                         Opengl_Shader *chunk_shader);
+
         static void end();
 
         static void wait_for_gpu_to_finish_work();

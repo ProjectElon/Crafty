@@ -15,6 +15,12 @@ namespace minecraft {
         static void execute(void* job_data);
     };
 
+    struct Calculate_Chunk_Light_Propagation_Job alignas(std::hardware_constructive_interference_size)
+    {
+        Chunk* chunk;
+        static void execute(void* job_data);
+    };
+
     struct Calculate_Chunk_Lighting_Job alignas(std::hardware_constructive_interference_size)
     {
         Chunk* chunk;

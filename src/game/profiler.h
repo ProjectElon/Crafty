@@ -1,7 +1,11 @@
 #pragma once
 
 #include "core/common.h"
-#include <mutex>
+
+/*
+    todo(harlequin): impelement thread safe profiling right now we are profiling
+    the top level functions and the main thread
+*/
 
 namespace minecraft {
 
@@ -25,7 +29,6 @@ namespace minecraft {
 
     struct Profiler_Data
     {
-        std::mutex m;
         std::vector<Profile> profiles;
         f64 start_time;
         f64 target_frame_rate;

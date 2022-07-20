@@ -47,7 +47,7 @@ namespace minecraft {
 
     void Input::set_cursor_mode(bool enabled)
     {
-        glfwSetInputMode(internal_data.window_handle, GLFW_CURSOR, enabled ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+        glfwSetInputMode(internal_data.window_handle, GLFW_CURSOR, enabled ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_DISABLED);
         internal_data.is_cursor_visible = enabled;
     }
 
@@ -65,12 +65,12 @@ namespace minecraft {
         if (Input::internal_data.is_cursor_visible)
         {
             Input::set_cursor_mode(false);
-            Input::set_raw_mouse_motion(true);
+            // Input::set_raw_mouse_motion(true);
         }
         else
         {
             Input::set_cursor_mode(true);
-            Input::set_raw_mouse_motion(false);
+            // Input::set_raw_mouse_motion(false);
         }
     }
 

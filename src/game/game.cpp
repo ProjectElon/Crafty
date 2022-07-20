@@ -14,6 +14,7 @@
 
 #include "game/physics.h"
 #include "game/ecs.h"
+#include "game/inventory.h"
 
 #include "ui/ui.h"
 #include "ui/dropdown_console.h"
@@ -35,6 +36,7 @@ namespace minecraft {
 
         if (key == MC_KEY_F1)
         {
+            Game::toggle_should_update_camera();
             Dropdown_Console::toggle();
         }
 
@@ -54,6 +56,23 @@ namespace minecraft {
             if (key == MC_KEY_U)
             {
                 Game::toggle_show_debug_status_hud();
+            }
+
+            if (key == MC_KEY_I)
+            {
+                if (Game::internal_data.cursor_mode == CursorMode_Locked)
+                {
+                    Game::internal_data.cursor_mode = CursorMode_Free;
+                }
+                else
+                {
+                    Game::internal_data.cursor_mode = CursorMode_Locked;
+                }
+
+                Input::toggle_cursor();
+
+                Game::toggle_should_update_camera();
+                Game::toggle_inventory();
             }
         }
         else
@@ -83,6 +102,7 @@ namespace minecraft {
         f32 xoffset;
         f32 yoffset;
         Event_System::parse_model_wheel(event, &xoffset, &yoffset);
+
         return false;
     }
 
@@ -115,7 +135,7 @@ namespace minecraft {
         return false;
     }
 
-    bool Game::start()
+    bool Game::initialize()
     {
         // @todo(harlequin): load the game config from a file
         Game_Config& config = internal_data.config;
@@ -221,6 +241,9 @@ namespace minecraft {
         Bitmap_Font *liberation_mono = new Bitmap_Font; // @todo(harlequin): memory system
         liberation_mono->load_from_file("../assets/fonts/liberation-mono.ttf", 20);
 
+        Opengl_Texture *hud_sprites = new Opengl_Texture;
+        hud_sprites->load_from_file("../assets/textures/hudSprites.png", TextureUsage_UI);
+
         UI_State default_ui_state;
         default_ui_state.cursor = { 0.0f, 0.0f };
         default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -267,6 +290,12 @@ namespace minecraft {
             return false;
         }
 
+        if (!Inventory::initialize(liberation_mono, hud_sprites))
+        {
+            fprintf(stderr, "[ERROR] failed to initialize inventory\n");
+            return false;
+        }
+
         Camera *camera = new Camera; // @todo(harlequin): memory system
 
         f32 fov = 90.0f;
@@ -278,18 +307,22 @@ namespace minecraft {
         std::string world_name = "harlequin";
         std::string world_path = "../assets/worlds/" + world_name;
         World::initialize(world_path);
+        Inventory::deserialize();
 
         internal_data.platform = platform;
         internal_data.camera = camera;
         internal_data.should_update_camera = true;
         internal_data.show_debug_stats_hud = false;
+        internal_data.is_inventory_active = false;
         internal_data.is_running = true;
+        internal_data.cursor_mode = CursorMode_Locked;
 
         return true;
     }
 
     void Game::shutdown()
     {
+        World::schedule_save_chunks_jobs();
         Job_System::wait_for_jobs_to_finish();
 
         internal_data.is_running = false;
@@ -301,6 +334,8 @@ namespace minecraft {
 
         Dropdown_Console::shutdown();
         UI::shutdown();
+
+        Inventory::shutdown();
 
         Opengl_2D_Renderer::shutdown();
         Opengl_Debug_Renderer::shutdown();

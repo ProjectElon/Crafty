@@ -17,17 +17,15 @@ namespace minecraft {
         Load_Chunk_Job* data = (Load_Chunk_Job*)job_data;
         Chunk* chunk = data->chunk;
 
-        if (!fs::exists(fs::path(chunk->file_path)))
-        {
-            chunk->generate(World::seed);
-        }
-        else
+        chunk->generate(World::seed);
+
+        if (fs::exists(fs::path(chunk->file_path)))
         {
             chunk->deserialize();
         }
 
+        chunk->loaded           = true;
         chunk->pending_for_load = false;
-        chunk->loaded = true;
     }
 
     void Update_Chunk_Job::execute(void* job_data)

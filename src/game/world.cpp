@@ -33,9 +33,9 @@ namespace minecraft {
         return directions;
     }
 
-    u8 Block::get_sky_light_level()
+    u8 Block_Light_Info::get_sky_light_level()
     {
-        i32 sky_light_factor = World::sky_light_level - 15;
+        i32 sky_light_factor = (i32)World::sky_light_level - 15;
         return (u8) glm::max(sky_light_level + sky_light_factor, 1);
     }
 
@@ -79,7 +79,10 @@ namespace minecraft {
         this->pending_for_load     = true;
         this->neighbours_loaded    = false;
         this->pending_for_lighting = true;
-        this->calculating_lighting = false;
+        this->in_light_propagation_queue = false;
+        this->in_light_calculation_queue = false;
+        this->light_propagated     = false;
+        this->light_calculated     = false;
         this->pending_for_save     = false;
         this->pending_for_update   = false;
         this->unload               = false;
@@ -254,43 +257,256 @@ namespace minecraft {
                 set_block_id_based_on_height(right_edge_block, y, right_edge_height, min_biome_height, max_biome_height, water_level);
             }
         }
-
-        this->loaded = true;
     }
+
+    struct Chunk_Serialization_Header
+    {
+        u32 block_count;
+        u32 front_edge_block_count;
+        u32 back_edge_block_count;
+        u32 left_edge_block_count;
+        u32 right_edge_block_count;
+    };
+
+    struct Block_Serialization_Info
+    {
+        u16 block_index;
+        u16 block_id;
+    };
 
     void Chunk::serialize()
     {
-        FILE *file = fopen(file_path.c_str(), "wb");
-        if (file == NULL)
-        {
-            fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", file_path.c_str(), strerror(errno));
-            return;
-        }
         assert(this->loaded);
-        fwrite(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
-        fwrite(front_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
-        fwrite(back_edge_blocks,  sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
-        fwrite(left_edge_blocks,  sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
-        fwrite(right_edge_blocks, sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
-        fclose(file);
+
+        // todo(harlequin): temprary
+        Chunk *original_chunk = new Chunk;
+        original_chunk->initialize(this->world_coords);
+        original_chunk->generate(World::seed);
+
+        u32 block_count = 0;
+        Block_Serialization_Info serialized_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
+
+        for (i32 block_index = 0; block_index < MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH; block_index++)
+        {
+            Block& block = this->blocks[block_index];
+            Block& original_block = original_chunk->blocks[block_index];
+
+            if (block.id != original_block.id)
+            {
+                Block_Serialization_Info& info = serialized_blocks[block_count++];
+                info.block_index = (u16)block_index;
+                info.block_id    = block.id;
+            }
+        }
+
+        u32 front_edge_count = 0;
+        Block_Serialization_Info serialized_front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+
+        for (u32 block_index = 0; block_index < MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH; block_index++)
+        {
+            Block& block = this->front_edge_blocks[block_index];
+            Block& original_block = original_chunk->front_edge_blocks[block_index];
+
+            if (block.id != original_block.id)
+            {
+                Block_Serialization_Info& info = serialized_front_edge_blocks[front_edge_count++];
+                info.block_index = (u16)block_index;
+                info.block_id    = block.id;
+            }
+        }
+
+        u32 back_edge_count = 0;
+        Block_Serialization_Info serialized_back_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
+
+        for (u32 block_index = 0; block_index < MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH; block_index++)
+        {
+            Block& block = this->back_edge_blocks[block_index];
+            Block& original_block = original_chunk->back_edge_blocks[block_index];
+
+            if (block.id != original_block.id)
+            {
+                Block_Serialization_Info& info = serialized_back_edge_blocks[back_edge_count++];
+                info.block_index = (u16)block_index;
+                info.block_id    = block.id;
+            }
+        }
+
+        u32 left_edge_count = 0;
+        Block_Serialization_Info serialized_left_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+
+        for (u32 block_index = 0; block_index < MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH; block_index++)
+        {
+            Block& block = this->left_edge_blocks[block_index];
+            Block& original_block = original_chunk->left_edge_blocks[block_index];
+
+            if (block.id != original_block.id)
+            {
+                Block_Serialization_Info& info = serialized_left_edge_blocks[left_edge_count++];
+                info.block_index = (u16)block_index;
+                info.block_id    = block.id;
+            }
+        }
+
+        u32 right_edge_count = 0;
+        Block_Serialization_Info serialized_right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+
+        for (u32 block_index = 0; block_index < MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH; block_index++)
+        {
+            Block& block = this->right_edge_blocks[block_index];
+            Block& original_block = original_chunk->right_edge_blocks[block_index];
+
+            if (block.id != original_block.id)
+            {
+                Block_Serialization_Info& info = serialized_right_edge_blocks[right_edge_count++];
+                info.block_index = (u16)block_index;
+                info.block_id    = block.id;
+            }
+        }
+
+        u32 serialized_block_count = block_count + front_edge_count + back_edge_count + left_edge_count + right_edge_count;
+
+        if (serialized_block_count)
+        {
+            FILE *file = fopen(file_path.c_str(), "wb");
+
+            if (file == NULL)
+            {
+                fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", file_path.c_str(), strerror(errno));
+                return;
+            }
+
+            Chunk_Serialization_Header header;
+            header.block_count            = block_count;
+            header.front_edge_block_count = front_edge_count;
+            header.back_edge_block_count  = back_edge_count;
+            header.left_edge_block_count  = left_edge_count;
+            header.right_edge_block_count = right_edge_count;
+
+            fwrite(&header, sizeof(Chunk_Serialization_Header), 1, file);
+
+            if (block_count)
+            {
+                fwrite(serialized_blocks, sizeof(Block_Serialization_Info) * block_count, 1, file);
+            }
+
+            if (front_edge_count)
+            {
+                fwrite(serialized_front_edge_blocks, sizeof(Block_Serialization_Info) * front_edge_count, 1, file);
+            }
+
+            if (back_edge_count)
+            {
+                fwrite(serialized_back_edge_blocks,  sizeof(Block_Serialization_Info) * back_edge_count,  1, file);
+            }
+
+            if (left_edge_count)
+            {
+                fwrite(serialized_left_edge_blocks,  sizeof(Block_Serialization_Info) * left_edge_count,  1, file);
+            }
+
+            if (right_edge_count)
+            {
+                fwrite(serialized_right_edge_blocks, sizeof(Block_Serialization_Info) * right_edge_count, 1, file);
+            }
+
+            fclose(file);
+        }
+        else
+        {
+            if (std::filesystem::exists(std::filesystem::path(file_path)))
+            {
+                i32 result = remove(file_path.c_str());
+
+                if (result != 0)
+                {
+                    fprintf(stderr, "[ERROR]: failed to delete file: %s\n", file_path.c_str());
+                }
+            }
+        }
+
+        delete original_chunk;
     }
 
     void Chunk::deserialize()
     {
+        assert(!this->loaded);
+
         FILE *file = fopen(file_path.c_str(), "rb");
         if (file == NULL)
         {
             fprintf(stderr, "[ERROR]: failed to open file %s for reading: %s\n", file_path.c_str(), strerror(errno));
             return;
         }
-        assert(!this->loaded);
-        fread(blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
-        fread(front_edge_blocks, sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
-        fread(back_edge_blocks,  sizeof(Block) * MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT, 1, file);
-        fread(left_edge_blocks,  sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
-        fread(right_edge_blocks, sizeof(Block) * MC_CHUNK_DEPTH * MC_CHUNK_HEIGHT, 1, file);
+
+        Chunk_Serialization_Header header;
+        fread(&header, sizeof(Chunk_Serialization_Header), 1, file);
+
+        if (header.block_count)
+        {
+            Block_Serialization_Info serialized_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
+            fread(serialized_blocks, sizeof(Block_Serialization_Info) * header.block_count, 1, file);
+
+            for (u32 i = 0; i < header.block_count; i++)
+            {
+                Block_Serialization_Info& info = serialized_blocks[i];
+                Block* block = this->blocks + info.block_index;
+                block->id = info.block_id;
+            }
+        }
+
+        if (header.front_edge_block_count)
+        {
+            Block_Serialization_Info serialized_front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+            fread(serialized_front_edge_blocks, sizeof(Block_Serialization_Info) * header.front_edge_block_count, 1, file);
+
+            for (u32 i = 0; i < header.front_edge_block_count; i++)
+            {
+                Block_Serialization_Info& info = serialized_front_edge_blocks[i];
+                Block* block = this->front_edge_blocks + info.block_index;
+                block->id = info.block_id;
+            }
+        }
+
+        if (header.back_edge_block_count)
+        {
+            Block_Serialization_Info serialized_back_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+            fread(serialized_back_edge_blocks, sizeof(Block_Serialization_Info) * header.back_edge_block_count, 1, file);
+
+            for (u32 i = 0; i < header.back_edge_block_count; i++)
+            {
+                Block_Serialization_Info& info = serialized_back_edge_blocks[i];
+                Block* block = this->back_edge_blocks + info.block_index;
+                block->id = info.block_id;
+            }
+        }
+
+        if (header.left_edge_block_count)
+        {
+            Block_Serialization_Info serialized_left_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+            fread(serialized_left_edge_blocks, sizeof(Block_Serialization_Info) * header.left_edge_block_count, 1, file);
+
+            for (u32 i = 0; i < header.left_edge_block_count; i++)
+            {
+                Block_Serialization_Info& info = serialized_left_edge_blocks[i];
+                Block* block = this->left_edge_blocks + info.block_index;
+                block->id = info.block_id;
+            }
+        }
+
+        if (header.right_edge_block_count)
+        {
+            Block_Serialization_Info serialized_right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+            fread(serialized_right_edge_blocks, sizeof(Block_Serialization_Info) * header.right_edge_block_count, 1, file);
+
+            for (u32 i = 0; i < header.right_edge_block_count; i++)
+            {
+                Block_Serialization_Info& info = serialized_right_edge_blocks[i];
+                Block* block = this->right_edge_blocks + info.block_index;
+                block->id = info.block_id;
+            }
+        }
+
         fclose(file);
-        this->loaded = true;
     }
 
     Block* Chunk::get_block(const glm::ivec3& block_coords)
@@ -298,8 +514,18 @@ namespace minecraft {
         assert(block_coords.x >= 0 && block_coords.x < MC_CHUNK_WIDTH &&
                block_coords.y >= 0 && block_coords.y < MC_CHUNK_HEIGHT &&
                block_coords.z >= 0 && block_coords.z < MC_CHUNK_DEPTH);
+
         i32 block_index = get_block_index(block_coords);
         return this->blocks + block_index;
+    }
+
+    Block_Light_Info* Chunk::get_block_light_info(const glm::ivec3& block_coords)
+    {
+        assert(block_coords.x >= 0 && block_coords.x < MC_CHUNK_WIDTH &&
+               block_coords.y >= 0 && block_coords.y < MC_CHUNK_HEIGHT &&
+               block_coords.z >= 0 && block_coords.z < MC_CHUNK_DEPTH);
+        i32 block_index = get_block_index(block_coords);
+        return this->light_map + block_index;
     }
 
     Block* Chunk::get_neighbour_block_from_right(const glm::ivec3& block_coords)
@@ -374,7 +600,7 @@ namespace minecraft {
         return neighbours;
     }
 
-    void Chunk::calculate_lighting(Circular_FIFO_Queue<Block_Query_Result> *queue)
+    void Chunk::propagate_sky_light(Circular_FIFO_Queue<Block_Query_Result> *queue)
     {
         for (i32 z = 0; z < MC_CHUNK_DEPTH; z++)
         {
@@ -396,6 +622,7 @@ namespace minecraft {
                         query.block = block;
                         query.block_coords = block_coords;
                         query.chunk = this;
+
                         queue->push(query);
                     }
                     else
@@ -412,11 +639,13 @@ namespace minecraft {
                 }
             }
         }
+    }
 
+    void Chunk::calculate_lighting(Circular_FIFO_Queue<Block_Query_Result> *queue)
+    {
         for (i32 y = MC_CHUNK_HEIGHT - 1; y >= 0; y--)
         {
             // bool found_any_sky_lights = false;
-
             for (i32 z = 0; z < MC_CHUNK_WIDTH; z++)
             {
                 for (i32 x = 0; x < MC_CHUNK_WIDTH; x++)
@@ -425,20 +654,24 @@ namespace minecraft {
                     Block* block = this->get_block(block_coords);
                     const auto& info = block->get_info();
                     if (!info.is_transparent()) continue;
-                    if (block->sky_light_level == 15)
+                    Block_Light_Info *block_light_info = this->get_block_light_info(block_coords);
+                    if (block_light_info->sky_light_level == 15)
                     {
                         // found_any_sky_lights = true;
                         auto neighbours_query = World::get_neighbours(this, block_coords);
-                        for (i32 d = 2; d < 6; d++)
+                        for (i32 direction = 2; direction < 6; direction++)
                         {
-                            Block *neighbour = neighbours_query[d].block;
+                            auto& neighbour_query = neighbours_query[direction];
+                            Block *neighbour = neighbour_query.block;
                             const auto& neighbour_info = neighbour->get_info();
-                            if (neighbour->sky_light_level != 15 && neighbour_info.is_transparent())
+                            Block_Light_Info *neighbour_light_info = neighbour_query.chunk->get_block_light_info(neighbour_query.block_coords);
+                            if (neighbour_light_info->sky_light_level != 15 && neighbour_info.is_transparent())
                             {
                                 Block_Query_Result query;
                                 query.block = block;
                                 query.block_coords = block_coords;
                                 query.chunk = this;
+
                                 queue->push(query);
                                 break;
                             }
@@ -446,7 +679,6 @@ namespace minecraft {
                     }
                 }
             }
-
             // if (!found_any_sky_lights) break;
         }
     }
@@ -478,14 +710,13 @@ namespace minecraft {
 
         fclose(meta_file);
 
-        // todo(harlequin): do more testing on the std::unordered_map or replace it at some point
         loaded_chunks.reserve(2 * World::chunk_capacity);
-        // loaded_chunks.max_load_factor(0.25);
         chunk_pool.initialize();
         pending_free_chunks.reserve(World::chunk_capacity);
 
         update_chunk_jobs_queue.initialize();
         calculate_chunk_lighting_queue.initialize();
+        light_propagation_queue.initialize();
 
         return true;
     }
@@ -511,7 +742,7 @@ namespace minecraft {
                 glm::vec3 block_position = query.chunk->get_block_position(query.block_coords);
                 Ray ray   = { view_position, view_direction };
                 AABB aabb = { block_position - glm::vec3(0.5f, 0.5f, 0.5f), block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
-                Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb, max_block_select_dist_in_cube_units);
+                Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb, (f32)max_block_select_dist_in_cube_units);
 
                 if (ray_cast_result.hit)
                 {
@@ -602,7 +833,8 @@ namespace minecraft {
                 !chunk->pending_for_load &&
                 chunk->loaded &&
                 !chunk->pending_for_lighting &&
-                !chunk->calculating_lighting &&
+                !chunk->in_light_propagation_queue &&
+                !chunk->in_light_calculation_queue &&
                 !chunk->pending_for_update &&
                 !chunk->pending_for_save)
             {
@@ -661,12 +893,16 @@ namespace minecraft {
         PROFILE_FUNCTION;
 
         chunk->pending_for_lighting = true;
+        chunk->light_propagated = false;
+        chunk->light_calculated = false;
 
         for (i32 i = 0; i < ChunkNeighbour_Count; i++)
         {
             Chunk* neighbour = chunk->neighbours[i];
             assert(neighbour);
             neighbour->pending_for_lighting = true;
+            neighbour->light_propagated = false;
+            neighbour->light_calculated = false;
         }
 
         Block *block = chunk->get_block(block_coords);
@@ -704,7 +940,8 @@ namespace minecraft {
     void World::set_block_sky_light_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level)
     {
         Block *block = chunk->get_block(block_coords);
-        block->sky_light_level = light_level;
+        Block_Light_Info *light_info = chunk->get_block_light_info(block_coords);
+        light_info->sky_light_level = light_level;
 
         i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
         queue_update_sub_chunk_job(update_chunk_jobs_queue, chunk, sub_chunk_index);
@@ -713,14 +950,14 @@ namespace minecraft {
         {
             Chunk *left_chunk = chunk->neighbours[ChunkNeighbour_Left];
             assert(left_chunk);
-            left_chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].sky_light_level = light_level;
+            left_chunk->right_edge_light_map[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].sky_light_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, left_chunk, sub_chunk_index);
         }
         else if (block_coords.x == MC_CHUNK_WIDTH - 1)
         {
             Chunk *right_chunk = chunk->neighbours[ChunkNeighbour_Right];
             assert(right_chunk);
-            right_chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].sky_light_level = light_level;
+            right_chunk->left_edge_light_map[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].sky_light_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, right_chunk, sub_chunk_index);
         }
 
@@ -728,14 +965,14 @@ namespace minecraft {
         {
             Chunk *front_chunk = chunk->neighbours[ChunkNeighbour_Front];
             assert(front_chunk);
-            front_chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].sky_light_level = light_level;
+            front_chunk->back_edge_light_map[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].sky_light_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, front_chunk, sub_chunk_index);
         }
         else if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
             Chunk *back_chunk = chunk->neighbours[ChunkNeighbour_Back];
             assert(back_chunk);
-            back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].sky_light_level = light_level;
+            back_chunk->front_edge_light_map[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].sky_light_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, back_chunk, sub_chunk_index);
         }
 
@@ -755,7 +992,8 @@ namespace minecraft {
     void World::set_block_light_source_level(Chunk *chunk, const glm::ivec3& block_coords, u8 light_level)
     {
         Block *block = chunk->get_block(block_coords);
-        block->light_source_level = light_level;
+        Block_Light_Info *light_info = chunk->get_block_light_info(block_coords);
+        light_info->light_source_level = light_level;
 
         i32 sub_chunk_index = World::get_sub_chunk_index(block_coords);
         queue_update_sub_chunk_job(update_chunk_jobs_queue, chunk, sub_chunk_index);
@@ -764,14 +1002,14 @@ namespace minecraft {
         {
             Chunk *left_chunk = chunk->neighbours[ChunkNeighbour_Left];
             assert(left_chunk);
-            left_chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_source_level = light_level;
+            left_chunk->right_edge_light_map[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_source_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, left_chunk, sub_chunk_index);
         }
         else if (block_coords.x == MC_CHUNK_WIDTH - 1)
         {
             Chunk *right_chunk = chunk->neighbours[ChunkNeighbour_Right];
             assert(right_chunk);
-            right_chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_source_level = light_level;
+            right_chunk->left_edge_light_map[block_coords.y * MC_CHUNK_DEPTH + block_coords.z].light_source_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, right_chunk, sub_chunk_index);
         }
 
@@ -779,14 +1017,14 @@ namespace minecraft {
         {
             Chunk *front_chunk = chunk->neighbours[ChunkNeighbour_Front];
             assert(front_chunk);
-            front_chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_source_level = light_level;
+            front_chunk->back_edge_light_map[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_source_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, front_chunk, sub_chunk_index);
         }
         else if (block_coords.z == MC_CHUNK_DEPTH - 1)
         {
             Chunk *back_chunk = chunk->neighbours[ChunkNeighbour_Back];
             assert(back_chunk);
-            back_chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_source_level = light_level;
+            back_chunk->front_edge_light_map[block_coords.y * MC_CHUNK_WIDTH + block_coords.x].light_source_level = light_level;
             queue_update_sub_chunk_job(update_chunk_jobs_queue, back_chunk, sub_chunk_index);
         }
 
@@ -893,6 +1131,80 @@ namespace minecraft {
         }
         result.block = result.chunk->get_block(result.block_coords);
         return result;
+    }
+
+    void World::schedule_chunk_lighting_jobs(World_Region_Bounds *player_region_bounds)
+    {
+        PROFILE_FUNCTION;
+
+        auto& light_propagation_queue = World::light_propagation_queue;
+        auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
+
+        auto dirs = get_chunk_neighbour_directions();
+
+        for (i32 z = player_region_bounds->min.y; z <= player_region_bounds->max.y; ++z)
+        {
+            for (i32 x = player_region_bounds->min.x; x <= player_region_bounds->max.x; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                assert(it != loaded_chunks.end());
+                Chunk* chunk = it->second;
+
+                if (chunk->loaded &&
+                    chunk->neighbours_loaded)
+                {
+                    if (chunk->pending_for_lighting && !chunk->light_propagated && !chunk->in_light_propagation_queue)
+                    {
+                        chunk->pending_for_lighting = false;
+                        chunk->in_light_propagation_queue = true;
+
+                        Calculate_Chunk_Light_Propagation_Job job;
+                        job.chunk = chunk;
+                        light_propagation_queue.push(job);
+                    }
+
+                    if (chunk->light_propagated)
+                    {
+                        bool all_neighbours_light_propagated = true;
+
+                        for (i32 i = 0; i < ChunkNeighbour_Count; i++)
+                        {
+                            Chunk *neighbour_chunk = chunk->neighbours[i];
+
+                            if (!neighbour_chunk->light_propagated)
+                            {
+                                all_neighbours_light_propagated = false;
+                                break;
+                            }
+                        }
+
+                        if (all_neighbours_light_propagated && !chunk->light_calculated)
+                        {
+                            chunk->light_calculated = true;
+                            chunk->in_light_calculation_queue = true;
+
+                            Calculate_Chunk_Lighting_Job job;
+                            job.chunk = chunk;
+                            calculate_chunk_lighting_queue.push(job);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void World::schedule_save_chunks_jobs()
+    {
+        for (auto it = loaded_chunks.begin(); it != loaded_chunks.end(); ++it)
+        {
+            Chunk *chunk = it->second;
+            chunk->pending_for_save = true;
+
+            Serialize_Chunk_Job job;
+            job.chunk = chunk;
+            Job_System::schedule(job);
+        }
     }
 
     std::array<Block_Query_Result, 6> World::get_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
@@ -1158,9 +1470,11 @@ namespace minecraft {
     std::vector<Chunk*> World::pending_free_chunks;
 
     Circular_FIFO_Queue< Update_Chunk_Job > World::update_chunk_jobs_queue;
+
+    Circular_FIFO_Queue< Calculate_Chunk_Light_Propagation_Job > World::light_propagation_queue;
     Circular_FIFO_Queue< Calculate_Chunk_Lighting_Job > World::calculate_chunk_lighting_queue;
 
-    u16 World::block_to_place_id = BlockId_Sand;
+
     f32 World::sky_light_level = 1.0f;
     i32 World::chunk_radius = 8;
 }

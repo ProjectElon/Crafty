@@ -72,7 +72,6 @@ namespace minecraft {
             register_command({ "list_commands", {}, list_commands });
             register_command({ "list_blocks", {}, list_blocks });
 
-            register_command({ "set_block", { "block_name:string" }, set_block });
             register_command({ "chunk_radius", {}, chunk_radius });
             register_command({ "set_chunk_radius", { "radius:i32" }, set_chunk_radius });
 
@@ -119,32 +118,6 @@ namespace minecraft {
                 }
 
                 Dropdown_Console::log("\n");
-            }
-        }
-
-        void set_block(const Console_Command::Arguments& args)
-        {
-            i32 block_id = -1;
-            std::string block_name = args[0];
-
-            for (i32 i = 1; i < BlockId_Count; i++)
-            {
-                const Block_Info& block_info = World::block_infos[i];
-
-                if (block_name == block_info.name)
-                {
-                    block_id = i;
-                    break;
-                }
-            }
-
-            if (block_id != -1)
-            {
-                World::block_to_place_id = (u16)block_id;
-            }
-            else
-            {
-                Dropdown_Console::log_with_new_line("invalid block name");
             }
         }
 

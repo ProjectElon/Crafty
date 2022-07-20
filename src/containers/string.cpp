@@ -3,7 +3,7 @@
 #include <assert.h>
 
 namespace minecraft {
-
+    
     String make_string(const char *cstring)
     {
         u32 count = strlen(cstring);
@@ -14,14 +14,14 @@ namespace minecraft {
         result.count = count;
         return result;
     }
-
+    
     void free_string(String *string)
     {
         delete[] string->data; // todo(harlequin): memory system
         string->data = nullptr;
         string->count = 0;
     }
-
+    
     String copy_string(String *other)
     {
         String result;
@@ -30,7 +30,7 @@ namespace minecraft {
         memcpy(result.data, other->data, result.count + 1); // todo(harlequin): memory system
         return result;
     }
-
+    
     bool starts_with(String *string, const char *match)
     {
         u32 match_count = strlen(match);
@@ -47,7 +47,7 @@ namespace minecraft {
         }
         return true;
     }
-
+    
     bool ends_with(String *string, const char *match)
     {
         u32 match_count = strlen(match);
@@ -66,7 +66,7 @@ namespace minecraft {
         }
         return true;
     }
-
+    
     i32 find_from_left(String *string, char c)
     {
         for (u32 i = 0; i < string->count; i++)
@@ -76,10 +76,10 @@ namespace minecraft {
                 return i;
             }
         }
-
+        
         return -1;
     }
-
+    
     i32 find_from_right(String *string, char c)
     {
         for (u32 i = string->count - 1; i >= 0; i--)
@@ -89,14 +89,14 @@ namespace minecraft {
                 return i;
             }
         }
-
+        
         return -1;
     }
-
+    
     i32 find_from_left(String *string, const char *pattern)
     {
         u32 pattern_count = strlen(pattern);
-
+        
         for (u32 i = 0; i < string->count; i++)
         {
             for (u32 j = 0; j < pattern_count; ++j)
@@ -107,14 +107,14 @@ namespace minecraft {
                 }
             }
         }
-
+        
         return -1;
     }
-
+    
     i32 find_from_right(String *string, const char *pattern)
     {
         u32 pattern_count = strlen(pattern);
-
+        
         for (u32 i = string->count - 1; i >= 0; i--)
         {
             for (u32 j = 0; j < pattern_count; ++j)
@@ -125,17 +125,17 @@ namespace minecraft {
                 }
             }
         }
-
+        
         return -1;
     }
-
+    
     bool is_equal(String *a, String *b)
     {
         if (a->count != b->count)
         {
             return false;
         }
-
+        
         for (u32 i = 0; i < a->count; i++)
         {
             if (a->data[i] != b->data[i])
@@ -143,39 +143,39 @@ namespace minecraft {
                 return false;
             }
         }
-
+        
         return true;
     }
-
+    
     String sub_string(String *string, u32 start, u32 count)
     {
         assert(count > 0);
         assert(start < string->count); // out of bounds
         assert(start + count <= string->count); // out of bounds
-
+        
         String sub_string;
         sub_string.count = count;
         sub_string.data = new char[count + 1]; // todo(harlequin): memory system
         memcpy(sub_string.data, string->data + start, sub_string.count);
         sub_string.data[count] = 0;
-
+        
         return sub_string;
     }
-
-    // Polynomial rolling hash
+    
+    // Polynomial Rolling Hash
     u64 hash_string(String *string)
     {
         u32 p = 53;
         u32 m = (u32)1e9 + 9;
         u64 power_of_p = 1;
         u64 result = 0;
-
+        
         for (u32 i = 0; i < string->count; i++)
         {
             result = (result + (string->data[i] - 'a' + 1) * power_of_p) % m;
             power_of_p = (power_of_p * p) % m;
         }
-
+        
         return (result % m + m) % m;
     }
 }

@@ -28,7 +28,10 @@ namespace minecraft {
         glm::vec3 gravity = { 0.0f, 20.0f, 0.0f };
         i32 update_rate;
         f32 delta_time;
+        f32 delta_time_accumulator;
     };
+
+    struct Registry;
 
     struct Physics
     {
@@ -36,6 +39,7 @@ namespace minecraft {
 
         static bool initialize(i32 update_rate);
         static void shutdown();
+        static void simulate(f32 delta_time, Registry *registry);
 
         static bool box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
         static bool is_colliding(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);

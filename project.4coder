@@ -1,0 +1,45 @@
+version(2);
+project_name = "crafty";
+patterns = {
+    "*.c",
+    "*.cpp",
+    "*.h",
+    "*.m",
+    "*.bat",
+    "*.sh",
+    "*.4coder",
+};
+blacklist_patterns = {
+    ".*",
+};
+load_paths_base = {
+    { ".", .relative = true, .recursive = true, },
+};
+load_paths = {
+    .win   = load_paths_base,
+    .linux = load_paths_base,
+    .mac   = load_paths_base,
+};
+
+commands = {
+    .build  = { 
+        .out = "*build*", 
+        .footer_panel = true, 
+        .cursor_at_end = true, 
+        .save_dirty_files = true,
+        .win   = "build.bat",
+        .linux = "./build.sh",
+        .mac   = "./build.sh", },
+    .run    = { 
+        .out = "*run*", 
+        .footer_panel = true, 
+        .cursor_at_end = true, 
+        .save_dirty_files = false,
+        .win   = "run.bat",
+        .linux = "./run.sh",
+        .mac   = "./run.sh", },
+};
+fkey_command = {
+    .F4 = "build",
+    .F5 = "run",
+};

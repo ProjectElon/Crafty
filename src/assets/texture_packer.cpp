@@ -16,43 +16,11 @@
 
 namespace minecraft {
 
-    struct Texture_Rect
-    {
-        u32 x;
-        u32 y;
-        u32 width;
-        u32 height;
-    };
-
-    struct UV_Rect
-    {
-        glm::vec2 bottom_right;
-        glm::vec2 bottom_left;
-        glm::vec2 top_left;
-        glm::vec2 top_right;
-    };
-
     struct Texture_Info
     {
         std::string name;
-        Texture_Rect rect;
+        Rectangle2i rect;
     };
-
-    static UV_Rect convert_texture_rect_to_uv_rect(const Texture_Rect *rect, f32 width, f32 height)
-    {
-        UV_Rect result;
-
-        f32 one_over_width = 1.0f / width;
-        f32 one_over_height = 1.0f / height;
-
-        f32 new_y = height - (f32)rect->y;
-        result.bottom_right = { ((f32)rect->x + rect->width) * one_over_width, (new_y - rect->height) * one_over_height };
-        result.bottom_left = { (f32)rect->x * one_over_width, (new_y - rect->height) * one_over_height };
-        result.top_left = { (f32)rect->x * one_over_width, (f32)new_y * one_over_height };
-        result.top_right = { ((f32)rect->x + rect->width) * one_over_width, (f32)new_y * one_over_height };
-
-        return result;
-    }
 
     bool Texture_Packer::pack_textures(
         std::vector<std::string> &paths,
@@ -150,7 +118,7 @@ namespace minecraft {
                 }
             }
 
-            Texture_Rect texture_rect = { current_x, current_y, (u32)width, (u32)height };
+            Rectangle2i texture_rect = { current_x, current_y, (u32)width, (u32)height };
 
             std::string texture_name_without_extension = std::filesystem::path(path).filename().stem().string();
             Texture_Info& info = textures[texture_id];
@@ -249,7 +217,7 @@ namespace minecraft {
 
         for (auto& texture_info : textures)
         {
-            UV_Rect uv_rect = convert_texture_rect_to_uv_rect(&texture_info.rect, (f32)output_width, (f32)output_height);
+            UV_Rectangle uv_rect = convert_texture_rect_to_uv_rect(texture_info.rect, (f32)output_width, (f32)output_height);
             texture_uv_rect_stream << "\t{ ";
             texture_uv_rect_stream << "{ " << uv_rect.bottom_right.x << ", " << uv_rect.bottom_right.y << " }, ";
             texture_uv_rect_stream << "{ " << uv_rect.bottom_left.x  << ", " << uv_rect.bottom_left.y << " }, ";

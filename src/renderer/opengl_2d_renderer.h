@@ -49,6 +49,7 @@ namespace minecraft {
     struct Opengl_Shader;
     struct Bitmap_Font;
 
+
     struct Opengl_2D_Renderer
     {
         static Opengl_2D_Renderer_Data internal_data;
@@ -63,10 +64,14 @@ namespace minecraft {
                               f32 rotation,
                               const glm::vec4& color,
                               Opengl_Texture *texture = &internal_data.white_pixel,
-                              const glm::vec2& uv_scale = { 1.0f, 1.0f },
+                              const glm::vec2& uv_scale  = { 1.0f, 1.0f },
                               const glm::vec2& uv_offset = { 0.0f, 0.0f });
 
-        static void draw_string(Bitmap_Font *font, const std::string& text, const glm::vec2& text_size, const glm::vec2& position, const glm::vec4& color);
+        static void draw_string(Bitmap_Font *font,
+                                const std::string& text,
+                                const glm::vec2& text_size,
+                                const glm::vec2& position,
+                                const glm::vec4& color);
 
         static void end();
     };

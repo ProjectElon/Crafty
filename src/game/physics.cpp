@@ -3,6 +3,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "game/ecs.h"
+#include "game/world.h"
 
 #include <optick/optick.h>
 
@@ -19,6 +21,95 @@ namespace minecraft {
     void Physics::shutdown()
     {
         OPTICK_EVENT();
+    }
+
+    void Physics::simulate(f32 delta_time, Registry *registry)
+    {
+        auto& delta_time_accumulator = internal_data.delta_time_accumulator;
+        auto& physics_delta_time = internal_data.delta_time;
+        delta_time_accumulator += delta_time;
+
+        while (delta_time_accumulator >= physics_delta_time)
+        {
+            auto view = get_view<Transform, Box_Collider, Rigid_Body>(registry);
+
+            for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
+            {
+                auto [transform, box_collider, rb] = registry->get_components< Transform, Box_Collider, Rigid_Body >(entity);
+
+                Character_Controller *controller = registry->get_component< Character_Controller >(entity);
+
+                if (controller)
+                {
+                    rb->velocity.x = controller->movement.x * controller->movement_speed;
+                    rb->velocity.z = controller->movement.z * controller->movement_speed;
+                }
+
+                transform->position += rb->velocity * physics_delta_time;
+                rb->velocity += rb->acceleration * physics_delta_time;
+
+                rb->velocity -= Physics::internal_data.gravity * physics_delta_time;
+
+                if (controller) rb->velocity = glm::clamp(rb->velocity, -controller->terminal_velocity, controller->terminal_velocity);
+
+                glm::vec3 box_collider_half_size = box_collider->size * 0.5f;
+                glm::ivec3 min = glm::ceil(transform->position - box_collider_half_size);
+                glm::ivec3 max = glm::ceil(transform->position + box_collider_half_size);
+
+                bool collide = false;
+                rb->is_under_water = false;
+
+                for (i32 y = max.y; y >= min.y; --y)
+                {
+                    for (i32 z = min.z; z <= max.z; ++z)
+                    {
+                        for (i32 x = min.x; x <= max.x; ++x)
+                        {
+                            glm::vec3 block_pos = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f);
+                            auto query = World::query_block(block_pos);
+                            if (World::is_block_query_valid(query))
+                            {
+                                const Block_Info& block_info = query.block->get_info();
+                                if (block_info.is_solid())
+                                {
+                                    Transform block_transform = {};
+                                    block_transform.position = block_pos;
+                                    block_transform.scale = { 1.0f, 1.0f, 1.0f };
+                                    block_transform.orientation = { 0.0f, 0.0f, 0.0f };
+
+                                    Box_Collider block_collider = {};
+                                    block_collider.size = { 1.0f, 1.0f, 1.0f };
+
+                                    if (Physics::is_colliding(*transform, *box_collider, block_transform, block_collider))
+                                    {
+                                        Box_Vs_Box_Collision_Info info = Physics::resolve_dynamic_box_vs_static_box_collision(*rb,
+                                                                                                                              *transform,
+                                                                                                                              *box_collider,
+                                                                                                                              block_transform,
+                                                                                                                              block_collider);
+                                        if (controller) controller->is_grounded = controller->is_grounded || info.face == CollisionFace_Bottom;
+                                        collide = true;
+                                    }
+                                }
+
+                                if (query.block->id == BlockId_Water)
+                                {
+                                    rb->is_under_water = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!collide && controller && controller->is_grounded && rb->velocity.y > 0)
+                {
+                    // If we're not colliding with any object it's impossible to be on the ground
+                    controller->is_grounded = false;
+                }
+            }
+
+            delta_time_accumulator -= physics_delta_time;
+        }
     }
 
     bool Physics::box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)

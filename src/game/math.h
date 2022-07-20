@@ -10,6 +10,47 @@ namespace minecraft {
 
     #define Infinity32 std::numeric_limits<f32>::max()
 
+    struct Rectangle2i
+    {
+        i32 x;
+        i32 y;
+        u32 width;
+        u32 height;
+    };
+
+    struct Rectangle2
+    {
+        union
+        {
+            struct
+            {
+                f32 x;
+                f32 y;
+            };
+
+            glm::vec2 min;
+        };
+
+        glm::vec2 max;
+    };
+
+    struct UV_Rectangle
+    {
+        glm::vec2 bottom_right;
+        glm::vec2 bottom_left;
+        glm::vec2 top_left;
+        glm::vec2 top_right;
+    };
+
+    Rectangle2 make_rectangle2(const glm::vec2& top_left, const glm::vec2& size);
+    Rectangle2 make_rectangle2(f32 x, f32 y, f32 width, f32 height);
+    Rectangle2 make_rectangle2_min_max(const glm::vec2& min, const glm::vec2& max);
+    bool is_point_inside_rectangle2(const glm::vec2& point, const Rectangle2& rectangle);
+
+    UV_Rectangle convert_texture_rect_to_uv_rect(Rectangle2i rect,
+                                                 f32 texture_width,
+                                                 f32 texture_height);
+
     struct AABB
     {
         glm::vec3 min;

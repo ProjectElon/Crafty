@@ -433,11 +433,11 @@ namespace minecraft {
         render_data.bucket_index = bucket_index;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto top_query = World::get_neighbour_block_from_top(chunk, block_coords);
 
@@ -451,20 +451,20 @@ namespace minecraft {
         auto back_right_query  = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_right(back_query.chunk, back_query.block_coords)   : null_query;
         auto back_left_query   = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_left(back_query.chunk, back_query.block_coords)    : null_query;
 
-        neighbours[0] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(top_query) ? top_query : null_query;
 
         switch (vertex_id)
         {
             case 0:
             case 1:
             {
-                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query : null_query;
             } break;
 
             case 2:
             case 3:
             {
-                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query : null_query;
             } break;
         }
 
@@ -473,13 +473,13 @@ namespace minecraft {
             case 0:
             case 3:
             {
-                neighbours[2] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(right_query) ? right_query : null_query;
             } break;
 
             case 1:
             case 2:
             {
-                neighbours[2] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(left_query) ? left_query : null_query;
             } break;
         }
 
@@ -487,33 +487,33 @@ namespace minecraft {
         {
             case 0:
             {
-                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query : null_query;
             } break;
 
             case 1:
             {
-                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query : null_query;
             } break;
 
             case 2:
             {
-                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query : null_query;
             } break;
 
             case 3:
             {
-                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_bottom(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_bottom(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto bottom_query = World::get_neighbour_block_from_bottom(chunk, block_coords);
 
@@ -527,20 +527,20 @@ namespace minecraft {
         auto back_right_query  = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_right(back_query.chunk, back_query.block_coords)   : null_query;
         auto back_left_query   = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_left(back_query.chunk, back_query.block_coords)    : null_query;
 
-        neighbours[0] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(bottom_query) ? bottom_query : null_query;
 
         switch (vertex_id)
         {
             case 4:
             case 5:
             {
-                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query : null_query;
             } break;
 
             case 6:
             case 7:
             {
-                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query : null_query;
             } break;
         }
 
@@ -549,13 +549,13 @@ namespace minecraft {
             case 4:
             case 7:
             {
-                neighbours[2] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(right_query) ? right_query : null_query;
             } break;
 
             case 5:
             case 6:
             {
-                neighbours[2] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(left_query) ? left_query : null_query;
             } break;
         }
 
@@ -563,33 +563,33 @@ namespace minecraft {
         {
             case 4:
             {
-                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_right_query) ? back_right_query : null_query;
             } break;
 
             case 5:
             {
-                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_left_query) ? back_left_query : null_query;
             } break;
 
             case 6:
             {
-                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_left_query) ? front_left_query : null_query;
             } break;
 
             case 7:
             {
-                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_right_query) ? front_right_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_right(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_right(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto right_query = World::get_neighbour_block_from_right(chunk, block_coords);
 
@@ -603,20 +603,20 @@ namespace minecraft {
         auto back_top_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_top(back_query.chunk, back_query.block_coords)   : null_query;
         auto back_bottom_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_bottom(back_query.chunk, back_query.block_coords) : null_query;
 
-        neighbours[0] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(right_query) ? right_query : null_query;
 
         switch (vertex_id)
         {
             case 0:
             case 4:
             {
-                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query : null_query;
             } break;
 
             case 3:
             case 7:
             {
-                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query : null_query;
             } break;
         }
 
@@ -625,13 +625,13 @@ namespace minecraft {
             case 0:
             case 3:
             {
-                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query : null_query;
             } break;
 
             case 4:
             case 7:
             {
-                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query : null_query;
             } break;
         }
 
@@ -639,33 +639,33 @@ namespace minecraft {
         {
             case 0:
             {
-                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query : null_query;
             } break;
 
             case 3:
             {
-                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query : null_query;
             } break;
 
             case 4:
             {
-                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query : null_query;
             } break;
 
             case 7:
             {
-                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_left(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_left(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto left_query = World::get_neighbour_block_from_left(chunk, block_coords);
 
@@ -679,20 +679,20 @@ namespace minecraft {
         auto back_top_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_top(back_query.chunk, back_query.block_coords)   : null_query;
         auto back_bottom_query = World::is_block_query_valid(back_query)  ? World::get_neighbour_block_from_bottom(back_query.chunk, back_query.block_coords) : null_query;
 
-        neighbours[0] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(left_query) ? left_query : null_query;
 
         switch (vertex_id)
         {
             case 1:
             case 5:
             {
-                neighbours[1] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(back_query) ? back_query : null_query;
             } break;
 
             case 2:
             case 6:
             {
-                neighbours[1] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(front_query) ? front_query : null_query;
             } break;
         }
 
@@ -701,13 +701,13 @@ namespace minecraft {
             case 1:
             case 2:
             {
-                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query : null_query;
             } break;
 
             case 5:
             case 6:
             {
-                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query : null_query;
             } break;
         }
 
@@ -715,33 +715,33 @@ namespace minecraft {
         {
             case 1:
             {
-                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_top_query) ? back_top_query : null_query;
             } break;
 
             case 2:
             {
-                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_top_query) ? front_top_query : null_query;
             } break;
 
             case 5:
             {
-                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(back_bottom_query) ? back_bottom_query : null_query;
             } break;
 
             case 6:
             {
-                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(front_bottom_query) ? front_bottom_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_back(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_back(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto back_query = World::get_neighbour_block_from_back(chunk, block_coords);
 
@@ -755,20 +755,20 @@ namespace minecraft {
         auto right_top_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_top(right_query.chunk, right_query.block_coords)   : null_query;
         auto right_bottom_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_bottom(right_query.chunk, right_query.block_coords) : null_query;
 
-        neighbours[0] = World::is_block_query_valid(back_query) ? back_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(back_query) ? back_query : null_query;
 
         switch (vertex_id)
         {
             case 0:
             case 4:
             {
-                neighbours[1] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(right_query) ? right_query : null_query;
             } break;
 
             case 1:
             case 5:
             {
-                neighbours[1] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(left_query) ? left_query : null_query;
             } break;
         }
 
@@ -777,13 +777,13 @@ namespace minecraft {
             case 0:
             case 1:
             {
-                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query : null_query;
             } break;
 
             case 4:
             case 5:
             {
-                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query : null_query;
             } break;
         }
 
@@ -791,33 +791,33 @@ namespace minecraft {
         {
             case 0:
             {
-                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query : null_query;
             } break;
 
             case 1:
             {
-                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query : null_query;
             } break;
 
             case 4:
             {
-                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query : null_query;
             } break;
 
             case 5:
             {
-                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours_from_front(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_front(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto front_query = World::get_neighbour_block_from_front(chunk, block_coords);
 
@@ -831,20 +831,20 @@ namespace minecraft {
         auto right_top_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_top(right_query.chunk, right_query.block_coords)   : null_query;
         auto right_bottom_query = World::is_block_query_valid(right_query)  ? World::get_neighbour_block_from_bottom(right_query.chunk, right_query.block_coords) : null_query;
 
-        neighbours[0] = World::is_block_query_valid(front_query) ? front_query.block : nullptr;
+        neighbours[0] = World::is_block_query_valid(front_query) ? front_query : null_query;
 
         switch (vertex_id)
         {
             case 3:
             case 7:
             {
-                neighbours[1] = World::is_block_query_valid(right_query) ? right_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(right_query) ? right_query : null_query;
             } break;
 
             case 2:
             case 6:
             {
-                neighbours[1] = World::is_block_query_valid(left_query) ? left_query.block : nullptr;
+                neighbours[1] = World::is_block_query_valid(left_query) ? left_query : null_query;
             } break;
         }
 
@@ -853,13 +853,13 @@ namespace minecraft {
             case 3:
             case 2:
             {
-                neighbours[2] = World::is_block_query_valid(top_query) ? top_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(top_query) ? top_query : null_query;
             } break;
 
             case 7:
             case 6:
             {
-                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query.block : nullptr;
+                neighbours[2] = World::is_block_query_valid(bottom_query) ? bottom_query : null_query;
             } break;
         }
 
@@ -867,29 +867,29 @@ namespace minecraft {
         {
             case 3:
             {
-                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(right_top_query) ? right_top_query : null_query;
             } break;
 
             case 2:
             {
-                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(left_top_query) ? left_top_query : null_query;
             } break;
 
             case 7:
             {
-                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(right_bottom_query) ? right_bottom_query : null_query;
             } break;
 
             case 6:
             {
-                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query.block : nullptr;
+                neighbours[3] = World::is_block_query_valid(left_bottom_query) ? left_bottom_query : null_query;
             } break;
         }
 
         return neighbours;
     }
 
-    std::array< Block*, 4 > get_vertex_neighbours(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
+    std::array< Block_Query_Result, 4 > get_vertex_neighbours(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
         // PROFILE_FUNCTION;
 
@@ -903,7 +903,7 @@ namespace minecraft {
             4----------7
         */
 
-        std::array< Block*, 4 > neighbours = {};
+        std::array< Block_Query_Result, 4 > neighbours = {};
 
         switch (face)
         {
@@ -993,22 +993,24 @@ namespace minecraft {
 
                 for (i32 j = 0; j < (i32)neighbours.size() - 1; ++j)
                 {
-                    Block *neighbour = neighbours[j];
-                    if (neighbour)
+                    auto& neighbour = neighbours[j];
+                    Block *neighbour_block = neighbour.block;
+                    if (neighbour_block)
                     {
-                        const auto& neighbour_info = neighbour->get_info();
+                        const auto& neighbour_info = neighbour_block->get_info();
+                        Block_Light_Info *neighbour_light_info = neighbour.chunk->get_block_light_info(neighbour.block_coords);
                         if (neighbour_info.is_transparent())
                         {
-                            sky_light_levels[i]    += neighbour->sky_light_level;
-                            light_source_levels[i] += neighbour->light_source_level;
+                            sky_light_levels[i]    += neighbour_light_info->sky_light_level;
+                            light_source_levels[i] += neighbour_light_info->light_source_level;
                             ++count;
                         }
                     }
                 }
 
-                Block *side0  = neighbours[1];
-                Block *side1  = neighbours[2];
-                Block *corner = neighbours[3];
+                Block *side0  = neighbours[1].block;
+                Block *side1  = neighbours[2].block;
+                Block *corner = neighbours[3].block;
 
                 bool has_side0  = side0  && !(side0->get_info().is_transparent());
                 bool has_side1  = side1  && !(side1->get_info().is_transparent());
@@ -1016,8 +1018,9 @@ namespace minecraft {
 
                 if (corner && corner->get_info().is_transparent() && (!has_side0 || !has_side1))
                 {
-                    sky_light_levels[i]    += corner->sky_light_level;
-                    light_source_levels[i] += corner->light_source_level;
+                    Block_Light_Info *corner_light_info = neighbours[3].chunk->get_block_light_info(neighbours[3].block_coords);
+                    sky_light_levels[i]    += corner_light_info->sky_light_level;
+                    light_source_levels[i] += corner_light_info->light_source_level;
                     ++count;
                 }
 
@@ -1292,6 +1295,43 @@ namespace minecraft {
         auto& stats = internal_data.stats;
         stats.face_count += render_data.opaque_buckets[render_data.bucket_index].face_count + render_data.transparent_buckets[render_data.bucket_index].face_count;
         stats.sub_chunk_count++;
+    }
+
+    void Opengl_Renderer::render_terrain(World_Region_Bounds *player_region_bounds,
+                                         Camera *camera,
+                                         Opengl_Shader *chunk_shader)
+    {
+        auto& loaded_chunks = World::loaded_chunks;
+
+        for (i32 z = player_region_bounds->min.y; z <= player_region_bounds->max.y; ++z)
+        {
+            for (i32 x = player_region_bounds->min.x; x <= player_region_bounds->max.x; ++x)
+            {
+                glm::ivec2 chunk_coords = { x, z };
+                auto it = loaded_chunks.find(chunk_coords);
+                assert(it != loaded_chunks.end());
+                Chunk* chunk = it->second;
+                if (!chunk->pending_for_load && chunk->loaded)
+                {
+                    for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+                    {
+                        Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+                        Sub_Chunk_Bucket& opaque_bucket = render_data.opaque_buckets[render_data.bucket_index];
+                        Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[render_data.bucket_index];
+                        u64 face_count = (u64)opaque_bucket.face_count + (u64)transparent_bucket.face_count;
+
+                        bool is_sub_chunk_visible = face_count > 0 &&
+                                                    camera->frustum.is_aabb_visible(render_data.aabb[render_data.bucket_index]);
+
+                        if (is_sub_chunk_visible)
+                        {
+                            Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, chunk_shader);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     void Opengl_Renderer::begin(

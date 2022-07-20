@@ -4,6 +4,56 @@
 
 namespace minecraft {
 
+    Rectangle2 make_rectangle2(const glm::vec2& top_left, const glm::vec2& size)
+    {
+        Rectangle2 result;
+        result.min = top_left;
+        result.max = top_left + size;
+        return result;
+    }
+
+    Rectangle2 make_rectangle2(f32 x, f32 y, f32 width, f32 height)
+    {
+        Rectangle2 result;
+        result.min = { x, y };
+        result.max = { x + width, y + height };
+        return result;
+    }
+
+    Rectangle2 make_rectangle2_min_max(const glm::vec2& min, const glm::vec2& max)
+    {
+        Rectangle2 result;
+        result.min = min;
+        result.max = max;
+        return result;
+    }
+
+    bool is_point_inside_rectangle2(const glm::vec2& point, const Rectangle2& rectangle)
+    {
+        return point.x >= rectangle.min.x &&
+               point.x <= rectangle.max.x &&
+               point.y >= rectangle.min.y &&
+               point.y <= rectangle.max.y;
+    }
+
+    UV_Rectangle convert_texture_rect_to_uv_rect(Rectangle2i rect,
+                                                 f32 texture_width,
+                                                 f32 texture_height)
+    {
+        UV_Rectangle result;
+
+        f32 one_over_width = 1.0f / texture_width;
+        f32 one_over_height = 1.0f / texture_height;
+
+        f32 new_y = texture_height - (f32)rect.y;
+        result.bottom_right = { ((f32)rect.x + rect.width) * one_over_width, (new_y - rect.height) * one_over_height };
+        result.bottom_left = { (f32)rect.x * one_over_width, (new_y - rect.height) * one_over_height };
+        result.top_left = { (f32)rect.x * one_over_width, (f32)new_y * one_over_height };
+        result.top_right = { ((f32)rect.x + rect.width) * one_over_width, (f32)new_y * one_over_height };
+
+        return result;
+    }
+
     Ray_Cast_Result cast_ray_on_aabb(const Ray& ray, const AABB& aabb, f32 max_distance)
     {
         f32 t1 = (aabb.min.x - ray.origin.x) / ray.direction.x;

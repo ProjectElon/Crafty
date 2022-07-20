@@ -1,0 +1,58 @@
+texture:
+  filepath: assets/images/hudSprites.png
+buttonRegular:
+  uvStart: 
+    x: 0
+    y: 0
+  uvSize:
+    x: 272
+    y: 32
+buttonHover:
+  uvStart:
+    x: 0
+    y: 33
+  uvSize:
+    x: 272
+    y: 32
+buttonClick:
+  uvStart:
+    x: 0
+    y: 66
+  uvSize:
+    x: 272
+    y: 32
+title:
+  uvStart:
+    x: 0
+    y: 100
+  uvSize:
+    x: 88
+    y: 19
+blockCursor:
+  uvStart:
+    x: 0
+    y: 128
+  uvSize:
+    x: 16
+    y: 16
+selectedInventorySlot:
+  uvStart:
+    x: 0
+    y: 144
+  uvSize:
+    x: 32
+    y: 32
+regularInventorySlot:
+  uvStart:
+    x: 0
+    y: 176
+  uvSize:
+    x: 32
+    y: 32
+inventoryHud:
+  uvStart:
+    x: 276
+    y: 0
+  uvSize:
+    x: 216
+    y: 194

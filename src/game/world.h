@@ -120,6 +120,11 @@ namespace minecraft {
     struct Block
     {
         u16 id;
+        const Block_Info& get_info();
+    };
+
+    struct Block_Light_Info
+    {
         u8 sky_light_level;
         u8 light_source_level;
 
@@ -129,8 +134,6 @@ namespace minecraft {
         {
             return glm::max(get_sky_light_level(), light_source_level);
         }
-
-        const Block_Info& get_info();
     };
 
     struct Sub_Chunk_Vertex
@@ -207,23 +210,33 @@ namespace minecraft {
         std::atomic<bool> loaded;
         std::atomic<bool> neighbours_loaded;
         std::atomic<bool> pending_for_lighting;
-        std::atomic<bool> calculating_lighting;
+        std::atomic<bool> in_light_propagation_queue;
+        std::atomic<bool> in_light_calculation_queue;
+        std::atomic<bool> light_propagated;
+        std::atomic<bool> light_calculated;
         std::atomic<bool> pending_for_update;
         std::atomic<bool> pending_for_save;
         std::atomic<bool> unload;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
-
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
         Block back_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
         Block left_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
         Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+
+        Block_Light_Info light_map[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
+        Block_Light_Info front_edge_light_map[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
+        Block_Light_Info back_edge_light_map[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
+        Block_Light_Info left_edge_light_map[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
+        Block_Light_Info right_edge_light_map[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
 
         Sub_Chunk_Render_Data sub_chunks_render_data[MC_CHUNK_HEIGHT / MC_SUB_CHUNK_HEIGHT];
 
         bool initialize(const glm::ivec2 &world_coords);
 
         void generate(i32 seed);
+
+        void propagate_sky_light(Circular_FIFO_Queue<struct Block_Query_Result> *queue);
         void calculate_lighting(Circular_FIFO_Queue<struct Block_Query_Result> *queue);
 
         void serialize();
@@ -240,6 +253,7 @@ namespace minecraft {
         }
 
         Block* get_block(const glm::ivec3& block_coords);
+        Block_Light_Info* get_block_light_info(const glm::ivec3& block_coords);
 
         Block* get_neighbour_block_from_right(const glm::ivec3& block_coords);
         Block* get_neighbour_block_from_left(const glm::ivec3& block_coords);
@@ -303,9 +317,9 @@ namespace minecraft {
         static std::vector<Chunk*> pending_free_chunks;
 
         static Circular_FIFO_Queue<Update_Chunk_Job> update_chunk_jobs_queue;
-        static Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job> calculate_chunk_lighting_queue;
 
-        static u16 block_to_place_id; // todo(harlequin): inventory system
+        static Circular_FIFO_Queue<Calculate_Chunk_Light_Propagation_Job> light_propagation_queue;
+        static Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job> calculate_chunk_lighting_queue;
 
         static bool initialize(const std::string& path);
         static void shutdown();
@@ -411,6 +425,9 @@ namespace minecraft {
                                                const glm::vec3& view_direction,
                                                u32 max_block_select_dist_in_cube_units,
                                                Ray_Cast_Result *out_ray_cast_result = nullptr);
+
+        static void schedule_chunk_lighting_jobs(World_Region_Bounds *player_region_bounds);
+        static void schedule_save_chunks_jobs();
 
         static void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
 

@@ -2,6 +2,9 @@
 
 #include "core/common.h"
 #include "renderer/opengl_texture.h"
+#include "game/math.h"
+
+#include <glm/glm.hpp>
 
 #include <vector>
 #include <string>
@@ -24,4 +27,5 @@ namespace minecraft {
             const std::string &meta_output_path,
             const std::string &header_output_path);
     };
+
 }
