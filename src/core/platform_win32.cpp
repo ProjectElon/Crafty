@@ -131,7 +131,9 @@ namespace minecraft {
             config.window_y = monitor_y + (monitor_height - config.window_height) / 2;
         }
 
-#ifdef MC_DEBUG
+
+#define OPENGL_DEBUGGING 0
+#ifdef OPENGL_DEBUGGING
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
 #endif
 
@@ -223,6 +225,7 @@ namespace minecraft {
                                  video_mode->refreshRate);
             config.window_x = window_x_before_fullscreen;
             config.window_y = window_y_before_fullscreen;
+            center_window();
         }
         else if (config.window_mode == WindowMode_Fullscreen)
         {

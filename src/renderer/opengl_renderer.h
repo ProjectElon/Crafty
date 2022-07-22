@@ -61,6 +61,18 @@ namespace minecraft {
         Platform *platform;
 
         glm::vec2 frame_buffer_size;
+
+        u32 opaque_frame_buffer_id;
+        u32 opaque_frame_buffer_color_texture_id;
+        u32 opaque_frame_buffer_depth_texture_id;
+
+        u32 transparent_frame_buffer_id;
+        u32 transparent_frame_buffer_accum_texture_id;
+        u32 transparent_frame_buffer_reveal_texture_id;
+
+        u32 quad_vertex_array_id;
+        u32 quad_vertex_buffer_id;
+
         u32 chunk_vertex_array_id;
         u32 chunk_vertex_buffer_id;
         u32 chunk_instance_buffer_id;
@@ -90,9 +102,20 @@ namespace minecraft {
         Opengl_Renderer_Stats stats;
         std::atomic<u64> sub_chunk_used_memory;
 
-        u16 sky_light_level;
+        u16 sky_light_level; // todo(harlequin): to be removed
 
         bool should_trace_debug_messsage = true;
+
+        glm::vec4 sky_color;
+        glm::vec4 tint_color;
+
+        Camera *camera;
+
+        Opengl_Shader *opaque_shader;
+        Opengl_Shader *transparent_shader;
+        Opengl_Shader *composite_shader;
+        Opengl_Shader *screen_shader;
+        Opengl_Shader *line_shader;
     };
 
     struct Opengl_Renderer
@@ -134,23 +157,27 @@ namespace minecraft {
         static void upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index);
         static void update_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
 
-        static void begin(
-            const glm::vec4& clear_color,
-            const glm::vec4& tint_color,
-            Camera *camera,
-            Opengl_Shader *shader);
+        static void begin(const glm::vec4& clear_color,
+                          const glm::vec4& tint_color,
+                          Camera *camera,
+                          Opengl_Shader *opaque_shader,
+                          Opengl_Shader *transparent_shader,
+                          Opengl_Shader *composite_shader,
+                          Opengl_Shader *screen_shader,
+                          Opengl_Shader *line_shader);
 
-        static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader);
-        static void render_terrain(World_Region_Bounds *player_region_bounds,
-                                         Camera *camera,
-                                         Opengl_Shader *chunk_shader);
+        static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index);
+        static void render_chunks_at_region(World_Region_Bounds *player_region_bounds,
+                                            Camera *camera);
 
-        static void end();
+        static void end(Block_Query_Result *select_query);
 
         static void wait_for_gpu_to_finish_work();
         static void signal_gpu_for_work();
 
         static void swap_buffers();
+
+        static bool recreate_frame_buffers();
 
         static inline glm::vec2 get_frame_buffer_size() { return internal_data.frame_buffer_size; }
     };

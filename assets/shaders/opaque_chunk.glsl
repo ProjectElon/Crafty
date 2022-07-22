@@ -2,16 +2,16 @@
 
 #version 430 core
 
-layout (location = 0) in uint in_data0;
-layout (location = 1) in uint in_data1;
-
+layout (location = 0) in uint  in_data0;
+layout (location = 1) in uint  in_data1;
 layout (location = 2) in ivec2 instance_chunk_coords;
 
 out vec2 a_uv;
-out flat uint a_data0;
-out flat uint a_data1;
+// out flat uint a_data0;
+// out flat uint a_data1;
 
-out vec4 a_biome_color;
+out flat vec4 a_biome_color;
+out flat vec4 a_highlight_color;
 out float a_fog_factor;
 out float a_light_level;
 
@@ -20,6 +20,9 @@ uniform mat4  u_projection;
 uniform float u_one_over_chunk_radius;
 uniform vec3  u_camera_position;
 uniform float u_sky_light_level;
+
+uniform ivec3 u_highlighted_block_coords;
+uniform ivec2 u_highlighted_block_chunk_coords;
 
 #define BLOCK_X_MASK 15
 #define BLOCK_Y_MASK 255
@@ -84,9 +87,8 @@ void main()
     float v = texelFetch(u_uvs, uv_index + 1).r;
     a_uv = vec2(u, v);
 
-    a_data0 = in_data0;
-    a_data1 = in_data1;
-    a_biome_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    // a_data0 = in_data0;
+    // a_data1 = in_data1;
 
     float sky_light_level = float(in_data1 & SKY_LIGHT_LEVEL_MASK);
     float sky_light_factor = u_sky_light_level - 15.0f;
@@ -101,6 +103,8 @@ void main()
     {
         a_light_level *= ambient_occlusion;
     }
+
+    a_biome_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
     switch (face_id)
     {
@@ -131,6 +135,17 @@ void main()
             }
         } break;
     }
+
+    a_highlight_color = vec4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (u_highlighted_block_coords.x == block_x &&
+        u_highlighted_block_coords.y == block_y &&
+        u_highlighted_block_coords.z == block_z &&
+        u_highlighted_block_chunk_coords.x == instance_chunk_coords.x &&
+        u_highlighted_block_chunk_coords.y == instance_chunk_coords.y)
+    {
+        a_highlight_color = vec4(0.5f, 0.5f, 0.5f, 1.0f);
+    }
 }
 
 #fragment
@@ -140,18 +155,17 @@ void main()
 layout (location = 0) out vec4 out_color;
 
 in vec2 a_uv;
-in flat uint a_data0;
-in flat uint a_data1;
-in vec4 a_biome_color;
+// in flat uint a_data0;
+// in flat uint a_data1;
+in flat vec4 a_biome_color;
+in flat vec4 a_highlight_color;
 in float a_fog_factor;
 in float a_light_level;
 
 uniform vec4 u_sky_color;
 uniform vec4 u_tint_color;
-uniform sampler2D u_block_sprite_sheet;
 
-vec3 light_dir = normalize(vec3(0.0f, 1.0f, 0.0f));
-vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
+uniform sampler2D u_block_sprite_sheet;
 
 #define BLOCK_X_MASK 15
 #define BLOCK_Y_MASK 255
@@ -184,22 +198,12 @@ vec3 face_normal[6] = vec3[](
 
 void main()
 {
-    uint face_id = (a_data0 >> 19) & FACE_ID_MASK;
+    // uint face_id = (a_data0 >> 19) & FACE_ID_MASK;
 
     // uint face_corner_id = (a_data0 >> 22) & FACE_CORNER_ID_MASK;
     // uint flags = a_data0 >> 24;
+    // vec3 normal = face_normal[face_id];
 
-    vec3 normal = face_normal[face_id];
-    vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color;
-
-    // phong
-    // float ambient_amount = 0.4f;
-    // vec3 ambient = light_color * ambient_amount;
-
-    // float diffuse_amount = max(dot(normal, light_dir), 0.0f);
-    // vec3 diffuse = light_color * diffuse_amount;
-    // out_color = vec4(ambient + diffuse, 1.0f) * color;
-    // out_color = mix(out_color, u_sky_color, a_fog_factor);
-
+    vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color * a_highlight_color;
     out_color = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor) * u_tint_color;
 }

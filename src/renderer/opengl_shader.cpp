@@ -124,6 +124,19 @@ namespace minecraft {
         glUniform1iv(location, count, values);
     }
 
+
+    void Opengl_Shader::set_uniform_ivec2(const char *uniform_name, i32 value0, i32 value1)
+    {
+        i32 location = get_uniform_location(uniform_name);
+        glUniform2i(location, value0, value1);
+    }
+
+    void Opengl_Shader::set_uniform_ivec3(const char *uniform_name, i32 value0, i32 value1, i32 value2)
+    {
+        i32 location = get_uniform_location(uniform_name);
+        glUniform3i(location, value0, value1, value2);
+    }
+
     void Opengl_Shader::set_uniform_f32(const char *uniform_name, float value)
     {
         i32 location = get_uniform_location(uniform_name);

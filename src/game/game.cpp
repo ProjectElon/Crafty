@@ -36,14 +36,30 @@ namespace minecraft {
 
         if (key == MC_KEY_F1)
         {
-            Game::toggle_should_update_camera();
             Dropdown_Console::toggle();
         }
 
         if (key == MC_KEY_F2)
         {
             Input::toggle_cursor();
-            Game::toggle_should_update_camera();
+        }
+
+        Platform *platform = Game::internal_data.platform;
+
+        if (key == MC_KEY_F11)
+        {
+            WindowMode mode;
+
+            if (Game::internal_data.config.window_mode == WindowMode_Fullscreen)
+            {
+                mode = WindowMode_Windowed;
+            }
+            else
+            {
+                mode = WindowMode_Fullscreen;
+            }
+
+            platform->switch_to_window_mode(mode);
         }
 
         if (Dropdown_Console::is_closed())
@@ -70,8 +86,6 @@ namespace minecraft {
                 }
 
                 Input::toggle_cursor();
-
-                Game::toggle_should_update_camera();
                 Game::toggle_inventory();
             }
         }
@@ -311,7 +325,6 @@ namespace minecraft {
 
         internal_data.platform = platform;
         internal_data.camera = camera;
-        internal_data.should_update_camera = true;
         internal_data.show_debug_stats_hud = false;
         internal_data.is_inventory_active = false;
         internal_data.is_running = true;

@@ -1,4 +1,2 @@
-﻿  game.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-  Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
+﻿  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(236,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data

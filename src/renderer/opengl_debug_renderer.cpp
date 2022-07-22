@@ -145,10 +145,11 @@ namespace minecraft {
 
         if (line_vertices.size())
         {
-            if (Game::show_debug_status_hud()) {
-                int x;
-            }
+            glEnable(GL_CULL_FACE);
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LESS);
             glDepthMask(GL_FALSE);
+            glDisable(GL_BLEND);
 
             glBindVertexArray(line_vao_id);
             glBindBuffer(GL_ARRAY_BUFFER, line_vbo_id);
@@ -171,8 +172,6 @@ namespace minecraft {
 
                 glDrawArrays(GL_LINES, 0, count);
             }
-
-            glDepthMask(GL_TRUE);
 
             line_vertices.resize(0);
         }

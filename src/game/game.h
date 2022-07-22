@@ -38,7 +38,6 @@ namespace minecraft {
         Camera   *camera;
 
         bool is_running;
-        bool should_update_camera;
         bool show_debug_stats_hud;
         bool is_inventory_active;
 
@@ -60,14 +59,8 @@ namespace minecraft {
         static inline Camera& get_camera() { return *internal_data.camera; }
 
         static inline bool is_running() { return internal_data.is_running; }
-        static inline bool should_update_camera() { return internal_data.should_update_camera; }
         static inline bool show_debug_status_hud() { return internal_data.show_debug_stats_hud; }
         static inline bool should_render_inventory() { return internal_data.is_inventory_active; }
-
-        static inline void toggle_should_update_camera()
-        {
-            internal_data.should_update_camera = !internal_data.should_update_camera;
-        }
 
         static inline void toggle_show_debug_status_hud()
         {

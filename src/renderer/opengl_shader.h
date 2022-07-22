@@ -26,6 +26,10 @@ namespace minecraft {
 
         void set_uniform_i32(const char *uniform_name, i32 value);
         void set_uniform_i32_array(const char *uniform_name, i32* values, u32 count);
+
+        void set_uniform_ivec2(const char *uniform_name, i32 value0, i32 value1);
+        void set_uniform_ivec3(const char *uniform_name, i32 value0, i32 value1, i32 value2);
+
         void set_uniform_f32(const char *uniform_name, f32 value);
         void set_uniform_vec2(const char *uniform_name, f32 value0, f32 value1);
         void set_uniform_vec3(const char *uniform_name, f32 value0, f32 value1, f32 value2);

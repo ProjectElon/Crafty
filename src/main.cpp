@@ -45,8 +45,17 @@ int main()
         return -1;
     }
 
-    Opengl_Shader chunk_shader = {};
-    chunk_shader.load_from_file("../assets/shaders/chunk.glsl");
+    Opengl_Shader opaque_chunk_shader = {};
+    opaque_chunk_shader.load_from_file("../assets/shaders/opaque_chunk.glsl");
+
+    Opengl_Shader transparent_chunk_shader = {};
+    transparent_chunk_shader.load_from_file("../assets/shaders/transparent_chunk.glsl");
+
+    Opengl_Shader composite_shader = {};
+    composite_shader.load_from_file("../assets/shaders/composite.glsl");
+
+    Opengl_Shader screen_shader = {};
+    screen_shader.load_from_file("../assets/shaders/screen.glsl");
 
     Opengl_Shader line_shader = {};
     line_shader.load_from_file("../assets/shaders/line.glsl");
@@ -201,7 +210,7 @@ int main()
             !Game::should_render_inventory())
         {
             glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
-            Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+            // Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
             Block_Query_Result block_facing_normal_query = {};
 
@@ -353,6 +362,7 @@ int main()
 
         {
             PROFILE_BLOCK("Input");
+
             if (Dropdown_Console::is_closed() && !Game::should_render_inventory())
             {
                 auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
@@ -448,11 +458,11 @@ int main()
                 if (transform)
                 {
                     camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                    camera.yaw      = transform->orientation.y;
+                    camera.yaw = transform->orientation.y;
                 }
             }
 
-            if (Game::should_update_camera())
+            if (Dropdown_Console::is_closed() && !Game::should_render_inventory())
             {
                 // todo(harlequin): follow entity and make the camera an entity
                 camera.update_transform(delta_time);
@@ -483,17 +493,24 @@ int main()
 
             {
                 PROFILE_BLOCK("Opengl_Renderer::begin");
-                Opengl_Renderer::begin(clear_color, tint_color, &camera, &chunk_shader);
+                Opengl_Renderer::begin(clear_color,
+                                       tint_color,
+                                       &camera,
+                                       &opaque_chunk_shader,
+                                       &transparent_chunk_shader,
+                                       &composite_shader,
+                                       &screen_shader,
+                                       &line_shader);
             }
 
             {
-                PROFILE_BLOCK("Opengl_Renderer::render_terrain");
-                Opengl_Renderer::render_terrain(&player_region_bounds, &camera, &chunk_shader);
+                PROFILE_BLOCK("Opengl_Renderer::render_chunks");
+                Opengl_Renderer::render_chunks_at_region(&player_region_bounds, &camera);
             }
 
             {
-                PROFILE_BLOCK("rendering::end");
-                Opengl_Renderer::end();
+                PROFILE_BLOCK("Opengl_Renderer::end");
+                Opengl_Renderer::end(&select_query);
             }
         }
 
@@ -651,19 +668,13 @@ int main()
             }
 
             // cursor_ui
-            glm::vec2 cursor_size = { cursor_texture->width  * 0.5f,
-                cursor_texture->height * 0.5f };
+            glm::vec2 cursor_size = { cursor_texture->width  * 0.5f, cursor_texture->height * 0.5f };
 
             Opengl_2D_Renderer::draw_rect(cursor,
                                           cursor_size,
                                           0.0f,
                                           { 1.0f, 1.0f, 1.0f, 1.0f },
                                           cursor_texture);
-
-
-            f32 line_thickness = 3.0f;
-            Opengl_Debug_Renderer::begin(&camera, &line_shader, line_thickness);
-            Opengl_Debug_Renderer::end();
 
             Dropdown_Console::draw(delta_time);
 

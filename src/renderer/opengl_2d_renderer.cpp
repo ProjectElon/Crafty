@@ -21,6 +21,14 @@ namespace minecraft {
         |          |
         1----------0
         */
+
+        //  1.0f, 1.0f,  0.0f, 1.0f, 1.0f
+        // -1.0f, -1.0f, 0.0f, 0.0f, 0.0f
+        //  1.0f, -1.0f, 0.0f, 1.0f, 0.0f
+        //  1.0f, 1.0f,  0.0f, 1.0f, 1.0f
+        // -1.0f, 1.0f,  0.0f, 0.0f, 1.0f
+        // -1.0f, -1.0f, 0.0f, 0.0f, 0.0f
+
         internal_data.quad_vertices[0] = { {  0.5f, -0.5f }, { 1.0f, 0.0f } };
         internal_data.quad_vertices[1] = { { -0.5f, -0.5f }, { 0.0f, 0.0f } };
         internal_data.quad_vertices[2] = { { -0.5f,  0.5f }, { 0.0f, 1.0f } };
@@ -128,7 +136,7 @@ namespace minecraft {
     {
         i32 texture_index = -1;
 
-        for (u32 i = 2; i < 32; i++)
+        for (u32 i = 5; i < 32; i++)
         {
             if (internal_data.texture_slots[i] == texture->id)
             {
@@ -139,7 +147,7 @@ namespace minecraft {
 
         if (texture_index == -1)
         {
-            for (u32 i = 2; i < 32; i++)
+            for (u32 i = 5; i < 32; i++)
             {
                 if (internal_data.texture_slots[i] == -1)
                 {
@@ -217,9 +225,6 @@ namespace minecraft {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.quad_ibo);
             glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0, internal_data.quad_instances.size());
             internal_data.quad_instances.resize(0);
-
-            glEnable(GL_DEPTH_TEST);
-            glDisable(GL_BLEND);
         }
     }
 

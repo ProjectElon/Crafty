@@ -191,6 +191,47 @@ namespace minecraft {
         internal_data.frame_buffer_size = { (f32)width, (f32)height };
         glViewport(0, 0, width, height);
 
+        internal_data.opaque_frame_buffer_id = 0;
+        internal_data.opaque_frame_buffer_color_texture_id = 0;
+        internal_data.opaque_frame_buffer_depth_texture_id = 0;
+
+        internal_data.transparent_frame_buffer_id = 0;
+        internal_data.transparent_frame_buffer_accum_texture_id = 0;
+        internal_data.transparent_frame_buffer_reveal_texture_id = 0;
+
+        success = recreate_frame_buffers();
+
+        if (!success)
+        {
+            return false;
+        }
+
+        // positions uvs
+        float quad_vertices[] =
+        {
+            1.0f, 1.0f,  0.0f, 1.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+             1.0f, 1.0f,  0.0f, 1.0f, 1.0f,
+            -1.0f, 1.0f,  0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+        };
+
+        glGenVertexArrays(1, &internal_data.quad_vertex_array_id);
+        glBindVertexArray(internal_data.quad_vertex_array_id);
+
+        glGenBuffers(1, &internal_data.quad_vertex_buffer_id);
+        glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_vertex_buffer_id);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+
+        glBindVertexArray(0);
+
         internal_data.sub_chunk_used_memory = 0;
         internal_data.sky_light_level = 15.0f;
 
@@ -237,6 +278,7 @@ namespace minecraft {
         Event_System::parse_resize_event(event, &width, &height);
         internal_data.frame_buffer_size = { (f32)width, (f32)height };
         glViewport(0, 0, width, height);
+        recreate_frame_buffers();
         return false;
     }
 
@@ -1262,7 +1304,7 @@ namespace minecraft {
         render_data.uploaded_to_gpu = true;
     }
 
-    void Opengl_Renderer::render_sub_chunk(Chunk *chunk, u32 sub_chunk_index, Opengl_Shader *shader)
+    void Opengl_Renderer::render_sub_chunk(Chunk *chunk, u32 sub_chunk_index)
     {
         // PROFILE_FUNCTION;
 
@@ -1297,9 +1339,8 @@ namespace minecraft {
         stats.sub_chunk_count++;
     }
 
-    void Opengl_Renderer::render_terrain(World_Region_Bounds *player_region_bounds,
-                                         Camera *camera,
-                                         Opengl_Shader *chunk_shader)
+    void Opengl_Renderer::render_chunks_at_region(World_Region_Bounds *player_region_bounds,
+                                                  Camera *camera)
     {
         auto& loaded_chunks = World::loaded_chunks;
 
@@ -1326,7 +1367,7 @@ namespace minecraft {
 
                         if (is_sub_chunk_visible)
                         {
-                            Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index, chunk_shader);
+                            Opengl_Renderer::render_sub_chunk(chunk, sub_chunk_index);
                         }
                     }
                 }
@@ -1334,58 +1375,101 @@ namespace minecraft {
         }
     }
 
-    void Opengl_Renderer::begin(
-        const glm::vec4& clear_color,
-        const glm::vec4& tint_color,
-        Camera *camera,
-        Opengl_Shader *shader)
+    void Opengl_Renderer::begin(const glm::vec4& clear_color,
+                                const glm::vec4& tint_color,
+                                Camera *camera,
+                                Opengl_Shader *opaque_shader,
+                                Opengl_Shader *transparent_shader,
+                                Opengl_Shader *composite_shader,
+                                Opengl_Shader *screen_shader,
+                                Opengl_Shader *line_shader)
     {
         PROFILE_FUNCTION;
 
-        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        internal_data.sky_color = clear_color;
+        internal_data.tint_color = tint_color;
+        internal_data.camera = camera;
+        internal_data.opaque_shader = opaque_shader;
+        internal_data.transparent_shader = transparent_shader;
+        internal_data.composite_shader = composite_shader;
+        internal_data.screen_shader = screen_shader;
+        internal_data.line_shader = line_shader;
 
-        shader->use();
-        shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
-        shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
-        shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-        shader->set_uniform_vec4("u_tint_color", tint_color.r, tint_color.g, tint_color.b, tint_color.a);
-        shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
-        shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+        internal_data.opaque_command_count = 0;
+        internal_data.transparent_command_count = 0;
+        memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
+    }
+
+    void Opengl_Renderer::end(Block_Query_Result *select_query)
+    {
+        PROFILE_FUNCTION;
+
+        glBindVertexArray(internal_data.chunk_vertex_array_id);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
+
+        // opaque pass
+        Opengl_Shader *opaque_shader = internal_data.opaque_shader;
+        Opengl_Shader *transparent_shader = internal_data.transparent_shader;
+        Opengl_Shader *composite_shader = internal_data.composite_shader;
+        Opengl_Shader *screen_shader = internal_data.screen_shader;
+
+        i32 width = (i32)internal_data.frame_buffer_size.x;
+        i32 height = (i32)internal_data.frame_buffer_size.y;
+
+        Camera *camera = internal_data.camera;
+        const glm::vec4& clear_color = internal_data.sky_color;
+        const glm::vec4& tint_color = internal_data.tint_color;
 
         f32 rgba_color_factor = 1.0f / 255.0f;
         glm::vec4 grass_color  = { 109.0f, 184.0f, 79.0f, 255.0f };
         grass_color *= rgba_color_factor;
 
-        shader->set_uniform_vec4(
+        glm::ivec3 block_coords = { -1, -1, -1 };
+        glm::ivec2 chunk_coords = { -1, -1 };
+        if (World::is_block_query_valid(*select_query))
+        {
+            block_coords = select_query->block_coords;
+            chunk_coords = select_query->chunk->world_coords;
+        }
+
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.opaque_frame_buffer_id);
+        glViewport(0, 0, width, height);
+
+        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        opaque_shader->use();
+        opaque_shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
+        opaque_shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
+        opaque_shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        opaque_shader->set_uniform_vec4("u_tint_color", tint_color.r, tint_color.g, tint_color.b, tint_color.a);
+        opaque_shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
+        opaque_shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+
+        opaque_shader->set_uniform_vec4(
             "u_biome_color",
             grass_color.r,
             grass_color.g,
             grass_color.b,
             grass_color.a);
 
-        shader->set_uniform_i32("u_block_sprite_sheet", 0);
+        opaque_shader->set_uniform_ivec3("u_highlighted_block_coords", block_coords.x, block_coords.y, block_coords.z);
+        opaque_shader->set_uniform_ivec2("u_highlighted_block_chunk_coords", chunk_coords.x, chunk_coords.y);
+
+        opaque_shader->set_uniform_i32("u_block_sprite_sheet", 0);
         internal_data.block_sprite_sheet.bind(0);
 
-        shader->set_uniform_i32("u_uvs", 1);
-        shader->set_uniform_f32("u_sky_light_level", World::sky_light_level);
+        opaque_shader->set_uniform_i32("u_uvs", 1);
+        opaque_shader->set_uniform_f32("u_sky_light_level", World::sky_light_level);
 
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
-
-        internal_data.opaque_command_count = 0;
-        internal_data.transparent_command_count = 0;
-
-        memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
-    }
-
-    void Opengl_Renderer::end()
-    {
-        PROFILE_FUNCTION;
-
-        // opaque pass
-        glBindVertexArray(internal_data.chunk_vertex_array_id);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.opaque_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.opaque_command_count, internal_data.opaque_command_buffer);
@@ -1393,26 +1477,180 @@ namespace minecraft {
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
 
         // transparent pass
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.transparent_command_buffer_id);
-        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.transparent_command_count, internal_data.transparent_command_buffer);
-
         glDepthMask(GL_FALSE);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glBlendFunci(0, GL_ONE, GL_ONE);
+        glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
+        glBlendEquation(GL_FUNC_ADD);
 
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.transparent_frame_buffer_id);
+        glViewport(0, 0, width, height);
+
+        glm::vec4 zeros = { 0.0f, 0.0f, 0.0f, 0.0f };
+        glClearBufferfv(GL_COLOR, 0, glm::value_ptr(zeros));
+
+        glm::vec4 ones = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glClearBufferfv(GL_COLOR, 1, glm::value_ptr(ones));
+
+        transparent_shader->use();
+        transparent_shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (World::chunk_radius * 16.0f));
+        transparent_shader->set_uniform_vec3("u_camera_position", camera->position.x, camera->position.y, camera->position.z);
+        transparent_shader->set_uniform_vec4("u_sky_color", clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        transparent_shader->set_uniform_vec4("u_tint_color", tint_color.r, tint_color.g, tint_color.b, tint_color.a);
+        transparent_shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
+        transparent_shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+
+        transparent_shader->set_uniform_vec4(
+            "u_biome_color",
+            grass_color.r,
+            grass_color.g,
+            grass_color.b,
+            grass_color.a);
+
+        transparent_shader->set_uniform_ivec3("u_highlighted_block_coords", block_coords.x, block_coords.y, block_coords.z);
+        transparent_shader->set_uniform_ivec2("u_highlighted_block_chunk_coords", chunk_coords.x, chunk_coords.y);
+
+        transparent_shader->set_uniform_i32("u_block_sprite_sheet", 0);
+        internal_data.block_sprite_sheet.bind(0);
+
+        transparent_shader->set_uniform_i32("u_uvs", 1);
+        transparent_shader->set_uniform_f32("u_sky_light_level", World::sky_light_level);
+
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.transparent_command_buffer_id);
+        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.transparent_command_count, internal_data.transparent_command_buffer);
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
 
-        glEnable(GL_CULL_FACE);
-        glDepthMask(GL_TRUE);
+        glDepthFunc(GL_ALWAYS);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.opaque_frame_buffer_id);
+
+        composite_shader->use();
+        composite_shader->set_uniform_i32("u_accum",  2);
+        composite_shader->set_uniform_i32("u_reveal", 3);
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, internal_data.transparent_frame_buffer_accum_texture_id);
+
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_2D, internal_data.transparent_frame_buffer_reveal_texture_id);
+
+        glBindVertexArray(internal_data.quad_vertex_array_id);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        f32 line_thickness = 3.0f;
+        Opengl_Debug_Renderer::begin(camera, internal_data.line_shader, line_thickness);
+        Opengl_Debug_Renderer::end();
+
         glDisable(GL_BLEND);
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_TRUE);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glClearColor(zeros.r, zeros.g, zeros.b, zeros.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+        screen_shader->use();
+        screen_shader->set_uniform_i32("u_screen", 4);
+
+        glActiveTexture(GL_TEXTURE4);
+        glBindTexture(GL_TEXTURE_2D, internal_data.opaque_frame_buffer_color_texture_id);
+
+        glBindVertexArray(internal_data.quad_vertex_array_id); // todo(harlequin): temprary
+        glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
     void Opengl_Renderer::swap_buffers()
     {
         PROFILE_FUNCTION;
-
         internal_data.platform->opengl_swap_buffers();
+    }
+
+    bool Opengl_Renderer::recreate_frame_buffers()
+    {
+        i32 width = (i32)internal_data.frame_buffer_size.x;
+        i32 height = (i32)internal_data.frame_buffer_size.y;
+
+        if (internal_data.opaque_frame_buffer_id)
+        {
+            glDeleteFramebuffers(1, &internal_data.opaque_frame_buffer_id);
+            glDeleteTextures(1, &internal_data.opaque_frame_buffer_color_texture_id);
+            glDeleteTextures(1, &internal_data.opaque_frame_buffer_depth_texture_id);
+        }
+
+        if (internal_data.transparent_frame_buffer_id)
+        {
+            glDeleteFramebuffers(1, &internal_data.transparent_frame_buffer_id);
+            glDeleteTextures(1, &internal_data.transparent_frame_buffer_accum_texture_id);
+            glDeleteTextures(1, &internal_data.transparent_frame_buffer_reveal_texture_id);
+        }
+
+        // opaque frame buffer
+        glGenFramebuffers(1, &internal_data.opaque_frame_buffer_id);
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.opaque_frame_buffer_id);
+
+        glGenTextures(1, &internal_data.opaque_frame_buffer_color_texture_id);
+        glBindTexture(GL_TEXTURE_2D, internal_data.opaque_frame_buffer_color_texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenTextures(1, &internal_data.opaque_frame_buffer_depth_texture_id);
+        glBindTexture(GL_TEXTURE_2D, internal_data.opaque_frame_buffer_depth_texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, internal_data.opaque_frame_buffer_color_texture_id, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, internal_data.opaque_frame_buffer_depth_texture_id, 0);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            fprintf(stderr, "[ERROR]: failed to create opaque frame buffer\n");
+            return false;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // transparent frame buffer
+        glGenFramebuffers(1, &internal_data.transparent_frame_buffer_id);
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.transparent_frame_buffer_id);
+
+        glGenTextures(1, &internal_data.transparent_frame_buffer_accum_texture_id);
+        glBindTexture(GL_TEXTURE_2D, internal_data.transparent_frame_buffer_accum_texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glGenTextures(1, &internal_data.transparent_frame_buffer_reveal_texture_id);
+        glBindTexture(GL_TEXTURE_2D, internal_data.transparent_frame_buffer_reveal_texture_id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, internal_data.transparent_frame_buffer_accum_texture_id, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, internal_data.transparent_frame_buffer_reveal_texture_id, 0);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, internal_data.opaque_frame_buffer_depth_texture_id, 0);
+
+        const GLenum transparent_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+        glDrawBuffers(2, transparent_draw_buffers);
+
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        {
+            fprintf(stderr, "[ERROR]: failed to create transparent frame buffer\n");
+            return false;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        return true;
     }
 
     void APIENTRY gl_debug_output(GLenum source,
