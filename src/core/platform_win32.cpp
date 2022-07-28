@@ -140,8 +140,7 @@ namespace minecraft {
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-        // @note(harlequin): we using msaa x16 for now because we developing the game with 720p windowed mode
-        glfwWindowHint(GLFW_SAMPLES, 16); // msaa
+        glfwWindowHint(GLFW_SAMPLES, 16);
 
         window_handle = glfwCreateWindow(config.window_width,
                                          config.window_height,

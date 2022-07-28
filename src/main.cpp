@@ -130,7 +130,7 @@ int main()
     auto& platform = Game::get_platform();
     f64 last_time = platform.get_current_time();
 
-    f32 game_time_rate = 1.0f / 72.0f;
+    f32 game_time_rate = 1.0f / 1000.0f; // 72.0f
     f32 game_timer     = 0.0f;
     i32 game_time      = 43200; // todo(harlequin): game time to real time function
 
@@ -174,12 +174,12 @@ int main()
         if (game_time >= 0 && game_time <= 43200)
         {
             f32 t = (f32)game_time / 43200.0f;
-            World::sky_light_level = glm::lerp(1.0f, 15.0f, t);
+            World::sky_light_level = (i32)glm::ceil(glm::lerp(1.0f, 15.0f, t));
         } // day time
         else if (game_time >= 43200 && game_time <= 86400)
         {
             f32 t = ((f32)game_time - 43200.0f) / 43200.0f;
-            World::sky_light_level = glm::lerp(15.0f, 1.0f, t);
+            World::sky_light_level = (i32)glm::ceil(glm::lerp(15.0f, 1.0f, t));
         }
 
         {

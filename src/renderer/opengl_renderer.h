@@ -62,9 +62,19 @@ namespace minecraft {
 
         glm::vec2 frame_buffer_size;
 
+        u32 samples;
+
+        u32 ms_opaque_frame_buffer_id;
+        u32 ms_opaque_frame_buffer_color_texture_id;
+        u32 ms_opaque_frame_buffer_depth_texture_id;
+
         u32 opaque_frame_buffer_id;
         u32 opaque_frame_buffer_color_texture_id;
         u32 opaque_frame_buffer_depth_texture_id;
+
+        u32 ms_transparent_frame_buffer_id;
+        u32 ms_transparent_frame_buffer_accum_texture_id;
+        u32 ms_transparent_frame_buffer_reveal_texture_id;
 
         u32 transparent_frame_buffer_id;
         u32 transparent_frame_buffer_accum_texture_id;
@@ -78,7 +88,7 @@ namespace minecraft {
         u32 chunk_instance_buffer_id;
         u32 chunk_index_buffer_id;
 
-        Sub_Chunk_Vertex *base_vertex;
+        Sub_Chunk_Vertex   *base_vertex;
         Sub_Chunk_Instance *base_instance;
 
         std::mutex free_buckets_mutex;

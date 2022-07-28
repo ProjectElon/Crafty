@@ -44,6 +44,7 @@ namespace minecraft {
         void set_block(const Console_Command::Arguments& args);
         void chunk_radius(const Console_Command::Arguments& args);
         void set_chunk_radius(const Console_Command::Arguments& args);
+        void add_block_to_inventory(const Console_Command::Arguments& args);
 
         // assets
         void build_assets(const Console_Command::Arguments& args);

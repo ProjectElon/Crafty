@@ -17,12 +17,13 @@ void main()
 
 #version 430 core
 
-layout (location = 0) out vec4 color;
+layout (location = 0) out vec4 out_color;
 
 in vec2 a_uv;
 
-uniform sampler2D u_accum;
-uniform sampler2D u_reveal;
+uniform int u_samples;
+uniform sampler2DMS u_accum;
+uniform sampler2DMS u_reveal;
 
 const float Epsilon = 0.00001f;
 
@@ -40,15 +41,24 @@ void main()
 {
     ivec2 coords = ivec2(gl_FragCoord.xy);
 
-    float revealage = texelFetch(u_reveal, coords, 0).r;
+    vec3 color_accum = vec3(0.0f);
+    float revealage_accum = 0.0f;
 
+    for (int texel_index = 0; texel_index < u_samples; texel_index++)
+    {
+        float revealage = texelFetch(u_reveal, coords, texel_index).r;
+        revealage_accum += revealage;
+
+        vec4 accumulation = texelFetch(u_accum, coords, texel_index);
+
+        if (isinf(get_max(abs(accumulation.rgb))))
+            accumulation.rgb = vec3(accumulation.a);
+
+        color_accum += accumulation.rgb / max(accumulation.a, Epsilon);
+    }
+
+    float revealage = revealage_accum / float(u_samples);
     if (is_approximately_equal(revealage, 1.0f)) discard;
-
-    vec4 accumulation = texelFetch(u_accum, coords, 0);
-
-    if (isinf(get_max(abs(accumulation.rgb))))
-        accumulation.rgb = vec3(accumulation.a);
-
-    vec3 average_color = accumulation.rgb / max(accumulation.a, Epsilon);
-    color = vec4(average_color, 1.0f - revealage);
+    vec3 color = color_accum / float(u_samples);
+    out_color = vec4(color, 1.0f - revealage);
 }

@@ -96,11 +96,11 @@ void main()
     float light_source = float((in_data1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
 
     a_light_level = float(max(sky_light, light_source)) / 15.0f;
-    float ambient_factor = 0.5f + a_light_level * 1.5f;
-    float ambient_occlusion = (float((in_data1 >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK) + ambient_factor) / (3.0f + ambient_factor);
 
     if ((flags & BlockFlags_Is_Light_Source) == 0)
     {
+        float ambient_factor = 0.5f + a_light_level * 1.5f;
+        float ambient_occlusion = (float((in_data1 >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK) + ambient_factor) / (3.0f + ambient_factor);
         a_light_level *= ambient_occlusion;
     }
 

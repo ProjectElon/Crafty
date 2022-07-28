@@ -3,6 +3,7 @@
 #include "ui/dropdown_console.h"
 #include "assets/texture_packer.h"
 #include "core/file_system.h"
+#include "game/inventory.h"
 #include "game/game.h"
 
 #include <sstream>
@@ -74,6 +75,7 @@ namespace minecraft {
 
             register_command({ "chunk_radius", {}, chunk_radius });
             register_command({ "set_chunk_radius", { "radius:i32" }, set_chunk_radius });
+            register_command({ "add_block", { "block_name:string" }, add_block_to_inventory });
 
             register_command({ "build_assets", {}, build_assets });
         }
@@ -149,6 +151,29 @@ namespace minecraft {
             }
             if (chunk_radius > World::max_chunk_radius) chunk_radius = World::max_chunk_radius;
             World::chunk_radius = chunk_radius;
+        }
+
+        void add_block_to_inventory(const Console_Command::Arguments& args)
+        {
+            std::string block_name;
+            std::stringstream ss(args[0]);
+            ss >> block_name;
+            i16 block_id = -1;
+            for (u16 i = 1; i < BlockId_Count; i++)
+            {
+                const Block_Info& block_info = World::block_infos[i];
+                if (block_info.name == block_name)
+                {
+                    block_id = i;
+                    break;
+                }
+            }
+            if (block_id == -1)
+            {
+                Dropdown_Console::log_with_new_line("invalid block\n");
+                return;
+            }
+            Inventory::add_block(block_id);
         }
 
         void build_assets(const Console_Command::Arguments& args)
