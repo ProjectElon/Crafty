@@ -6,26 +6,18 @@
 #include <string.h>
 #include <functional>
 
-typedef int8_t  i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
+typedef int8_t   i8;
+typedef int16_t  i16;
+typedef int32_t  i32;
+typedef int64_t  i64;
 
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
-typedef float  f32;
-typedef double f64;
-
-#if defined(WIN32) || defined(_WIN32) || defined(__WIN32__) || defined(__NT__)
-    #if defined(_WIN64)
-        #define MC_PLATFORM_WINDOWS 1
-    #endif
-#endif
-
-// todo(harlequin): add support for linux and mac
+typedef float    f32;
+typedef double   f64;
 
 #ifdef _MSC_VER
 #define MC_DebugBreak() __debugbreak()

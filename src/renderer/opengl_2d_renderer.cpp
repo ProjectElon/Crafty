@@ -109,6 +109,7 @@ namespace minecraft {
         u32 white_pxiel = 0xffffffff;
         internal_data.white_pixel.initialize(reinterpret_cast<u8*>(&white_pxiel), 1, 1, TextureFormat_RGBA, TextureUsage_UI);
 
+        internal_data.ui_shader.load_from_file("../assets/shaders/quad.glsl");
         return true;
     }
 
@@ -116,11 +117,12 @@ namespace minecraft {
     {
     }
 
-    void Opengl_2D_Renderer::begin(Opengl_Shader *shader)
+    void Opengl_2D_Renderer::begin()
     {
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
         glm::mat4 projection = glm::ortho(0.0f, frame_buffer_size.x, 0.0f, frame_buffer_size.y); // left right bottom top
 
+        Opengl_Shader *shader = &internal_data.ui_shader;
         shader->use();
         shader->set_uniform_mat4("u_projection", glm::value_ptr(projection));
         shader->set_uniform_i32_array("u_textures", internal_data.samplers, 32);

@@ -2,8 +2,10 @@
 
 #include "core/common.h"
 #include "core/event.h"
+#include "core/platform.h"
 
 #include "opengl_texture.h"
+#include "opengl_shader.h"
 #include "game/world.h"
 
 #include <glm/glm.hpp>
@@ -15,7 +17,6 @@ namespace minecraft {
 
     struct Platform;
     struct Camera;
-    struct Opengl_Shader;
 
     enum BlockFaceId : u32
     {
@@ -58,23 +59,11 @@ namespace minecraft {
 
     struct Opengl_Renderer_Data
     {
-        Platform *platform;
-
         glm::vec2 frame_buffer_size;
-
-        u32 samples;
-
-        u32 ms_opaque_frame_buffer_id;
-        u32 ms_opaque_frame_buffer_color_texture_id;
-        u32 ms_opaque_frame_buffer_depth_texture_id;
 
         u32 opaque_frame_buffer_id;
         u32 opaque_frame_buffer_color_texture_id;
         u32 opaque_frame_buffer_depth_texture_id;
-
-        u32 ms_transparent_frame_buffer_id;
-        u32 ms_transparent_frame_buffer_accum_texture_id;
-        u32 ms_transparent_frame_buffer_reveal_texture_id;
 
         u32 transparent_frame_buffer_id;
         u32 transparent_frame_buffer_accum_texture_id;
@@ -121,11 +110,11 @@ namespace minecraft {
 
         Camera *camera;
 
-        Opengl_Shader *opaque_shader;
-        Opengl_Shader *transparent_shader;
-        Opengl_Shader *composite_shader;
-        Opengl_Shader *screen_shader;
-        Opengl_Shader *line_shader;
+        Opengl_Shader opaque_chunk_shader;
+        Opengl_Shader transparent_chunk_shader;
+        Opengl_Shader composite_shader;
+        Opengl_Shader screen_shader;
+        Opengl_Shader line_shader;
     };
 
     struct Opengl_Renderer
@@ -134,7 +123,7 @@ namespace minecraft {
 
         Opengl_Renderer() = delete;
 
-        static bool initialize(Platform *platform);
+        static bool initialize(GLFWwindow *window);
         static void shutdown();
 
         static bool on_resize(const Event* event, void *sender);
@@ -169,12 +158,7 @@ namespace minecraft {
 
         static void begin(const glm::vec4& clear_color,
                           const glm::vec4& tint_color,
-                          Camera *camera,
-                          Opengl_Shader *opaque_shader,
-                          Opengl_Shader *transparent_shader,
-                          Opengl_Shader *composite_shader,
-                          Opengl_Shader *screen_shader,
-                          Opengl_Shader *line_shader);
+                          Camera *camera);
 
         static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index);
         static void render_chunks_at_region(World_Region_Bounds *player_region_bounds,
@@ -185,7 +169,7 @@ namespace minecraft {
         static void wait_for_gpu_to_finish_work();
         static void signal_gpu_for_work();
 
-        static void swap_buffers();
+        static void swap_buffers(struct GLFWwindow *window);
 
         static bool recreate_frame_buffers();
 

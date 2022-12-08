@@ -5,15 +5,13 @@ namespace minecraft {
 
     Profile_Timer::Profile_Timer(const char *name)
     {
-        auto& platform = Game::get_platform();
         this->profile.name = name;
-        this->start_time   = platform.get_current_time();
+        this->start_time   = Platform::get_current_time_in_seconds();
     }
 
     Profile_Timer::~Profile_Timer()
     {
-        auto& platform = Game::get_platform();
-        this->profile.elapsed_time = platform.get_current_time() - this->start_time;
+        this->profile.elapsed_time = Platform::get_current_time_in_seconds() - this->start_time;
         Profiler::internal_data.profiles.emplace_back(std::move(this->profile));
     }
 
@@ -26,14 +24,12 @@ namespace minecraft {
 
     void Profiler::begin()
     {
-        auto& platform = Game::get_platform();
-        internal_data.start_time = platform.get_current_time();
+        internal_data.start_time = Platform::get_current_time_in_seconds();
     }
 
     void Profiler::end()
     {
-        auto& platform = Game::get_platform();
-        f64 delta_time = platform.get_current_time() - internal_data.start_time;
+        f64 delta_time = Platform::get_current_time_in_seconds() - internal_data.start_time;
         if (delta_time >= internal_data.target_frame_rate)
         {
             fprintf(stderr, "================= frame drop %.2fms =================\n", delta_time * 1000.0f);

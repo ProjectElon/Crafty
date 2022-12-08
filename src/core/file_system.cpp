@@ -10,40 +10,52 @@ namespace minecraft {
         return std::filesystem::current_path().string().c_str();
     }
 
-    std::vector<std::string> File_System::list_files(const char *path, const std::vector<std::string> &extensions)
+    static void
+    add_file_path_if_matches_extension(const std::filesystem::directory_entry& entry,
+                                       const std::vector<std::string>&         extensions,
+                                       std::vector<std::string>&               paths)
     {
-        std::vector<std::string> result;
-        const std::filesystem::path target(path);
-
-        for (const auto &entry : std::filesystem::directory_iterator(target))
+        if (entry.is_regular_file())
         {
-            if (entry.is_regular_file())
+            if (extensions.size() == 0 ||
+                std::find(std::begin(extensions),
+                          std::end(extensions),
+                          entry.path().extension().string()) != extensions.end())
             {
-                auto ext = entry.path().extension().string();
-                if (extensions.size() == 0 || std::find(std::begin(extensions), std::end(extensions), ext) != extensions.end())
-                    result.push_back(entry.path().string());
+                paths.push_back(entry.path().string());
             }
         }
-
-        return result;
     }
 
-    std::vector<std::string> File_System::list_files_recursivly(const char *path, const std::vector<std::string> &extensions)
+    std::vector<std::string>
+    File_System::list_files_at_path(const char *path,
+                                    bool recursive,
+                                    const std::vector<std::string> &extensions)
     {
-        std::vector<std::string> result;
-        const std::filesystem::path target(path);
+        std::vector<std::string> paths;
 
-        for (const auto &entry : std::filesystem::recursive_directory_iterator(target))
+        if (recursive)
         {
-            if (entry.is_regular_file())
+            auto directory_iterator =
+                std::filesystem::recursive_directory_iterator(std::filesystem::path(path));
+
+            for (const auto &entry : directory_iterator)
             {
-                auto ext = entry.path().extension().string();
-                if (extensions.size() == 0 || std::find(std::begin(extensions), std::end(extensions), ext) != extensions.end())
-                    result.push_back(entry.path().string());
+                add_file_path_if_matches_extension(entry, extensions, paths);
+            }
+        }
+        else
+        {
+            auto directory_iterator =
+                std::filesystem::directory_iterator(std::filesystem::path(path));
+
+            for (const auto &entry : directory_iterator)
+            {
+                add_file_path_if_matches_extension(entry, extensions, paths);
             }
         }
 
-        return result;
+        return paths;
     }
 
     bool File_System::exists(const char *path)

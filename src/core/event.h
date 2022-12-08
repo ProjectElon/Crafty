@@ -61,8 +61,8 @@ namespace minecraft {
 
     struct Event_Entry
     {
-        void *sender;
-        on_event_fn on_event;
+        void        *sender;
+        on_event_fn  on_event;
     };
 
     struct Event_Registry
@@ -72,7 +72,7 @@ namespace minecraft {
 
     struct Event_System_Data
     {
-        bool is_tracing_events = false;
+        bool           is_logging_enabled;
         Event_Registry event_registry[EventType_Count];
     };
 
@@ -80,19 +80,39 @@ namespace minecraft {
     {
         static Event_System_Data internal_data;
 
-        static bool initialize(struct Platform *platform, bool is_tracing_events = false);
+        static bool initialize(bool is_logging_enabled);
+
         static void shutdown();
 
-        static bool register_event(EventType event_type, on_event_fn on_event, void *sender = nullptr);
-        static bool unregister_event(EventType event_type, void *sender = nullptr);
+        static bool register_event(EventType event_type,
+                                   on_event_fn on_event,
+                                   void *sender = nullptr);
 
-        static void fire_event(EventType event_type, const Event *event);
+        static bool unregister_event(EventType event_type,
+                                     void *sender = nullptr);
 
-        static void parse_resize_event(const Event *event, u32 *out_width, u32 *out_height);
-        static void parse_key_code(const Event *event, u16 *out_key);
-        static void parse_mouse_move(const Event *event, f32 *out_mouse_x, f32 *out_mouse_y);
-        static void parse_button_code(const Event *event, u8 *out_button);
-        static void parse_model_wheel(const Event *event, f32 *out_xoffset, f32 *out_yoffset);
-        static void parse_char(const Event *event, char *out_code_point);
+        static void fire_event(EventType event_type,
+                               const Event *event);
+
+        static void parse_resize_event(const Event *event,
+                                       u32 *out_width,
+                                       u32 *out_height);
+
+        static void parse_key_code(const Event *event,
+                                   u16 *out_key);
+
+        static void parse_mouse_move(const Event *event,
+                                     f32 *out_mouse_x,
+                                     f32 *out_mouse_y);
+
+        static void parse_button_code(const Event *event,
+                                      u8 *out_button);
+
+        static void parse_model_wheel(const Event *event,
+                                      f32 *out_xoffset,
+                                      f32 *out_yoffset);
+
+        static void parse_char(const Event *event,
+                               char *out_code_point);
     };
 }

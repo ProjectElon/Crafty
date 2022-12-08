@@ -2,6 +2,7 @@
 
 #include "core/common.h"
 #include "renderer/opengl_texture.h"
+#include "renderer/opengl_shader.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -44,11 +45,10 @@ namespace minecraft {
         std::vector<Quad_Instance> quad_instances;
 
         Opengl_Texture white_pixel;
+        Opengl_Shader  ui_shader;
     };
 
-    struct Opengl_Shader;
     struct Bitmap_Font;
-
 
     struct Opengl_2D_Renderer
     {
@@ -57,7 +57,7 @@ namespace minecraft {
         static bool initialize();
         static void shutdown();
 
-        static void begin(Opengl_Shader *shader);
+        static void begin();
 
         static void draw_rect(const glm::vec2& position,
                               const glm::vec2& scale,

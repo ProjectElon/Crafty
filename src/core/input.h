@@ -9,36 +9,33 @@ struct GLFWwindow;
 
 namespace minecraft {
 
-    struct Platform;
-
     #define MC_KEY_STATE_COUNT    512
     #define MC_BUTTON_STATE_COUNT 64
 
     struct InputData
     {
-        GLFWwindow *window_handle;
-        bool key_states[MC_KEY_STATE_COUNT];
-        bool previous_key_states[MC_KEY_STATE_COUNT];
-        bool button_states[MC_BUTTON_STATE_COUNT];
-        bool previous_button_states[MC_BUTTON_STATE_COUNT];
-        glm::vec2 mouse_position;
-        glm::vec2 previous_mouse_position;
-        bool is_cursor_visible = true;
-        bool is_using_raw_mouse_motion = false;
+        glm::vec2   previous_mouse_position;
+        glm::vec2   mouse_position;
+        bool        previous_key_states[MC_KEY_STATE_COUNT];
+        bool        key_states[MC_KEY_STATE_COUNT];
+        bool        previous_button_states[MC_BUTTON_STATE_COUNT];
+        bool        button_states[MC_BUTTON_STATE_COUNT];
+        bool        is_cursor_visible;
+        bool        is_using_raw_mouse_motion;
     };
 
     struct Input
     {
         static InputData internal_data;
 
-        static bool initialize(Platform *platform);
+        static bool initialize(GLFWwindow *window);
         static void shutdown();
 
-        static void update();
+        static void update(GLFWwindow *window);
 
-        static void set_cursor_mode(bool enabled);
-        static void set_raw_mouse_motion(bool enabled);
-        static void toggle_cursor();
+        static void set_cursor_mode(GLFWwindow *window, bool enabled);
+        static void set_raw_mouse_motion(GLFWwindow *window, bool enabled);
+        static void toggle_cursor(GLFWwindow *window);
 
         static bool get_key(u16 key_code);
 

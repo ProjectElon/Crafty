@@ -9,24 +9,24 @@ namespace minecraft {
     {
         switch (event_type)
         {
-            case EventType_Resize: return "Resize"; break;
+            // Window Events
+            case EventType_Resize:   return "Resize";   break;
             case EventType_Minimize: return "Minimize"; break;
-            case EventType_Restore: return "Restore"; break;
-            case EventType_Quit: return "Quit"; break;
+            case EventType_Restore:  return "Restore";  break;
+            case EventType_Quit:     return "Quit";     break;
 
             // Key Events
-            case EventType_KeyPress: return "KeyPress"; break;
-            case EventType_KeyHeld: return "KeyHeld"; break;
+            case EventType_KeyPress:   return "KeyPress";   break;
+            case EventType_KeyHeld:    return "KeyHeld";    break;
             case EventType_KeyRelease: return "KeyRelease"; break;
+            case EventType_Char:       return "Char";       break;
 
             // Mouse Events
-            case EventType_MouseButtonPress: return "MouseButtonPress"; break;
-            case EventType_MouseButtonHeld: return "MouseButtonHeld"; break;
+            case EventType_MouseButtonPress:   return "MouseButtonPress";   break;
+            case EventType_MouseButtonHeld:    return "MouseButtonHeld";    break;
             case EventType_MouseButtonRelease: return "MouseButtonRelease"; break;
-            case EventType_MouseWheel: return "MouseWheel"; break;
-            case EventType_MouseMove: return "MouseMove"; break;
-
-            case EventType_Char: return "Char"; break;
+            case EventType_MouseWheel:         return "MouseWheel";         break;
+            case EventType_MouseMove:          return "MouseMove";          break;
         }
 
         return "";
@@ -62,28 +62,36 @@ namespace minecraft {
             case EventType_KeyPress:
             {
                 u16 key = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: KeyPress => key: \"%s\"", Input::convert_key_code_to_string(key));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: KeyPress => key: \"%s\"",
+                        Input::convert_key_code_to_string(key));
                 return internal_string_buffer;
             } break;
 
             case EventType_KeyHeld:
             {
                 u16 key = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: KeyHeld => key: \"%s\"", Input::convert_key_code_to_string(key));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: KeyHeld => key: \"%s\"",
+                        Input::convert_key_code_to_string(key));
                 return internal_string_buffer;
             } break;
 
             case EventType_KeyRelease:
             {
                 u16 key = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: KeyRelease => key: \"%s\"", Input::convert_key_code_to_string(key));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: KeyRelease => key: \"%s\"",
+                        Input::convert_key_code_to_string(key));
                 return internal_string_buffer;
             } break;
 
             case EventType_Char:
             {
                 u8 code_point = event->data_u8;
-                sprintf(internal_string_buffer, "[EVENT]: Char => key: \"%c\"", (unsigned char)code_point);
+                sprintf(internal_string_buffer,
+                        "[EVENT]: Char => key: \"%c\"",
+                        (unsigned char)code_point);
                 return internal_string_buffer;
             } break;
 
@@ -91,21 +99,27 @@ namespace minecraft {
             case EventType_MouseButtonPress:
             {
                 u16 button = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: MouseButtonPress => button: \"%s\"", Input::convert_button_code_to_string(button));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: MouseButtonPress => button: \"%s\"",
+                        Input::convert_button_code_to_string(button));
                 return internal_string_buffer;
             } break;
 
             case EventType_MouseButtonHeld:
             {
                 u16 button = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: MouseButtonHeld => button: \"%s\"", Input::convert_button_code_to_string(button));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: MouseButtonHeld => button: \"%s\"",
+                        Input::convert_button_code_to_string(button));
                 return internal_string_buffer;
             } break;
 
             case EventType_MouseButtonRelease:
             {
                 u16 button = event->data_u16;
-                sprintf(internal_string_buffer, "[EVENT]: MouseButtonRelease => button: \"%s\"", Input::convert_button_code_to_string(button));
+                sprintf(internal_string_buffer,
+                        "[EVENT]: MouseButtonRelease => button: \"%s\"",
+                        Input::convert_button_code_to_string(button));
                 return internal_string_buffer;
             } break;
 
@@ -116,7 +130,9 @@ namespace minecraft {
                 const char *direction;
                 if (yoffset > 0.0f) direction = "up";
                 if (yoffset < 0.0f) direction = "down";
-                sprintf(internal_string_buffer, "[EVENT]: MouseWheel => direction: \"%s\"", direction);
+                sprintf(internal_string_buffer,
+                        "[EVENT]: MouseWheel => direction: \"%s\"",
+                        direction);
                 return internal_string_buffer;
             } break;
 
@@ -124,15 +140,17 @@ namespace minecraft {
             {
                 f32 mouse_x = event->data_f32_array[0];
                 f32 mouse_y = event->data_f32_array[1];
-                sprintf(internal_string_buffer, "[EVENT]: MouseMouse => position: \"(%f, %f)\"", mouse_x, mouse_y);
+                sprintf(internal_string_buffer,
+                        "[EVENT]: MouseMouse => position: \"(%f, %f)\"",
+                        mouse_x, mouse_y);
                 return internal_string_buffer;
             } break;
         }
     }
 
-    bool Event_System::initialize(Platform *platform, bool is_tracing_events)
+    bool Event_System::initialize(bool is_logging_enabled)
     {
-        internal_data.is_tracing_events = is_tracing_events;
+        internal_data.is_logging_enabled = is_logging_enabled;
         internal_data.event_registry->entries.reserve(1024);
         return true;
     }
@@ -151,9 +169,10 @@ namespace minecraft {
                 return false;
             }
         }
+
         Event_Entry event_entry;
         event_entry.on_event = on_event;
-        event_entry.sender = sender;
+        event_entry.sender   = sender;
         internal_data.event_registry[event_type].entries.emplace_back(event_entry);
         fprintf(stderr, "[TRACE]: %s event registered with sender %p\n", convert_event_type_to_string(event_type), sender);
         return true;
@@ -185,7 +204,7 @@ namespace minecraft {
         {
             bool handled = event_entry.on_event(event, event_entry.sender);
 
-            if (internal_data.is_tracing_events)
+            if (internal_data.is_logging_enabled)
             {
                 const char* event_string = convert_event_to_string(event_type, event);
                 fprintf(stderr, "[TRACE]: %s event fired with sender %p\n", event_string, event_entry.sender);
@@ -200,7 +219,7 @@ namespace minecraft {
 
     void Event_System::parse_resize_event(const Event *event, u32 *out_width, u32 *out_height)
     {
-        *out_width = event->data_u32_array[0];
+        *out_width  = event->data_u32_array[0];
         *out_height = event->data_u32_array[1];
     }
 

@@ -4,16 +4,14 @@
 
 layout (location = 0) in uint  in_data0;
 layout (location = 1) in uint  in_data1;
-layout (location = 2) in ivec2 instance_chunk_coords;
+layout (location = 2) in ivec2 in_instance_chunk_coords;
 
 out vec2 a_uv;
-// out flat uint a_data0;
-// out flat uint a_data1;
 
 out flat vec4 a_biome_color;
 out flat vec4 a_highlight_color;
-out float a_fog_factor;
-out float a_light_level;
+out float     a_fog_factor;
+out float     a_light_level;
 
 uniform mat4  u_view;
 uniform mat4  u_projection;
@@ -76,7 +74,7 @@ void main()
     // uint face_corner_id = (in_data0 >> 22) & FACE_CORNER_ID_MASK;
     uint flags = in_data0 >> 24;
 
-    vec3 position = vec3(instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
+    vec3 position = vec3(in_instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, in_instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
     gl_Position = u_projection * u_view * vec4(position, 1.0f);
 
     float distance_relative_to_camera = length(u_camera_position - position);
@@ -141,8 +139,8 @@ void main()
     if (u_highlighted_block_coords.x == block_x &&
         u_highlighted_block_coords.y == block_y &&
         u_highlighted_block_coords.z == block_z &&
-        u_highlighted_block_chunk_coords.x == instance_chunk_coords.x &&
-        u_highlighted_block_chunk_coords.y == instance_chunk_coords.y)
+        u_highlighted_block_chunk_coords.x == in_instance_chunk_coords.x &&
+        u_highlighted_block_chunk_coords.y == in_instance_chunk_coords.y)
     {
         a_highlight_color = vec4(0.5f, 0.5f, 0.5f, 1.0f);
     }
@@ -155,8 +153,6 @@ void main()
 layout (location = 0) out vec4 out_color;
 
 in vec2 a_uv;
-// in flat uint a_data0;
-// in flat uint a_data1;
 in flat vec4 a_biome_color;
 in flat vec4 a_highlight_color;
 in float a_fog_factor;
@@ -204,6 +200,6 @@ void main()
     // uint flags = a_data0 >> 24;
     // vec3 normal = face_normal[face_id];
 
-    vec4 color = texture(u_block_sprite_sheet, a_uv) * a_biome_color * a_highlight_color;
+    vec4 color = texture(u_block_sprite_sheet, a_uv, 0) * a_biome_color * a_highlight_color;
     out_color = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor) * u_tint_color;
 }

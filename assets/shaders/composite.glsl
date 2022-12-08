@@ -3,14 +3,10 @@
 #version 430 core
 
 layout (location = 0) in vec3 in_position;
-layout (location = 0) in vec2 in_uv;
-
-out vec2 a_uv;
 
 void main()
 {
     gl_Position = vec4(in_position, 1.0f);
-    a_uv = in_uv;
 }
 
 #fragment
@@ -19,11 +15,9 @@ void main()
 
 layout (location = 0) out vec4 out_color;
 
-in vec2 a_uv;
-
 uniform int u_samples;
-uniform sampler2DMS u_accum;
-uniform sampler2DMS u_reveal;
+uniform sampler2D u_accum;
+uniform sampler2D u_reveal;
 
 const float Epsilon = 0.00001f;
 
@@ -39,26 +33,42 @@ float get_max(vec3 v)
 
 void main()
 {
+    // ivec2 coords = ivec2(gl_FragCoord.xy);
+
+    // vec3 color_accum = vec3(0.0f);
+    // float revealage_accum = 0.0f;
+
+    // for (int texel_index = 0; texel_index < u_samples; texel_index++)
+    // {
+    //     float revealage = texelFetch(u_reveal, coords, texel_index).r;
+    //     revealage_accum += revealage;
+
+    //     vec4 accumulation = texelFetch(u_accum, coords, texel_index);
+
+    //     if (isinf(get_max(abs(accumulation.rgb)))) accumulation.rgb = vec3(accumulation.a);
+
+    //     color_accum += accumulation.rgb / max(accumulation.a, Epsilon);
+    // }
+
+    // // float revealage = revealage_accum / float(u_samples);
+    // float revealage = revealage_accum;
+
+    // if (is_approximately_equal(revealage, 1.0f)) discard;
+    // // vec3 color = color_accum / float(u_samples);
+    // vec3 color = color_accum;
+    // out_color = vec4(color, 1.0f - revealage);
+
     ivec2 coords = ivec2(gl_FragCoord.xy);
 
-    vec3 color_accum = vec3(0.0f);
-    float revealage_accum = 0.0f;
+    float revealage = texelFetch(u_reveal, coords, 0).r;
 
-    for (int texel_index = 0; texel_index < u_samples; texel_index++)
-    {
-        float revealage = texelFetch(u_reveal, coords, texel_index).r;
-        revealage_accum += revealage;
-
-        vec4 accumulation = texelFetch(u_accum, coords, texel_index);
-
-        if (isinf(get_max(abs(accumulation.rgb))))
-            accumulation.rgb = vec3(accumulation.a);
-
-        color_accum += accumulation.rgb / max(accumulation.a, Epsilon);
-    }
-
-    float revealage = revealage_accum / float(u_samples);
     if (is_approximately_equal(revealage, 1.0f)) discard;
-    vec3 color = color_accum / float(u_samples);
-    out_color = vec4(color, 1.0f - revealage);
+
+    vec4 accumulation = texelFetch(u_accum, coords, 0);
+
+    if (isinf(get_max(abs(accumulation.rgb))))
+        accumulation.rgb = vec3(accumulation.a);
+
+    vec3 average_color = accumulation.rgb / max(accumulation.a, Epsilon);
+    out_color = vec4(average_color, 1.0f - revealage);
 }

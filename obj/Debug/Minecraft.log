@@ -1,14 +1,16 @@
-﻿  main.cpp
+﻿  game.cpp
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\game.cpp(510,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\game\game.cpp(515,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
 C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\main.cpp(107): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
+C:\dev\cpp\Crafty\src\game\game.cpp(441): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
 C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\main.cpp(261): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+C:\dev\cpp\Crafty\src\game\game.cpp(599): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform

@@ -9,24 +9,30 @@ namespace minecraft {
 
     struct Platform
     {
-        // note(harlequin): we are going to have one main window throughout the game
-        GLFWwindow *window_handle;
-        i32 window_x_before_fullscreen;
-        i32 window_y_before_fullscreen;
+        static bool initialize(Game_Config *config,
+                               u32          opengl_major_version,
+                               u32          opengl_minor_version);
 
-        bool initialize(u32 opengl_major_version = 4,
-                        u32 opengl_minor_version = 5);
+        static void shutdown();
 
-        bool opengl_initialize();
-        void opengl_swap_buffers();
+        static bool opengl_initialize(GLFWwindow *window);
+        static void opengl_swap_buffers(GLFWwindow *window);
 
-        void pump_messages();
+        static GLFWwindow *open_window(const char *title,
+                                       u32 width,
+                                       u32 height,
+                                       u32 back_buffer_samples);
 
-        void switch_to_window_mode(WindowMode new_window_mode);
-        void center_window();
+        static void hook_event_callbacks(GLFWwindow *window);
 
-        f64 get_current_time();
+        static void pump_messages();
 
-        void shutdown();
+        static void switch_to_window_mode(GLFWwindow  *window,
+                                          Game_Config *config,
+                                          WindowMode   new_window_mode);
+
+        static void center_window(GLFWwindow *window, Game_Config *config);
+
+        static f64 get_current_time_in_seconds();
     };
 }
