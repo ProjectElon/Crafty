@@ -59,6 +59,7 @@ namespace minecraft {
 
     struct Opengl_Renderer_Data
     {
+        glm::vec2 new_frame_buffer_size;
         glm::vec2 frame_buffer_size;
 
         u32 opaque_frame_buffer_id;

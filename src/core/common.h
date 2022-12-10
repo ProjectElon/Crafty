@@ -19,6 +19,10 @@ typedef uint64_t u64;
 typedef float    f32;
 typedef double   f64;
 
+#define KiloBytes(X) (X) * (u64)1024
+#define MegaBytes(X) (X) * (u64)1024 * (u64)1024
+#define GigaBytes(X) (X) * (u64)1024 * (u64)1024 * (u64)1024
+
 #ifdef _MSC_VER
 #define MC_DebugBreak() __debugbreak()
 #else

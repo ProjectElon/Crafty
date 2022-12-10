@@ -1,11 +1,15 @@
 #pragma once
 
 #include "core/common.h"
+#include "containers/string.h"
+
 #include "renderer/opengl_texture.h"
 #include "renderer/opengl_shader.h"
 
 #include <glm/glm.hpp>
+
 #include <vector>
+#include <string> // @Temprary
 
 namespace minecraft {
 
@@ -67,6 +71,13 @@ namespace minecraft {
                               const glm::vec2& uv_scale  = { 1.0f, 1.0f },
                               const glm::vec2& uv_offset = { 0.0f, 0.0f });
 
+        static void draw_string(Bitmap_Font *font,
+                                String8 text,
+                                const glm::vec2& text_size,
+                                const glm::vec2& position,
+                                const glm::vec4& color);
+
+        // @Temprary
         static void draw_string(Bitmap_Font *font,
                                 const std::string& text,
                                 const glm::vec2& text_size,

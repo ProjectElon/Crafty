@@ -1,8 +1,9 @@
 #pragma once
 
 #include "core/common.h"
+#include "containers/string.h"
+
 #include <glm/glm.hpp>
-#include <string>
 
 namespace minecraft {
 
@@ -41,10 +42,10 @@ namespace minecraft {
         static void set_offset(const glm::vec2& offset);
 
         static bool rect(const glm::vec2& size);
-        static bool text(const std::string& text);
-        static bool button(const std::string& text, const glm::vec2& padding = { 5.0f, 5.0f });
+        static bool text(String8 text);
+        static bool button(String8 text, const glm::vec2& padding = { 5.0f, 5.0f });
 
-        static bool textured_button(const std::string& text,
+        static bool textured_button(String8 text,
                                     Opengl_Texture *texture,
                                     const glm::vec2& padding   = { 5.0f, 5.0f },
                                     const glm::vec2& uv_scale  = { 1.0f, 1.0f },

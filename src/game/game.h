@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "memory/memory_arena.h"
 #include "renderer/camera.h"
 
 struct GLFWwindow;
@@ -30,31 +31,40 @@ namespace minecraft {
         u32         window_width;
         u32         window_height;
         WindowMode  window_mode;
-        bool        minimized;
+    };
+
+    struct Game_Memory
+    {
+        u64          permanent_memory_size;
+        void        *permanent_memory;
+
+        u64          transient_memory_size;
+        void        *transient_memory;
+
+        Memory_Arena permanent_arena;
+        Memory_Arena transient_arena;
     };
 
     struct Game_State
     {
+        Game_Memory *game_memory;
         Game_Config  config;
         GLFWwindow  *window;
-
-        Camera      camera;
-
-        bool        is_running;
-        bool        show_debug_stats_hud;
-        bool        is_inventory_active;
-
-        CursorMode  cursor_mode;
-
-        void *ingame_crosshair_texture;
-        void *inventory_crosshair_texture;
+        Camera       camera;
+        bool         minimized;
+        bool         is_running;
+        bool         show_debug_stats_hud;
+        bool         is_inventory_active;
+        CursorMode   cursor_mode;
+        void        *ingame_crosshair_texture;
+        void        *inventory_crosshair_texture;
     };
 
     struct Game
     {
         static Game_State internal_data;
 
-        static bool initialize();
+        static bool initialize(Game_Memory *game_memory);
         static void shutdown();
 
         static void run();

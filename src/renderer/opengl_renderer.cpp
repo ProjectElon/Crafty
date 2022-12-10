@@ -43,7 +43,7 @@ namespace minecraft {
             return false;
         }
 
-#define OPENGL_DEBUGGING 0
+#define OPENGL_DEBUGGING 1
 #if OPENGL_DEBUGGING
 #ifndef MC_DIST
         i32 flags;
@@ -195,6 +195,7 @@ namespace minecraft {
         u32 width = Game::internal_data.config.window_width;
         u32 height = Game::internal_data.config.window_height;
         internal_data.frame_buffer_size = { (f32)width, (f32)height };
+        internal_data.new_frame_buffer_size = internal_data.frame_buffer_size;
         glViewport(0, 0, width, height);
 
         internal_data.opaque_frame_buffer_id = 0;
@@ -282,9 +283,12 @@ namespace minecraft {
         u32 width;
         u32 height;
         Event_System::parse_resize_event(event, &width, &height);
-        internal_data.frame_buffer_size = { (f32)width, (f32)height };
-        glViewport(0, 0, width, height);
-        recreate_frame_buffers();
+        if (width == 0 || height == 0)
+        {
+            return true; // todo(harlequin): maybe we should return true
+        }
+        internal_data.new_frame_buffer_size = { (f32)width, (f32)height };
+        // recreate_frame_buffers();
         return false;
     }
 
@@ -1401,6 +1405,13 @@ namespace minecraft {
         internal_data.opaque_command_count = 0;
         internal_data.transparent_command_count = 0;
         memset(&internal_data.stats, 0, sizeof(Opengl_Renderer_Stats));
+
+        if ((i32)internal_data.new_frame_buffer_size.x != (i32)internal_data.frame_buffer_size.x ||
+            (i32)internal_data.new_frame_buffer_size.y != (i32)internal_data.frame_buffer_size.y)
+        {
+                internal_data.frame_buffer_size = internal_data.new_frame_buffer_size;
+                recreate_frame_buffers();
+        }
     }
 
     void Opengl_Renderer::end(Block_Query_Result *select_query)

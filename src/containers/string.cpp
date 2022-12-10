@@ -4,34 +4,34 @@
 
 namespace minecraft {
     
-    String make_string(const char *cstring)
+    String8 make_string(const char *cstring)
     {
         u32 count = strlen(cstring);
         char *data = new char[count + 1]; // todo(harlequin): memory system
         memcpy(data, cstring, count + 1);
-        String result;
+        String8 result;
         result.data = data;
         result.count = count;
         return result;
     }
     
-    void free_string(String *string)
+    void free_string(String8 *string)
     {
         delete[] string->data; // todo(harlequin): memory system
         string->data = nullptr;
         string->count = 0;
     }
     
-    String copy_string(String *other)
+    String8 copy_string(String8 *other)
     {
-        String result;
+        String8 result;
         result.count = other->count;
         result.data = new char[other->count + 1];
         memcpy(result.data, other->data, result.count + 1); // todo(harlequin): memory system
         return result;
     }
     
-    bool starts_with(String *string, const char *match)
+    bool starts_with(String8 *string, const char *match)
     {
         u32 match_count = strlen(match);
         if (match_count > string->count)
@@ -48,7 +48,7 @@ namespace minecraft {
         return true;
     }
     
-    bool ends_with(String *string, const char *match)
+    bool ends_with(String8 *string, const char *match)
     {
         u32 match_count = strlen(match);
         if (match_count > string->count)
@@ -67,7 +67,7 @@ namespace minecraft {
         return true;
     }
     
-    i32 find_from_left(String *string, char c)
+    i32 find_from_left(String8 *string, char c)
     {
         for (u32 i = 0; i < string->count; i++)
         {
@@ -80,7 +80,7 @@ namespace minecraft {
         return -1;
     }
     
-    i32 find_from_right(String *string, char c)
+    i32 find_from_right(String8 *string, char c)
     {
         for (u32 i = string->count - 1; i >= 0; i--)
         {
@@ -93,7 +93,7 @@ namespace minecraft {
         return -1;
     }
     
-    i32 find_from_left(String *string, const char *pattern)
+    i32 find_from_left(String8 *string, const char *pattern)
     {
         u32 pattern_count = strlen(pattern);
         
@@ -111,7 +111,7 @@ namespace minecraft {
         return -1;
     }
     
-    i32 find_from_right(String *string, const char *pattern)
+    i32 find_from_right(String8 *string, const char *pattern)
     {
         u32 pattern_count = strlen(pattern);
         
@@ -129,7 +129,7 @@ namespace minecraft {
         return -1;
     }
     
-    bool is_equal(String *a, String *b)
+    bool is_equal(String8 *a, String8 *b)
     {
         if (a->count != b->count)
         {
@@ -147,13 +147,13 @@ namespace minecraft {
         return true;
     }
     
-    String sub_string(String *string, u32 start, u32 count)
+    String8 sub_string(String8 *string, u32 start, u32 count)
     {
         assert(count > 0);
         assert(start < string->count); // out of bounds
         assert(start + count <= string->count); // out of bounds
         
-        String sub_string;
+        String8 sub_string;
         sub_string.count = count;
         sub_string.data = new char[count + 1]; // todo(harlequin): memory system
         memcpy(sub_string.data, string->data + start, sub_string.count);
@@ -163,7 +163,7 @@ namespace minecraft {
     }
     
     // Polynomial Rolling Hash
-    u64 hash_string(String *string)
+    u64 hash_string(String8 *string)
     {
         u32 p = 53;
         u32 m = (u32)1e9 + 9;

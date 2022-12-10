@@ -1,54 +1,33 @@
-﻿  event.cpp
-  input.cpp
-  platform.cpp
+﻿  string.cpp
   Inventory.cpp
-  console_commands.cpp
   game.cpp
-  jobs.cpp
-  math.cpp
-  physics.cpp
-  profiler.cpp
-  world.cpp
-  main.cpp
-C:\dev\cpp\Crafty\src\core\event.cpp(185,35): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\core\event.cpp(149): warning C4715: 'minecraft::convert_event_to_string': not all control paths return a value
-  camera.cpp
+  font.cpp
   opengl_2d_renderer.cpp
-  opengl_debug_renderer.cpp
-  opengl_renderer.cpp
   dropdown_console.cpp
-C:\dev\cpp\Crafty\src\game\console_commands.cpp(114,61): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
+  ui.cpp
+C:\dev\cpp\Crafty\src\containers\string.cpp(9,36): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(36,40): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(53,40): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(98,44): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\containers\string.cpp(116,44): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\font.cpp(34,59): warning C4244: 'argument': conversion from 'i32' to 'float', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\font.cpp(62,34): warning C4244: 'argument': conversion from 'i32' to 'float', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\font.cpp(77,27): warning C4018: '<': signed/unsigned mismatch
+C:\dev\cpp\Crafty\src\renderer\font.cpp(98,27): warning C4018: '<': signed/unsigned mismatch
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\game.cpp(510,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(515,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(125): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ] (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\game\physics.cpp(38): message : see reference to function template instantiation 'std::tuple<T *,minecraft::Box_Collider *,minecraft::Rigid_Body *> minecraft::Registry::get_components<minecraft::Transform,minecraft::Box_Collider,minecraft::Rigid_Body>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(183,27): warning C4018: '<': signed/unsigned mismatch
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(273,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
 C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
 C:\dev\cpp\Crafty\src\game\game.cpp(441): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
-C:\dev\cpp\Crafty\src\game\physics.cpp(177): warning C4715: 'minecraft::get_collision_direction': not all control paths return a value
 C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\game.cpp(599): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+C:\dev\cpp\Crafty\src\game\game.cpp(629): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
-C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(163,62): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(228,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(242,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

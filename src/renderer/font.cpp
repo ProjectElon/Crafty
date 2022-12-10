@@ -90,7 +90,31 @@ namespace minecraft {
         return success;
     }
 
-    glm::vec2 Bitmap_Font::get_string_size(const std::string& text)
+    glm::vec2 Bitmap_Font::get_string_size(String8 text)
+    {
+        glm::vec2 cursor = { 0.0f, 0.0f };
+        glm::vec2 size = { 0.0f, this->char_height };
+
+        for (i32 i = 0; i < text.count; i++)
+        {
+            assert(text.data[i] >= ' ' && text.data[i] <= '~');
+
+            stbtt_aligned_quad quad;
+            stbtt_GetPackedQuad(this->glyphs,
+                                this->atlas.width,
+                                this->atlas.height,
+                                text.data[i] - ' ',
+                                &cursor.x,
+                                &cursor.y,
+                                &quad,
+                                1); // 1 for opengl, 0 for dx3d
+        }
+
+        size.x = cursor.x;
+        return size;
+    }
+
+    glm::vec2 Bitmap_Font::get_string_size(const std::string &text) // @Temprary
     {
         glm::vec2 cursor = { 0.0f, 0.0f };
         glm::vec2 size = { 0.0f, this->char_height };

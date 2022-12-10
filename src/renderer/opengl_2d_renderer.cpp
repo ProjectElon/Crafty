@@ -171,7 +171,52 @@ namespace minecraft {
         internal_data.quad_instances.emplace_back(instance);
     }
 
-    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font, const std::string& text, const glm::vec2& text_size, const glm::vec2& position, const glm::vec4& color)
+    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font,
+                                         String8 text,
+                                         const glm::vec2& text_size,
+                                         const glm::vec2& position,
+                                         const glm::vec4& color)
+    {
+        glm::vec2 half_text_size = text_size * 0.5f;
+        glm::vec2 cursor = position;
+
+        for (i32 i = 0; i < text.count; i++)
+        {
+            stbtt_aligned_quad quad;
+            stbtt_GetPackedQuad(font->glyphs,
+                                font->atlas.width,
+                                font->atlas.height,
+                                text.data[i] - ' ',
+                                &cursor.x,
+                                &cursor.y,
+                                &quad,
+                                1); // 1 for opengl, 0 for dx3d
+
+            f32 xp = (quad.x1 + quad.x0) / 2.0f;
+            f32 yp = (quad.y1 + quad.y0) / 2.0f;
+
+            f32 sx = (quad.x1 - quad.x0);
+            f32 sy = (quad.y1 - quad.y0);
+
+            glm::vec2 uv0 = { quad.s0, quad.t1 };
+            glm::vec2 uv1 = { quad.s1, quad.t0 };
+            glm::vec2 uv_scale = uv1 - uv0;
+
+            draw_rect(glm::vec2(xp - half_text_size.x, yp + half_text_size.y),
+                      glm::vec2(sx, sy),
+                      0.0f,
+                      color,
+                      &font->atlas,
+                      uv_scale,
+                      uv0);
+        }
+    }
+
+    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font,
+                                         const std::string &text,
+                                         const glm::vec2& text_size,
+                                         const glm::vec2& position,
+                                         const glm::vec4& color)
     {
         glm::vec2 half_text_size = text_size * 0.5f;
         glm::vec2 cursor = position;

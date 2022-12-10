@@ -10,10 +10,10 @@ namespace minecraft {
         switch (event_type)
         {
             // Window Events
-            case EventType_Resize:   return "Resize";   break;
-            case EventType_Minimize: return "Minimize"; break;
-            case EventType_Restore:  return "Restore";  break;
-            case EventType_Quit:     return "Quit";     break;
+            case EventType_Resize:   { return "Resize";   break; }
+            case EventType_Minimize: { return "Minimize"; break; }
+            case EventType_Restore:  { return "Restore";  break; }
+            case EventType_Quit:     { return "Quit";     break; }
 
             // Key Events
             case EventType_KeyPress:   return "KeyPress";   break;

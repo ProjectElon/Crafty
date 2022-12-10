@@ -70,7 +70,7 @@ namespace minecraft {
         return false;
     }
 
-    bool UI::text(const std::string& text)
+    bool UI::text(String8 text)
     {
         UI_State& state = internal_data.current_state;
         glm::vec2 position = state.offset + state.cursor;
@@ -90,7 +90,7 @@ namespace minecraft {
         return false;
     }
 
-    bool UI::button(const std::string& text, const glm::vec2& padding)
+    bool UI::button(String8 text, const glm::vec2& padding)
     {
         UI_State& state = internal_data.current_state;
 
@@ -111,7 +111,7 @@ namespace minecraft {
         return hovered && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT);
     }
 
-    bool UI::textured_button(const std::string& text,
+    bool UI::textured_button(String8 text,
                              Opengl_Texture *texture,
                              const glm::vec2& padding,
                              const glm::vec2& uv_scale,

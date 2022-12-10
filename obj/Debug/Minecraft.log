@@ -1,8 +1,14 @@
 ﻿  game.cpp
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\game.cpp(510,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(515,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\game\game.cpp(536,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\game\game.cpp(541,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\game\game.cpp(916,53): warning C4477: 'sprintf' : format string '%llu' requires an argument of type 'unsigned __int64', but variadic argument 1 has type 'i32'
+C:\dev\cpp\Crafty\src\game\game.cpp(916,53): message : consider using '%u' in the format string
+C:\dev\cpp\Crafty\src\game\game.cpp(916,53): message : consider using '%I32u' in the format string
+C:\dev\cpp\Crafty\src\game\game.cpp(964,93): warning C4477: 'sprintf' : format string '%d' requires an argument of type 'int', but variadic argument 1 has type 'double'
+C:\dev\cpp\Crafty\src\game\game.cpp(964,93): warning C4477: 'sprintf' : format string '%d' requires an argument of type 'int', but variadic argument 2 has type 'double'
+C:\dev\cpp\Crafty\src\game\game.cpp(1017,58): warning C4267: '=': conversion from 'size_t' to 'u32', possible loss of data
 C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
 C:\dev\cpp\Crafty\src\game\game.cpp(441): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
@@ -10,7 +16,7 @@ C:\dev\cpp\Crafty\src\game\game.cpp(441): message : see reference to function te
               T=minecraft::Transform
           ]
 C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(599): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+C:\dev\cpp\Crafty\src\game\game.cpp(629): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
