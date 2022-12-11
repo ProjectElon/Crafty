@@ -24,9 +24,9 @@ namespace minecraft {
         this->frustum.initialize(this->projection * this->view);
     }
 
-    void Camera::update_transform(f32 delta_time)
+    void Camera::update_transform(Input *input, f32 delta_time)
     {
-        glm::vec2 mouse_delta = Input::get_mouse_delta();
+        glm::vec2 mouse_delta = get_mouse_delta(input);
 
         this->pitch += mouse_delta.y * this->rotation_speed * this->sensetivity * delta_time;
 

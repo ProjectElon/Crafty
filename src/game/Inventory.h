@@ -15,6 +15,7 @@ namespace minecraft {
 
     struct Bitmap_Font;
     struct Opengl_Texture;
+    struct Input;
 
     struct Inventory_Slot
     {
@@ -71,10 +72,10 @@ namespace minecraft {
         static void add_block(u16 block_id);
 
         static void calculate_slot_positions_and_sizes();
-        static void handle_input();
-        static void draw();
+        static void handle_input(Input *input);
+        static void draw(Input *input);
 
-        static void handle_hotbar_input();
+        static void handle_hotbar_input(Input *input);
         static void draw_hotbar();
 
         static void serialize();

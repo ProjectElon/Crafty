@@ -2,20 +2,20 @@
 
 #include "core/common.h"
 #include "containers/string.h"
-
 #include <glm/glm.hpp>
 
 namespace minecraft {
 
     struct Bitmap_Font;
     struct Opengl_Texture;
+    struct Input;
 
     struct UI_State
     {
-        glm::vec2 cursor;
-        glm::vec2 offset;
-        glm::vec4 text_color;
-        glm::vec4 fill_color;
+        glm::vec2    cursor;
+        glm::vec2    offset;
+        glm::vec4    text_color;
+        glm::vec4    fill_color;
         Bitmap_Font *font;
     };
 
@@ -23,6 +23,7 @@ namespace minecraft {
     {
         UI_State default_state;
         UI_State current_state;
+        Input   *input;
     };
 
     struct UI
@@ -32,7 +33,7 @@ namespace minecraft {
         static bool initialize(UI_State *default_state);
         static void shutdown();
 
-        static void begin();
+        static void begin(Input *input);
 
         static void set_font(Bitmap_Font *font);
         static void set_text_color(const glm::vec4& color);

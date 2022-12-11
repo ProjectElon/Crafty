@@ -85,6 +85,7 @@ namespace minecraft {
         static Dropdown_Console_Data internal_data;
 
         static bool initialize(Bitmap_Font *font,
+                               Event_System *event_system,
                                const glm::vec4& text_color,
                                const glm::vec4& background_color,
                                const glm::vec4& input_text_color,

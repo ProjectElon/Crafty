@@ -9,93 +9,107 @@ namespace minecraft {
 
     static void on_framebuffer_resize(GLFWwindow *window, i32 width, i32 height)
     {
-        (void)window;
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
         Event event;
         event.data_u32_array[0] = width;
         event.data_u32_array[1] = height;
 
-        Event_System::fire_event(EventType_Resize, &event);
+        fire_event(event_system, EventType_Resize, &event);
     }
 
     static void on_window_close(GLFWwindow *window)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
-        Event_System::fire_event(EventType_Quit, &event);
+        fire_event(event_system, EventType_Quit, &event);
     }
 
     static void on_window_iconfiy(GLFWwindow* window, i32 iconified)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
 
         if (iconified)
         {
-            Event_System::fire_event(EventType_Minimize, &event);
+            fire_event(event_system, EventType_Minimize, &event);
         }
         else
         {
-            Event_System::fire_event(EventType_Restore, &event);
+            fire_event(event_system, EventType_Restore, &event);
         }
     }
 
     static void on_key(GLFWwindow* window, int key, int scancode, int action, int mods)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
         event.data_u16 = key;
         if (action == GLFW_PRESS)
         {
-            Event_System::fire_event(EventType_KeyPress, &event);
+            fire_event(event_system, EventType_KeyPress, &event);
         }
         else if (action == GLFW_REPEAT)
         {
-            Event_System::fire_event(EventType_KeyHeld, &event);
+            fire_event(event_system, EventType_KeyHeld, &event);
         }
         else
         {
-            Event_System::fire_event(EventType_KeyRelease, &event);
+            fire_event(event_system, EventType_KeyRelease, &event);
         }
     }
 
     static void on_mouse_move(GLFWwindow* window, f64 mouse_x, f64 mouse_y)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
         event.data_f32_array[0] = (f32)mouse_x;
         event.data_f32_array[1] = (f32)mouse_y;
-        Event_System::fire_event(EventType_MouseMove, &event);
+        fire_event(event_system, EventType_MouseMove, &event);
     }
 
     static void on_mouse_button(GLFWwindow* window, i32 button, i32 action, i32 mods)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
         event.data_u8 = button;
 
         if (action == GLFW_PRESS)
         {
-            Event_System::fire_event(EventType_MouseButtonPress, &event);
+            fire_event(event_system, EventType_MouseButtonPress, &event);
         }
         else if (action == GLFW_REPEAT)
         {
-            Event_System::fire_event(EventType_MouseButtonHeld, &event);
+            fire_event(event_system, EventType_MouseButtonHeld, &event);
         }
         else
         {
-            Event_System::fire_event(EventType_MouseButtonRelease, &event);
+            fire_event(event_system, EventType_MouseButtonRelease, &event);
         }
     }
 
     static void on_mouse_wheel(GLFWwindow* window, f64 xoffset, f64 yoffset)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
         event.data_f32_array[0] = (f32)xoffset;
         event.data_f32_array[1] = (f32)yoffset;
-        Event_System::fire_event(EventType_MouseWheel, &event);
+        fire_event(event_system, EventType_MouseWheel, &event);
     }
 
     static void on_char(GLFWwindow* window, unsigned int code_point)
     {
+        Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
+
         Event event;
         event.data_u8 = code_point;
-        Event_System::fire_event(EventType_Char, &event);
+        fire_event(event_system, EventType_Char, &event);
     }
 
     bool Platform::initialize(Game_Config *config,
@@ -171,7 +185,17 @@ namespace minecraft {
         return window;
     }
 
-    void Platform::hook_event_callbacks(GLFWwindow *window)
+    void Platform::set_window_user_pointer(GLFWwindow *window, void *user_pointer)
+    {
+        glfwSetWindowUserPointer(window, user_pointer);
+    }
+
+    void* Platform::get_window_user_pointer(GLFWwindow *window)
+    {
+        return glfwGetWindowUserPointer(window);
+    }
+
+    void Platform::hook_window_event_callbacks(GLFWwindow *window)
     {
         glfwSetFramebufferSizeCallback(window, on_framebuffer_resize);
         glfwSetWindowCloseCallback(window,     on_window_close);

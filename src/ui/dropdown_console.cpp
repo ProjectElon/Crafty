@@ -9,6 +9,7 @@
 namespace minecraft {
 
     bool Dropdown_Console::initialize(Bitmap_Font *font,
+                                      Event_System *event_system,
                                       const glm::vec4& text_color,
                                       const glm::vec4& background_color,
                                       const glm::vec4& input_text_color,
@@ -60,10 +61,10 @@ namespace minecraft {
         internal_data.scroll_x = 0.0f;
         internal_data.scroll_x_target = 0.0f;
 
-        Event_System::register_event(EventType_Char,       Dropdown_Console::on_char_input);
-        Event_System::register_event(EventType_KeyPress,   Dropdown_Console::on_key);
-        Event_System::register_event(EventType_KeyHeld,    Dropdown_Console::on_key);
-        Event_System::register_event(EventType_MouseWheel, Dropdown_Console::on_mouse_wheel);
+        register_event(event_system, EventType_Char,       Dropdown_Console::on_char_input);
+        register_event(event_system, EventType_KeyPress,   Dropdown_Console::on_key);
+        register_event(event_system, EventType_KeyHeld,    Dropdown_Console::on_key);
+        register_event(event_system, EventType_MouseWheel, Dropdown_Console::on_mouse_wheel);
 
         console_commands::register_commands();
 
@@ -105,7 +106,7 @@ namespace minecraft {
         if (internal_data.state != ConsoleState_Closed)
         {
             char code_point;
-            Event_System::parse_char(event, &code_point);
+            parse_char(event, &code_point);
             current_text.insert(current_text.begin() + current_cursor_index, code_point);
             current_cursor_index++;
             return true;
@@ -128,7 +129,7 @@ namespace minecraft {
             internal_data.cursor_opacity = 180.0f;
 
             u16 key;
-            Event_System::parse_key_code(event, &key);
+            parse_key_code(event, &key);
 
             if (key == MC_KEY_ENTER || key == MC_KEY_KP_ENTER)
             {
@@ -187,7 +188,7 @@ namespace minecraft {
     {
         f32 x_offset;
         f32 y_offset;
-        Event_System::parse_model_wheel(event, &x_offset, &y_offset);
+        parse_mouse_wheel(event, &x_offset, &y_offset);
 
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 

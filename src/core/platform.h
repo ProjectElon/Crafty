@@ -23,7 +23,10 @@ namespace minecraft {
                                        u32 height,
                                        u32 back_buffer_samples);
 
-        static void hook_event_callbacks(GLFWwindow *window);
+        static void set_window_user_pointer(GLFWwindow *window, void *user_pointer);
+        static void* get_window_user_pointer(GLFWwindow *window);
+
+        static void hook_window_event_callbacks(GLFWwindow *window);
 
         static void pump_messages();
 

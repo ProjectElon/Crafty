@@ -35,7 +35,9 @@ namespace minecraft {
                                          const char *message,
                                          const void *user_param);
 
-    bool Opengl_Renderer::initialize(GLFWwindow *window)
+    bool Opengl_Renderer::initialize(GLFWwindow *window,
+                                     u32 initial_frame_buffer_width,
+                                     u32 initial_frame_buffer_height)
     {
         if (!Platform::opengl_initialize(window))
         {
@@ -192,11 +194,8 @@ namespace minecraft {
         glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
 
-        u32 width = Game::internal_data.config.window_width;
-        u32 height = Game::internal_data.config.window_height;
-        internal_data.frame_buffer_size = { (f32)width, (f32)height };
+        internal_data.frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
         internal_data.new_frame_buffer_size = internal_data.frame_buffer_size;
-        glViewport(0, 0, width, height);
 
         internal_data.opaque_frame_buffer_id = 0;
         internal_data.opaque_frame_buffer_color_texture_id = 0;
@@ -282,7 +281,7 @@ namespace minecraft {
     {
         u32 width;
         u32 height;
-        Event_System::parse_resize_event(event, &width, &height);
+        parse_resize_event(event, &width, &height);
         if (width == 0 || height == 0)
         {
             return true; // todo(harlequin): maybe we should return true

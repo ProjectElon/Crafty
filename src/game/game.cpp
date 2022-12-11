@@ -1,7 +1,5 @@
 #include "core/common.h"
 #include "core/platform.h"
-#include "core/input.h"
-#include "core/event.h"
 
 #include "containers/string.h"
 
@@ -34,21 +32,25 @@
 #include <glm/gtx/compatibility.hpp>
 
 #include <sstream>
+#include <stdarg.h>
 
 namespace minecraft {
 
     static bool on_quit(const Event *event, void *sender)
     {
-        Game::internal_data.is_running = false;
+        Game_State *game_state = (Game_State*)sender;
+        game_state->is_running = false;
         return true;
     }
 
     static bool on_key_press(const Event *event, void *sender)
     {
-        Game_State& game_state = Game::get_state();
+        Game_State  *game_state   = (Game_State*)sender;
+        Game_Config *game_config  = &game_state->game_config;
+        Input       *game_input   = &game_state->game_input;
 
         u16 key;
-        Event_System::parse_key_code(event, &key);
+        parse_key_code(event, &key);
 
         if (key == MC_KEY_F1)
         {
@@ -57,14 +59,14 @@ namespace minecraft {
 
         if (key == MC_KEY_F2)
         {
-            Input::toggle_cursor(game_state.window);
+            toggle_cursor(game_input, game_state->window);
         }
 
         if (key == MC_KEY_F11)
         {
             WindowMode mode;
 
-            if (Game::internal_data.config.window_mode == WindowMode_Fullscreen)
+            if (game_config->window_mode == WindowMode_Fullscreen)
             {
                 mode = WindowMode_Windowed;
             }
@@ -73,34 +75,34 @@ namespace minecraft {
                 mode = WindowMode_Fullscreen;
             }
 
-            Platform::switch_to_window_mode(game_state.window, &game_state.config, mode);
+            Platform::switch_to_window_mode(game_state->window, game_config, mode);
         }
 
         if (Dropdown_Console::is_closed())
         {
             if (key == MC_KEY_ESCAPE)
             {
-                Game::internal_data.is_running = false;
+                game_state->is_running = false;
             }
 
             if (key == MC_KEY_U)
             {
-                Game::toggle_show_debug_status_hud();
+                toggle_show_debug_status_hud(game_state);
             }
 
             if (key == MC_KEY_I)
             {
-                if (Game::internal_data.cursor_mode == CursorMode_Locked)
+                if (game_state->cursor_mode == CursorMode_Locked)
                 {
-                    Game::internal_data.cursor_mode = CursorMode_Free;
+                    game_state->cursor_mode = CursorMode_Free;
                 }
                 else
                 {
-                    Game::internal_data.cursor_mode = CursorMode_Locked;
+                    game_state->cursor_mode = CursorMode_Locked;
                 }
 
-                Input::toggle_cursor(game_state.window);
-                Game::toggle_inventory();
+                toggle_cursor(game_input, game_state->window);
+                toggle_inventory(game_state);
             }
         }
         else
@@ -119,7 +121,7 @@ namespace minecraft {
         (void)event;
         (void)sender;
         u8 button;
-        Event_System::parse_button_code(event, &button);
+        parse_button_code(event, &button);
         return false;
     }
 
@@ -129,7 +131,7 @@ namespace minecraft {
         (void)sender;
         f32 xoffset;
         f32 yoffset;
-        Event_System::parse_model_wheel(event, &xoffset, &yoffset);
+        parse_mouse_wheel(event, &xoffset, &yoffset);
 
         return false;
     }
@@ -140,7 +142,7 @@ namespace minecraft {
         (void)sender;
         f32 mouse_x;
         f32 mouse_y;
-        Event_System::parse_mouse_move(event, &mouse_x, &mouse_y);
+        parse_mouse_move(event, &mouse_x, &mouse_y);
         return false;
     }
 
@@ -149,7 +151,7 @@ namespace minecraft {
         (void)event;
         (void)sender;
         char code_point;
-        Event_System::parse_char(event, &code_point);
+        parse_char(event, &code_point);
         return false;
     }
 
@@ -157,13 +159,13 @@ namespace minecraft {
     {
         u32 width;
         u32 height;
-        Event_System::parse_resize_event(event, &width, &height);
+        parse_resize_event(event, &width, &height);
         if (width == 0 || height == 0)
         {
             return true;
         }
-        Camera& camera      = Game::get_camera();
-        camera.aspect_ratio = (f32)width / (f32)height;
+        Camera* camera       = (Camera*)sender;
+        camera->aspect_ratio = (f32)width / (f32)height;
         return false;
     }
 
@@ -181,70 +183,76 @@ namespace minecraft {
         return false;
     }
 
-    bool Game::initialize(Game_Memory *game_memory)
+    bool initialize_game(Game_State *game_state)
     {
-        // @todo(harlequin): load the game config from a file
-        Game_Config& config               = internal_data.config;
-        config.window_title               = "Minecraft";
-        config.window_x                   = -1;
-        config.window_y                   = -1;
-        config.window_x_before_fullscreen = -1;
-        config.window_y_before_fullscreen = -1;
-        config.window_width               = 1280;
-        config.window_height              = 720;
-        config.window_mode                = WindowMode_Windowed;
+        Game_Memory  *game_memory  = game_state->game_memory;
+        Game_Config  *game_config  = &game_state->game_config;
+        Event_System *event_system = &game_state->event_system;
+        Input        *game_input   = &game_state->game_input;
 
-        Game_State& game_state = internal_data;
-        game_state.game_memory = game_memory;
+        // @todo(harlequin): load the game config from a file
+        game_config->window_title               = "Minecraft";
+        game_config->window_x                   = -1;
+        game_config->window_y                   = -1;
+        game_config->window_x_before_fullscreen = -1;
+        game_config->window_y_before_fullscreen = -1;
+        game_config->window_width               = 1280;
+        game_config->window_height              = 720;
+        game_config->window_mode                = WindowMode_Windowed;
 
         u32 opengl_major_version = 4;
         u32 opengl_minor_version = 4;
         u32 opengl_back_buffer_samples = 16;
 
-        if (!Platform::initialize(&config, opengl_major_version, opengl_minor_version))
+        if (!Platform::initialize(game_config,
+                                  opengl_major_version,
+                                  opengl_minor_version))
         {
             fprintf(stderr, "[ERROR]: failed to initialize platform\n");
             return false;
         }
 
-        game_state.window = Platform::open_window(config.window_title,
-                                                 config.window_width,
-                                                 config.window_height,
-                                                 opengl_back_buffer_samples);
-        if (!game_state.window)
+        game_state->window = Platform::open_window(game_config->window_title,
+                                                   game_config->window_width,
+                                                   game_config->window_height,
+                                                   opengl_back_buffer_samples);
+        if (!game_state->window)
         {
             fprintf(stderr, "[ERROR]: failed to open a window\n");
             return false;
         }
 
-        Platform::hook_event_callbacks(game_state.window);
+        Platform::hook_window_event_callbacks(game_state->window);
 
-        WindowMode desired_window_mode = config.window_mode;
-        config.window_mode             = WindowMode_Windowed;
-        Platform::switch_to_window_mode(game_state.window, &config, desired_window_mode);
+        // @Hack
+        WindowMode desired_window_mode  = game_config->window_mode;
+        game_config->window_mode        = WindowMode_Windowed;
+        Platform::switch_to_window_mode(game_state->window, game_config, desired_window_mode);
 
         if (desired_window_mode == WindowMode_Windowed)
         {
-            Platform::center_window(game_state.window, &config);
+            Platform::center_window(game_state->window, game_config);
         }
-
-        if (!Input::initialize(game_state.window))
-        {
-            fprintf(stderr, "[ERROR]: failed to initialize input system\n");
-            return false;
-        }
-
-        Input::set_raw_mouse_motion(game_state.window, true);
-        Input::set_cursor_mode(game_state.window, false);
 
         bool is_tracing_events = false;
-        if (!Event_System::initialize(is_tracing_events))
+        if (!initialize_event_system(event_system, is_tracing_events))
         {
             fprintf(stderr, "[ERROR]: failed to initialize event system\n");
             return false;
         }
 
-        if (!Opengl_Renderer::initialize(game_state.window))
+        Platform::set_window_user_pointer(game_state->window, event_system);
+
+        if (!initialize_input(game_input, game_state->window))
+        {
+            fprintf(stderr, "[ERROR]: failed to initialize input system\n");
+            return false;
+        }
+
+        set_raw_mouse_motion(game_input, game_state->window, true);
+        set_cursor_mode(game_input, game_state->window, false);
+
+        if (!Opengl_Renderer::initialize(game_state->window, game_config->window_width, game_config->window_height))
         {
             fprintf(stderr, "[ERROR]: failed to initialize render system\n");
             return false;
@@ -293,15 +301,15 @@ namespace minecraft {
         i32 new_max = _setmaxstdio(8192);
         assert(new_max == 8192);
 
-        Event_System::register_event(EventType_Quit, on_quit);
-        Event_System::register_event(EventType_KeyPress, on_key_press);
-        Event_System::register_event(EventType_Char, on_char);
-        Event_System::register_event(EventType_Resize, Opengl_Renderer::on_resize);
-        Event_System::register_event(EventType_MouseButtonPress, on_mouse_press);
-        Event_System::register_event(EventType_MouseMove, on_mouse_move);
-        Event_System::register_event(EventType_MouseWheel, on_mouse_wheel);
-        Event_System::register_event(EventType_Minimize, on_minimize, &game_state);
-        Event_System::register_event(EventType_Restore,  on_restore, &game_state);
+        register_event(event_system, EventType_Quit,             on_quit);
+        register_event(event_system, EventType_KeyPress,         on_key_press, game_state);
+        register_event(event_system, EventType_Char,             on_char);
+        register_event(event_system, EventType_Resize,           Opengl_Renderer::on_resize);
+        register_event(event_system, EventType_MouseButtonPress, on_mouse_press);
+        register_event(event_system, EventType_MouseMove,        on_mouse_move);
+        register_event(event_system, EventType_MouseWheel,       on_mouse_wheel);
+        register_event(event_system, EventType_Minimize,         on_minimize, game_state);
+        register_event(event_system, EventType_Restore,          on_restore, game_state);
 
         Bitmap_Font *fira_code = new Bitmap_Font; // @todo(harlequin): memory system
         fira_code->load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
@@ -349,6 +357,7 @@ namespace minecraft {
         glm::vec4 type_color = { 0x84, 0x79, 0xe1, 0xff }; // 8479E1
 
         if (!Dropdown_Console::initialize(consolas,
+                                          event_system,
                                           text_color * normalize_color_factor,
                                           background_color * normalize_color_factor,
                                           input_text_color * normalize_color_factor,
@@ -370,12 +379,12 @@ namespace minecraft {
             return false;
         }
 
-        Camera &camera = internal_data.camera;
+        Camera &camera = game_state->camera;
 
         f32 fov = 90.0f;
         glm::vec3 camera_position = { 0.0f, 0.0f, 0.0f };
         camera.initialize(camera_position, fov);
-        Event_System::register_event(EventType_Resize, on_resize);
+        register_event(event_system, EventType_Resize, on_resize, &camera);
 
         // @todo(harlequin): game menu to add worlds
         std::string world_name = "harlequin";
@@ -383,29 +392,29 @@ namespace minecraft {
         World::initialize(world_path);
         Inventory::deserialize();
 
-        internal_data.show_debug_stats_hud  = false;
-        internal_data.is_inventory_active   = false;
-        internal_data.is_running            = true;
-        internal_data.minimized             = false;
-        internal_data.cursor_mode           = CursorMode_Locked;
+        game_state->show_debug_stats_hud  = false;
+        game_state->is_inventory_active   = false;
+        game_state->is_running            = true;
+        game_state->minimized             = false;
+        game_state->cursor_mode           = CursorMode_Locked;
 
-        internal_data.ingame_crosshair_texture   = new Opengl_Texture;
-        Opengl_Texture *ingame_crosshair_texture = (Opengl_Texture*)internal_data.ingame_crosshair_texture;
+        game_state->ingame_crosshair_texture   = new Opengl_Texture;
+        Opengl_Texture *ingame_crosshair_texture = (Opengl_Texture*)game_state->ingame_crosshair_texture;
         ingame_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
 
-        internal_data.inventory_crosshair_texture   = new Opengl_Texture;
-        Opengl_Texture *inventory_crosshair_texture = (Opengl_Texture *)internal_data.ingame_crosshair_texture;
+        game_state->inventory_crosshair_texture   = new Opengl_Texture;
+        Opengl_Texture *inventory_crosshair_texture = (Opengl_Texture *)game_state->ingame_crosshair_texture;
         inventory_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair001.png", TextureUsage_UI);
 
         return true;
     }
 
-    void Game::shutdown()
+    void shutdown_game(Game_State *game_state)
     {
         World::schedule_save_chunks_jobs();
         Job_System::wait_for_jobs_to_finish();
 
-        internal_data.is_running = false;
+        game_state->is_running = false;
         Job_System::shutdown();
 
         ECS::shutdown();
@@ -421,18 +430,22 @@ namespace minecraft {
         Opengl_Debug_Renderer::shutdown();
         Opengl_Renderer::shutdown();
 
-        Event_System::shutdown();
-        Input::shutdown();
+        shutdown_event_system(&game_state->event_system);
+        shutdown_input(&game_state->game_input);
 
         Platform::shutdown();
     }
 
-    void Game::run()
+    void run_game(Game_State *game_state)
     {
-        f32 frame_timer       = 0;
-        u32 frames_per_second = 0;
+        Game_Memory *game_memory = game_state->game_memory;
+        Input       *game_input  = &game_state->game_input;
 
-        auto& camera        = Game::get_camera();
+        f32 frame_timer            = 0;
+        u32 last_frames_per_second = 0;
+        u32 frames_per_second      = 0;
+
+        Camera& camera      = game_state->camera;
         auto& loaded_chunks = World::loaded_chunks;
         Registry& registry  = ECS::internal_data.registry;
 
@@ -467,14 +480,7 @@ namespace minecraft {
 
         World_Region_Bounds& player_region_bounds = World::player_region_bounds;
 
-        Game_State& game_state = Game::get_state();
-        Game_Memory* game_memory = game_state.game_memory;
-
-        String8 frames_per_second_text = {};
-        frames_per_second_text.data    = ArenaPushArray(&game_memory->permanent_arena, char, 64);
-
-
-        while (Game::is_running())
+        while (game_state->is_running)
         {
             Profiler::begin();
 
@@ -484,8 +490,7 @@ namespace minecraft {
             f32 delta_time = (f32)(now - last_time);
             last_time = now;
 
-            frames_per_second++;
-
+            String8 frames_per_second_text = {};
             String8 frame_time_text   = {};
             String8 vertex_count_text = {};
             String8 face_count_text   = {};
@@ -508,14 +513,12 @@ namespace minecraft {
             String8 block_facing_normal_light_source_level_text = {};
             String8 block_facing_normal_light_level_text = {};
 
+            frames_per_second++;
+
             while (frame_timer >= 1.0f)
             {
                 frame_timer -= 1.0f;
-
-                frames_per_second_text.count = sprintf(frames_per_second_text.data,
-                                                       "FPS: %u",
-                                                       frames_per_second);
-
+                last_frames_per_second = frames_per_second;
                 frames_per_second = 0;
             }
 
@@ -548,7 +551,7 @@ namespace minecraft {
 
             {
                 PROFILE_BLOCK("input update");
-                Input::update(game_state.window);
+                update_input(game_input, game_state->window);
             }
 
             glm::vec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
@@ -557,16 +560,17 @@ namespace minecraft {
             World::load_chunks_at_region(player_region_bounds);
             World::schedule_chunk_lighting_jobs(&player_region_bounds);
 
-            glm::vec2 mouse_delta = Input::get_mouse_delta();
+            glm::vec2 mouse_delta = get_mouse_delta(game_input);
 
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
             Block_Query_Result select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
+            const char *back_facing_normal_label = "";
 
             if (ray_cast_result.hit &&
                 World::is_block_query_valid(select_query) &&
                 Dropdown_Console::is_closed() &&
-                !Game::should_render_inventory())
+                !game_state->is_inventory_active)
             {
                 glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
                 // Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
@@ -577,7 +581,6 @@ namespace minecraft {
                 const glm::vec3& hit_point = ray_cast_result.point;
 
                 glm::vec3 normal = {};
-                const char *back_facing_normal_label = "";
 
                 if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
                 {
@@ -616,9 +619,6 @@ namespace minecraft {
                     back_facing_normal_label = "face: back";
                 }
 
-                block_facing_normal_face_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                block_facing_normal_face_text.count = sprintf(block_facing_normal_face_text.data, "%s", back_facing_normal_label);
-
                 bool block_facing_normal_is_valid = World::is_block_query_valid(block_facing_normal_query);
 
                 Entity player = registry.find_entity_by_tag(EntityTag_Player);
@@ -654,7 +654,7 @@ namespace minecraft {
                     glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
                     glm::ivec3 block_coords = block_facing_normal_query.block_coords;
 
-                    if (Game::internal_data.show_debug_stats_hud)
+                    if (game_state->show_debug_stats_hud)
                     {
                         glm::vec3 abs_normal  = glm::abs(normal);
                         glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
@@ -662,40 +662,34 @@ namespace minecraft {
                         Opengl_Debug_Renderer::draw_line(block_position, block_position + normal * 1.5f, debug_color);
                     }
 
+                    block_facing_normal_chunk_coords_text = push_formatted_string8(frame_arena.arena,
+                                                                                   "chunk: (%d, %d)",
+                                                                                   chunk_coords.x,
+                                                                                   chunk_coords.y);
 
-                    block_facing_normal_chunk_coords_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    block_facing_normal_chunk_coords_text.count = sprintf(block_facing_normal_chunk_coords_text.data,
-                                                                          "chunk: (%d, %d)",
-                                                                          chunk_coords.x,
-                                                                          chunk_coords.y);
-
-                    block_facing_normal_block_coords_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    block_facing_normal_block_coords_text.count = sprintf(block_facing_normal_block_coords_text.data,
-                                                                          "block: (%d, %d, %d)",
-                                                                          block_coords.x,
-                                                                          block_coords.y,
-                                                                          block_coords.z);
+                    block_facing_normal_block_coords_text = push_formatted_string8(frame_arena.arena,
+                                                                                   "block: (%d, %d, %d)",
+                                                                                   block_coords.x,
+                                                                                   block_coords.y,
+                                                                                   block_coords.z);
 
                     Block_Light_Info* light_info = block_facing_normal_query.chunk->get_block_light_info(block_facing_normal_query.block_coords);
                     i32 sky_light_level          = light_info->get_sky_light_level();
 
-                    block_facing_normal_sky_light_level_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    block_facing_normal_sky_light_level_text.count = sprintf(block_facing_normal_sky_light_level_text.data,
-                                                                              "sky light level: %d",
-                                                                              sky_light_level);
+                    block_facing_normal_sky_light_level_text = push_formatted_string8(frame_arena.arena,
+                                                                                      "sky light level: %d",
+                                                                                      sky_light_level);
 
-                    block_facing_normal_light_source_level_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    block_facing_normal_light_source_level_text.count = sprintf(block_facing_normal_light_source_level_text.data,
-                                                                                "light source level: %d",
-                                                                                (i32)light_info->light_source_level);
+                    block_facing_normal_light_source_level_text = push_formatted_string8(frame_arena.arena,
+                                                                                         "light source level: %d",
+                                                                                         (i32)light_info->light_source_level);
 
-                    block_facing_normal_light_level_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    block_facing_normal_light_level_text.count = sprintf(block_facing_normal_light_level_text.data,
-                                                                         "light level: %d",
-                                                                         glm::max(sky_light_level, (i32)light_info->light_source_level));
+                    block_facing_normal_light_level_text = push_formatted_string8(frame_arena.arena,
+                                                                                  "light level: %d",
+                                                                                  glm::max(sky_light_level, (i32)light_info->light_source_level));
                 }
 
-                if (Input::is_button_pressed(MC_MOUSE_BUTTON_RIGHT) && can_place_block)
+                if (is_button_pressed(game_input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
                 {
                     i32 active_slot_index = Inventory::internal_data.active_hot_bar_slot_index;
                     if (active_slot_index != -1)
@@ -714,7 +708,7 @@ namespace minecraft {
                     }
                 }
 
-                if (Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+                if (is_button_pressed(game_input, MC_MOUSE_BUTTON_LEFT))
                 {
                     // @todo(harlequin): this solves the problem but do we really want this ?
                     bool any_neighbouring_water_block = false;
@@ -748,7 +742,7 @@ namespace minecraft {
             {
                 PROFILE_BLOCK("Input");
 
-                if (Dropdown_Console::is_closed() && !Game::should_render_inventory())
+                if (Dropdown_Console::is_closed() && !game_state->is_inventory_active)
                 {
                     auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
                     for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
@@ -766,22 +760,22 @@ namespace minecraft {
 
                         controller->movement = { 0.0f, 0.0f, 0.0f };
 
-                        if (Input::get_key(MC_KEY_W))
+                        if (get_key(game_input, MC_KEY_W))
                         {
                             controller->movement += forward;
                         }
 
-                        if (Input::get_key(MC_KEY_S))
+                        if (get_key(game_input, MC_KEY_S))
                         {
                             controller->movement -= forward;
                         }
 
-                        if (Input::get_key(MC_KEY_D))
+                        if (get_key(game_input, MC_KEY_D))
                         {
                             controller->movement += right;
                         }
 
-                        if (Input::get_key(MC_KEY_A))
+                        if (get_key(game_input, MC_KEY_A))
                         {
                             controller->movement -= right;
                         }
@@ -789,13 +783,13 @@ namespace minecraft {
                         controller->is_running = false;
                         controller->movement_speed = controller->walk_speed;
 
-                        if (Input::get_key(MC_KEY_LEFT_SHIFT))
+                        if (get_key(game_input, MC_KEY_LEFT_SHIFT))
                         {
                             controller->is_running = true;
                             controller->movement_speed = controller->run_speed;
                         }
 
-                        if (Input::is_key_pressed(MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
+                        if (is_key_pressed(game_input, MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
                         {
                             rb->velocity.y = controller->jump_force;
                             controller->is_jumping  = true;
@@ -817,12 +811,12 @@ namespace minecraft {
                     }
                 }
 
-                Inventory::handle_hotbar_input();
+                Inventory::handle_hotbar_input(game_input);
 
-                if (Game::should_render_inventory())
+                if (game_state->is_inventory_active)
                 {
                     Inventory::calculate_slot_positions_and_sizes();
-                    Inventory::handle_input();
+                    Inventory::handle_input(game_input);
                 }
             }
 
@@ -847,10 +841,10 @@ namespace minecraft {
                     }
                 }
 
-                if (Dropdown_Console::is_closed() && !Game::should_render_inventory())
+                if (Dropdown_Console::is_closed() && !game_state->is_inventory_active)
                 {
                     // todo(harlequin): follow entity and make the camera an entity
-                    camera.update_transform(delta_time);
+                    camera.update_transform(game_input, delta_time);
                 }
 
                 camera.update();
@@ -899,90 +893,78 @@ namespace minecraft {
 
                 glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
-                if (Game::show_debug_status_hud())
+                if (game_state->show_debug_stats_hud)
                 {
-                    frame_time_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    frame_time_text.count = sprintf(frame_time_text.data,
-                                                    "frame time: %.2f ms",
-                                                    delta_time * 1000.0f);
+                    frames_per_second_text = push_formatted_string8(frame_arena.arena, "FPS: %d", last_frames_per_second);
 
-                    vertex_count_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    vertex_count_text.count = sprintf(vertex_count_text.data,
-                                                      "vertex count: %d",
-                                                      Opengl_Renderer::internal_data.stats.face_count * 4);
+                    frame_time_text = push_formatted_string8(frame_arena.arena,
+                                                             "frame time: %.2f ms",
+                                                             delta_time * 1000.0f);
 
-                    face_count_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    face_count_text.count = sprintf(face_count_text.data,
-                                                    "face count: %u",
-                                                    Opengl_Renderer::internal_data.stats.face_count);
+                    block_facing_normal_face_text = push_formatted_string8(frame_arena.arena, "%s", back_facing_normal_label);
 
+                    vertex_count_text = push_formatted_string8(frame_arena.arena,
+                                                               "vertex count: %d",
+                                                               Opengl_Renderer::internal_data.stats.face_count * 4);
+
+                    face_count_text = push_formatted_string8(frame_arena.arena,
+                                                             "face count: %u",
+                                                             Opengl_Renderer::internal_data.stats.face_count);
+
+                    sub_chunk_bucket_capacity_text = push_formatted_string8(frame_arena.arena,
+                                                                            "sub chunk bucket capacity: %llu",
+                                                                            World::sub_chunk_bucket_capacity);
 
                     i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - Opengl_Renderer::internal_data.free_buckets.size();
-                    sub_chunk_bucket_capacity_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    sub_chunk_bucket_capacity_text.count = sprintf(sub_chunk_bucket_capacity_text.data,
-                                                                   "sub chunk bucket capacity: %llu",
-                                                                   World::sub_chunk_bucket_capacity);
-
-                    sub_chunk_bucket_count_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    sub_chunk_bucket_count_text.count = sprintf(sub_chunk_bucket_count_text.data,
-                                                                "sub chunk buckets: %llu",
-                                                                sub_chunk_bucket_count);
+                    sub_chunk_bucket_count_text = push_formatted_string8(frame_arena.arena,
+                                                                         "sub chunk buckets: %llu",
+                                                                         sub_chunk_bucket_count);
 
                     {
                         f64 total_size = (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
-                        sub_chunk_bucket_total_memory_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                        sub_chunk_bucket_total_memory_text.count = sprintf(sub_chunk_bucket_total_memory_text.data,
-                                                                           "buckets total memory: %.2f",
-                                                                           total_size);
+                        sub_chunk_bucket_total_memory_text = push_formatted_string8(frame_arena.arena,
+                                                                                    "buckets total memory: %.2f",
+                                                                                    total_size);
                     }
 
                     {
                         f64 total_size = (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
-                        sub_chunk_bucket_allocated_memory_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                        sub_chunk_bucket_allocated_memory_text.count = sprintf(sub_chunk_bucket_allocated_memory_text.data,
-                                                                           "buckets allocated memory: %.2f",
-                                                                           total_size);
+                        sub_chunk_bucket_allocated_memory_text = push_formatted_string8(frame_arena.arena,
+                                                                                        "buckets allocated memory: %.2f",
+                                                                                        total_size);
                     }
 
                     {
                         f64 total_size = Opengl_Renderer::internal_data.sub_chunk_used_memory / (1024.0 * 1024.0);
-                        sub_chunk_bucket_used_memory_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                        sub_chunk_bucket_used_memory_text.count = sprintf(sub_chunk_bucket_used_memory_text.data,
-                                                                          "buckets used memory: %.2f",
-                                                                          total_size);
+                        sub_chunk_bucket_used_memory_text = push_formatted_string8(frame_arena.arena,
+                                                                                   "buckets used memory: %.2f",
+                                                                                   total_size);
                     }
 
-                    player_position_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    player_position_text.count = sprintf(player_position_text.data,
-                                                         "position: (%.2f, %.2f, %.2f)",
-                                                         camera.position.x,
-                                                         camera.position.y,
-                                                         camera.position.z);
+                    player_position_text = push_formatted_string8(frame_arena.arena,
+                                                                  "position: (%.2f, %.2f, %.2f)",
+                                                                  camera.position.x,
+                                                                  camera.position.y,
+                                                                  camera.position.z);
 
+                    player_chunk_coords_text = push_formatted_string8(frame_arena.arena,
+                                                                      "chunk coords: (%d, %d)",
+                                                                      (i32)player_chunk_coords.x,
+                                                                      (i32)player_chunk_coords.y);
 
-                    player_chunk_coords_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    player_chunk_coords_text.count = sprintf(player_chunk_coords_text.data,
-                                                             "chunk coords: (%d, %d)",
-                                                             (i32)player_chunk_coords.x,
-                                                             (i32)player_chunk_coords.y);
+                    chunk_radius_text = push_formatted_string8(frame_arena.arena,
+                                                               "chunk radius: %d",
+                                                               World::chunk_radius);
 
-                    chunk_radius_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    chunk_radius_text.count = sprintf(chunk_radius_text.data,
-                                                      "chunk radius: %d",
-                                                      World::chunk_radius);
-
-                    global_sky_light_level_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    global_sky_light_level_text.count = sprintf(global_sky_light_level_text.data,
-                                                                "global sky light level: %d",
-                                                                (u32)World::sky_light_level);
-
+                    global_sky_light_level_text = push_formatted_string8(frame_arena.arena,
+                                                                         "global sky light level: %d",
+                                                                         (u32)World::sky_light_level);
 
                     i32 hours = game_time / (60 * 60);
                     i32 minutes = (game_time % (60 * 60)) / 60;
-                    game_time_text.data  = ArenaPushArray(&frame_arena, char, 64);
-                    game_time_text.count = sprintf(game_time_text.data, "game time: %d:%d", hours, minutes);
+                    game_time_text = push_formatted_string8(frame_arena.arena, "game time: %d:%d", hours, minutes);
 
-                    UI::begin();
+                    UI::begin(game_input);
 
                     UI::set_offset({ 10.0f, 10.0f });
                     UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
@@ -1029,20 +1011,21 @@ namespace minecraft {
                     UI::end();
                 }
 
-                if (Game::should_render_inventory())
+                if (game_state->is_inventory_active)
                 {
-                    Inventory::draw();
+                    Inventory::draw(game_input);
                 }
 
                 Inventory::draw_hotbar();
 
                 glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
-                Opengl_Texture *cursor_texture = (Opengl_Texture *)Game::internal_data.ingame_crosshair_texture;
+                // todo(harlequin): game_assets
+                Opengl_Texture *cursor_texture = (Opengl_Texture *)game_state->ingame_crosshair_texture;
 
-                if (Game::internal_data.cursor_mode == CursorMode_Free)
+                if (game_state->cursor_mode == CursorMode_Free)
                 {
-                    cursor = Input::get_mouse_position();
-                    cursor_texture = (Opengl_Texture *)Game::internal_data.inventory_crosshair_texture;
+                    cursor = game_input->mouse_position;
+                    cursor_texture = (Opengl_Texture *)game_state->inventory_crosshair_texture;
                 }
 
                 // cursor_ui
@@ -1070,7 +1053,7 @@ namespace minecraft {
 
             {
                 PROFILE_BLOCK("swap buffers");
-                Opengl_Renderer::swap_buffers(game_state.window);
+                Opengl_Renderer::swap_buffers(game_state->window);
             }
 
             end_temprary_memory_arena(&frame_arena);
@@ -1079,5 +1062,41 @@ namespace minecraft {
 
     }
 
-    Game_State Game::internal_data;
+    void toggle_show_debug_status_hud(Game_State *game_state)
+    {
+        game_state->show_debug_stats_hud = !game_state->show_debug_stats_hud;
+    }
+
+    void toggle_inventory(Game_State *game_state)
+    {
+        game_state->is_inventory_active = !game_state->is_inventory_active;
+    }
+
+    void set_cursor_mode(Game_State *game_state, CursorMode mode)
+    {
+        game_state->cursor_mode = mode;
+    }
+
+    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...)
+    {
+        String8 result = {};
+
+        va_list args;
+        va_start(args, format);
+
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            if (arena->allocated + count + 1 <= arena->size)
+            {
+                result.data       = buffer;
+                result.count      = (u32)count;
+                arena->allocated += (u32)count + 1;
+            }
+        }
+        va_end(args);
+        return result;
+    }
 }

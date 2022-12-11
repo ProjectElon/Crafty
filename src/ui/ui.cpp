@@ -1,7 +1,7 @@
 #include "ui.h"
+#include "core/input.h"
 #include "renderer/font.h"
 #include "renderer/opengl_2d_renderer.h"
-#include "core/input.h"
 
 namespace minecraft {
 
@@ -16,10 +16,11 @@ namespace minecraft {
     {
     }
 
-    void UI::begin()
+    void UI::begin(Input *input)
     {
         UI_State& state = internal_data.current_state;
         state = internal_data.default_state;
+        internal_data.input = input;
     }
 
     void UI::set_font(Bitmap_Font *font)
@@ -58,11 +59,11 @@ namespace minecraft {
         glm::vec2 position = state.offset + state.cursor;
         Opengl_2D_Renderer::draw_rect(position + size * 0.5f, size, 0.0f, state.fill_color);
         state.cursor.y += size.y;
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = internal_data.input->mouse_position;
 
         if (mouse.x >= position.x && mouse.x <= position.x + size.x &&
             mouse.y >= position.y && mouse.y <= position.y + size.y &&
-            Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            is_button_pressed(internal_data.input, MC_MOUSE_BUTTON_LEFT))
         {
             return true;
         }
@@ -78,11 +79,11 @@ namespace minecraft {
         Opengl_2D_Renderer::draw_string(state.font, text, text_size, position + text_size * 0.5f, state.text_color);
         state.cursor.y += state.font->char_height * 1.3f;
 
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = internal_data.input->mouse_position;
 
         if (mouse.x >= position.x && mouse.x <= position.x + text_size.x &&
             mouse.y >= position.y && mouse.y <= position.y + text_size.y &&
-            Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT))
+            is_button_pressed(internal_data.input, MC_MOUSE_BUTTON_LEFT))
         {
             return true;
         }
@@ -97,18 +98,18 @@ namespace minecraft {
         glm::vec2 size     = state.font->get_string_size(text);
         glm::vec2 position = state.offset + state.cursor;
 
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = internal_data.input->mouse_position;
 
         bool hovered = mouse.x >= position.x && mouse.x <= position.x + size.x + padding.x &&
                        mouse.y >= position.y && mouse.y <= position.y + size.y + padding.y;
 
         glm::vec4 color = state.fill_color;
-        if (hovered && Input::is_button_held(MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
+        if (hovered && is_button_held(internal_data.input, MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
 
         Opengl_2D_Renderer::draw_rect(position + (size + padding) * 0.5f, size + padding, 0.0f, color);
         Opengl_2D_Renderer::draw_string(state.font, text, size, position + (size + padding) * 0.5f, state.text_color);
         state.cursor.y += size.y + padding.y + 5.0f;
-        return hovered && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT);
+        return hovered && is_button_pressed(internal_data.input, MC_MOUSE_BUTTON_LEFT);
     }
 
     bool UI::textured_button(String8 text,
@@ -122,19 +123,19 @@ namespace minecraft {
         glm::vec2 size     = state.font->get_string_size(text);
         glm::vec2 position = state.offset + state.cursor;
 
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = internal_data.input->mouse_position;
 
         bool hovered = mouse.x >= position.x && mouse.x <= position.x + size.x + padding.x &&
                        mouse.y >= position.y && mouse.y <= position.y + size.y + padding.y;
 
         glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
-        if (hovered && Input::is_button_held(MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
+        if (hovered && is_button_held(internal_data.input, MC_MOUSE_BUTTON_LEFT)) color.a = 0.5f;
 
         Opengl_2D_Renderer::draw_rect(position + (size + padding) * 0.5f, size + padding, 0.0f, color, texture, uv_scale, uv_offset);
         Opengl_2D_Renderer::draw_string(state.font, text, size, position + (size + padding) * 0.5f, state.text_color);
 
         state.cursor.y += size.y + padding.y + 5.0f;
-        return hovered && Input::is_button_pressed(MC_MOUSE_BUTTON_LEFT);
+        return hovered && is_button_pressed(internal_data.input, MC_MOUSE_BUTTON_LEFT);
     }
 
     void UI::end()

@@ -1,24 +1,37 @@
-﻿  game.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\game.cpp(536,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(541,56): warning C4244: '=': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(916,53): warning C4477: 'sprintf' : format string '%llu' requires an argument of type 'unsigned __int64', but variadic argument 1 has type 'i32'
-C:\dev\cpp\Crafty\src\game\game.cpp(916,53): message : consider using '%u' in the format string
-C:\dev\cpp\Crafty\src\game\game.cpp(916,53): message : consider using '%I32u' in the format string
-C:\dev\cpp\Crafty\src\game\game.cpp(964,93): warning C4477: 'sprintf' : format string '%d' requires an argument of type 'int', but variadic argument 1 has type 'double'
-C:\dev\cpp\Crafty\src\game\game.cpp(964,93): warning C4477: 'sprintf' : format string '%d' requires an argument of type 'int', but variadic argument 2 has type 'double'
-C:\dev\cpp\Crafty\src\game\game.cpp(1017,58): warning C4267: '=': conversion from 'size_t' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(441): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
+﻿  event.cpp
+  input.cpp
+  platform.cpp
+  Inventory.cpp
+  console_commands.cpp
+  game.cpp
+  jobs.cpp
+  profiler.cpp
+  world.cpp
+  main.cpp
+  opengl_2d_renderer.cpp
+  opengl_debug_renderer.cpp
+C:\dev\cpp\Crafty\src\core\event.cpp(45,35): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(163,62): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\core\event.cpp(251): warning C4715: 'minecraft::convert_event_to_string': not all control paths return a value
+  opengl_renderer.cpp
+  dropdown_console.cpp
+C:\dev\cpp\Crafty\src\game\console_commands.cpp(114,61): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(183,27): warning C4018: '<': signed/unsigned mismatch
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(273,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\game.cpp(450): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(629): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\game.cpp(626): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
           [
               T=minecraft::Transform
           ]
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(242,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data
+  LINK : ..\bin\Minecraft.exe not found or not built by the last incremental link; performing full link
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

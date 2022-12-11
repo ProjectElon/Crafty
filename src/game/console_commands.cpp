@@ -89,7 +89,7 @@ namespace minecraft {
 
         void exit(const Console_Command::Arguments& args)
         {
-            Game::internal_data.is_running = false;
+            // Game::internal_data.is_running = false;
         }
 
         void close(const Console_Command::Arguments& args)

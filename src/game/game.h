@@ -1,7 +1,13 @@
 #pragma once
 
 #include "core/common.h"
+#include "core/event.h"
+#include "core/input.h"
+
 #include "memory/memory_arena.h"
+
+#include "containers/string.h"
+
 #include "renderer/camera.h"
 
 struct GLFWwindow;
@@ -48,7 +54,9 @@ namespace minecraft {
     struct Game_State
     {
         Game_Memory *game_memory;
-        Game_Config  config;
+        Game_Config  game_config;
+        Event_System event_system;
+        Input        game_input;
         GLFWwindow  *window;
         Camera       camera;
         bool         minimized;
@@ -56,40 +64,19 @@ namespace minecraft {
         bool         show_debug_stats_hud;
         bool         is_inventory_active;
         CursorMode   cursor_mode;
+
+        // todo(harlequin): game_assets
         void        *ingame_crosshair_texture;
         void        *inventory_crosshair_texture;
     };
 
-    struct Game
-    {
-        static Game_State internal_data;
+    bool initialize_game(Game_State *game_state);
+    void shutdown_game(Game_State *game_state);
+    void run_game(Game_State *game_state);
 
-        static bool initialize(Game_Memory *game_memory);
-        static void shutdown();
+    void toggle_show_debug_status_hud(Game_State *game_state);
+    void toggle_inventory(Game_State *game_state);
+    void set_cursor_mode(Game_State *game_state, CursorMode mode);
 
-        static void run();
-
-        static inline Game_Config& get_config() { return internal_data.config; }
-        static inline Game_State& get_state() { return internal_data; }
-        static inline Camera& get_camera() { return internal_data.camera; }
-
-        static inline bool is_running() { return internal_data.is_running; }
-        static inline bool show_debug_status_hud() { return internal_data.show_debug_stats_hud; }
-        static inline bool should_render_inventory() { return internal_data.is_inventory_active; }
-
-        static inline void toggle_show_debug_status_hud()
-        {
-            internal_data.show_debug_stats_hud = !internal_data.show_debug_stats_hud;
-        }
-
-        static inline void toggle_inventory()
-        {
-            internal_data.is_inventory_active = !internal_data.is_inventory_active;
-        }
-
-        static inline void set_cursor_mode(CursorMode mode)
-        {
-            internal_data.cursor_mode = mode;
-        }
-    };
+    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...);
 }

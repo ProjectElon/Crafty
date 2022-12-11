@@ -124,7 +124,9 @@ namespace minecraft {
 
         Opengl_Renderer() = delete;
 
-        static bool initialize(GLFWwindow *window);
+        static bool initialize(GLFWwindow *window,
+                               u32 initial_frame_buffer_width,
+                               u32 initial_frame_buffer_height);
         static void shutdown();
 
         static bool on_resize(const Event* event, void *sender);

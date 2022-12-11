@@ -24,13 +24,16 @@ int main()
         return -1;
     }
 
-    game_memory.permanent_arena       = create_memory_arena(game_memory.permanent_memory,
-                                                            game_memory.permanent_memory_size);
+    game_memory.permanent_arena = create_memory_arena(game_memory.permanent_memory,
+                                                      game_memory.permanent_memory_size);
 
-    game_memory.transient_arena       = create_memory_arena(game_memory.transient_memory,
-                                                            game_memory.transient_memory_size);
+    game_memory.transient_arena = create_memory_arena(game_memory.transient_memory,
+                                                      game_memory.transient_memory_size);
 
-    bool success = Game::initialize(&game_memory);
+    Game_State *game_state  = ArenaPushZero(&game_memory.permanent_arena, Game_State);
+    game_state->game_memory = &game_memory;
+
+    bool success = initialize_game(game_state);
 
     if (!success)
     {
@@ -38,8 +41,8 @@ int main()
         return -1;
     }
 
-    Game::run();
-    Game::shutdown();
+    run_game(game_state);
+    shutdown_game(game_state);
 
     return 0;
 }

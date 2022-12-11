@@ -161,9 +161,9 @@ namespace minecraft {
         }
     }
 
-    void Inventory::handle_input()
+    void Inventory::handle_input(Input *input)
     {
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = input->mouse_position;
 
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
@@ -173,7 +173,7 @@ namespace minecraft {
 
             if (!is_slot_empty &&
                 is_point_inside_rectangle2(mouse, slot_rect) &&
-                Input::is_button_held(MC_MOUSE_BUTTON_LEFT) &&
+                is_button_held(input, MC_MOUSE_BUTTON_LEFT) &&
                 !internal_data.is_dragging)
             {
                 internal_data.is_dragging = true;
@@ -191,7 +191,7 @@ namespace minecraft {
         auto& slot_positions = internal_data.slot_positions;
         auto half_slot_size = slot_size * 0.5f;
 
-        if (Input::is_button_released(MC_MOUSE_BUTTON_LEFT) && internal_data.is_dragging)
+        if (is_button_released(input, MC_MOUSE_BUTTON_LEFT) && internal_data.is_dragging)
         {
             i32 closest_slot_index = -1;
             f32 best_distance_squared = Infinity32;
@@ -246,7 +246,7 @@ namespace minecraft {
         }
     }
 
-    static void draw_slot_at_index(i32 slot_index)
+    static void draw_slot_at_index(i32 slot_index, glm::vec2 mouse)
     {
         auto& inventory_hud_pos = Inventory::internal_data.inventory_hud_pos;
         auto& inventory_hud_size = Inventory::internal_data.inventory_hud_size;
@@ -261,7 +261,6 @@ namespace minecraft {
 
         if (slot_index == Inventory::internal_data.dragging_slot_index)
         {
-            glm::vec2 mouse = Input::get_mouse_position();
             slot_pos = mouse - Inventory::internal_data.dragging_slot_offset;
         }
 
@@ -298,9 +297,9 @@ namespace minecraft {
         }
     }
 
-    void Inventory::draw()
+    void Inventory::draw(Input *input)
     {
-        glm::vec2 mouse = Input::get_mouse_position();
+        const glm::vec2& mouse = input->mouse_position;
 
         auto& inventory_hud_pos = Inventory::internal_data.inventory_hud_pos;
         auto& inventory_hud_size = Inventory::internal_data.inventory_hud_size;
@@ -317,26 +316,26 @@ namespace minecraft {
         {
             if (slot_index != internal_data.dragging_slot_index)
             {
-                draw_slot_at_index(slot_index);
+                draw_slot_at_index(slot_index, mouse);
             }
         }
 
         if (internal_data.dragging_slot_index != -1)
         {
-            draw_slot_at_index(internal_data.dragging_slot_index);
+            draw_slot_at_index(internal_data.dragging_slot_index, mouse);
         }
     }
 
-    void Inventory::handle_hotbar_input()
+    void Inventory::handle_hotbar_input(Input *input)
     {
         for (i32 key_code = MC_KEY_1, numpad_key_code = MC_KEY_KP_1; key_code <= MC_KEY_9; key_code++, numpad_key_code++)
         {
-            if (Input::is_key_pressed(key_code))
+            if (is_key_pressed(input, key_code))
             {
                 i32 slot_index = key_code - MC_KEY_1;
                 internal_data.active_hot_bar_slot_index = slot_index;
             }
-            else if (Input::is_key_pressed(numpad_key_code))
+            else if (is_key_pressed(input, numpad_key_code))
             {
                 i32 slot_index = numpad_key_code - MC_KEY_KP_1;
                 internal_data.active_hot_bar_slot_index = slot_index;
