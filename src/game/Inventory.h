@@ -16,6 +16,7 @@ namespace minecraft {
     struct Bitmap_Font;
     struct Opengl_Texture;
     struct Input;
+    struct World;
 
     struct Inventory_Slot
     {
@@ -44,11 +45,11 @@ namespace minecraft {
         i32 dragging_slot_index;
         glm::vec2 dragging_slot_offset;
 
-        Bitmap_Font *font;
+        Bitmap_Font    *font;
         Opengl_Texture *hud_sprite;
-        UV_Rectangle inventory_slot_uv_rect;
-        UV_Rectangle active_inventory_slot_uv_rect;
-        UV_Rectangle inventory_hud_uv_rect;
+        UV_Rectangle    inventory_slot_uv_rect;
+        UV_Rectangle    active_inventory_slot_uv_rect;
+        UV_Rectangle    inventory_hud_uv_rect;
 
         f32 hot_bar_scale;
         f32 hot_bar_size;
@@ -67,18 +68,19 @@ namespace minecraft {
 
         static bool initialize(Bitmap_Font *font,
                                Opengl_Texture *hud_sprite);
-        static void shutdown();
+        // todo(harlequin): remove std::string
+        static void shutdown(const std::string& path);
 
         static void add_block(u16 block_id);
 
         static void calculate_slot_positions_and_sizes();
         static void handle_input(Input *input);
-        static void draw(Input *input);
+        static void draw(World *world, Input *input);
 
         static void handle_hotbar_input(Input *input);
-        static void draw_hotbar();
+        static void draw_hotbar(World *world);
 
-        static void serialize();
-        static void deserialize();
+        static void serialize(const std::string& world_path);
+        static void deserialize(const std::string& world_path);
     };
 }

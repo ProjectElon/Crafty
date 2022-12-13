@@ -127,53 +127,54 @@ namespace minecraft {
         {
             for (i32 i = 0; i < BlockId_Count; i++)
             {
-                const Block_Info& block_info = World::block_infos[i];
-                Dropdown_Console::log_with_new_line(block_info.name);
+                // const Block_Info& block_info = World::block_infos[i];
+                // Dropdown_Console::log_with_new_line(block_info.name);
             }
         }
 
         void chunk_radius(const Console_Command::Arguments& args)
         {
-            std::stringstream ss;
-            ss << World::chunk_radius;
-            Dropdown_Console::log_with_new_line(ss.str());
+            // std::stringstream ss;
+            // ss << World::chunk_radius;
+            // Dropdown_Console::log_with_new_line(ss.str());
+
         }
 
         void set_chunk_radius(const Console_Command::Arguments& args)
         {
-            i32 chunk_radius;
-            std::stringstream ss(args[0]);
-            ss >> chunk_radius;
-            if (ss.fail())
-            {
-                Dropdown_Console::log_with_new_line("invalid argument expected an integer");
-                return;
-            }
-            if (chunk_radius > World::max_chunk_radius) chunk_radius = World::max_chunk_radius;
-            World::chunk_radius = chunk_radius;
+            // i32 chunk_radius;
+            // std::stringstream ss(args[0]);
+            // ss >> chunk_radius;
+            // if (ss.fail())
+            // {
+            //     Dropdown_Console::log_with_new_line("invalid argument expected an integer");
+            //     return;
+            // }
+            // if (chunk_radius > World::max_chunk_radius) chunk_radius = World::max_chunk_radius;
+            // World::chunk_radius = chunk_radius;
         }
 
         void add_block_to_inventory(const Console_Command::Arguments& args)
         {
-            std::string block_name;
-            std::stringstream ss(args[0]);
-            ss >> block_name;
-            i16 block_id = -1;
-            for (u16 i = 1; i < BlockId_Count; i++)
-            {
-                const Block_Info& block_info = World::block_infos[i];
-                if (block_info.name == block_name)
-                {
-                    block_id = i;
-                    break;
-                }
-            }
-            if (block_id == -1)
-            {
-                Dropdown_Console::log_with_new_line("invalid block\n");
-                return;
-            }
-            Inventory::add_block(block_id);
+            // std::string block_name;
+            // std::stringstream ss(args[0]);
+            // ss >> block_name;
+            // i16 block_id = -1;
+            // for (u16 i = 1; i < BlockId_Count; i++)
+            // {
+            //     const Block_Info& block_info = World::block_infos[i];
+            //     if (block_info.name == block_name)
+            //     {
+            //         block_id = i;
+            //         break;
+            //     }
+            // }
+            // if (block_id == -1)
+            // {
+            //     Dropdown_Console::log_with_new_line("invalid block\n");
+            //     return;
+            // }
+            // Inventory::add_block(block_id);
         }
 
         void build_assets(const Console_Command::Arguments& args)

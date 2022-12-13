@@ -6,7 +6,6 @@
 
 #include "opengl_texture.h"
 #include "opengl_shader.h"
-#include "game/world.h"
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -15,6 +14,7 @@
 
 namespace minecraft {
 
+    struct World;
     struct Platform;
     struct Camera;
 
@@ -156,18 +156,18 @@ namespace minecraft {
 
         static void free_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
 
-        static void upload_sub_chunk_to_gpu(Chunk *chunk, u32 sub_chunk_index);
-        static void update_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
+        static void upload_sub_chunk_to_gpu(World *world, Chunk *chunk, u32 sub_chunk_index);
+        static void update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index);
 
         static void begin(const glm::vec4& clear_color,
                           const glm::vec4& tint_color,
                           Camera *camera);
 
-        static void render_sub_chunk(Chunk *chunk, u32 sub_chunk_index);
-        static void render_chunks_at_region(World_Region_Bounds *player_region_bounds,
+        static void render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index);
+        static void render_chunks_at_region(World *world, World_Region_Bounds *player_region_bounds,
                                             Camera *camera);
 
-        static void end(Block_Query_Result *select_query);
+        static void end(i32 chunk_radius, i32 sky_light_level, Block_Query_Result *select_query);
 
         static void wait_for_gpu_to_finish_work();
         static void signal_gpu_for_work();

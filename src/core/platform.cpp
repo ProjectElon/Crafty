@@ -116,6 +116,10 @@ namespace minecraft {
                               u32 opengl_major_version,
                               u32 opengl_minor_version)
     {
+        // setting the max number of open files using fopen
+        i32 new_max = _setmaxstdio(8192);
+        assert(new_max == 8192);
+
         if (!glfwInit())
         {
             fprintf(stderr, "[ERROR]: failed to initialize GLFW\n");
@@ -143,16 +147,13 @@ namespace minecraft {
             config->window_y = monitor_y + (monitor_height - config->window_height) / 2;
         }
 
-
-// todo(harlequin): move to common.h
-#define OPENGL_DEBUGGING 0
 #ifdef OPENGL_DEBUGGING
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
 #endif
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, opengl_major_version);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, opengl_minor_version);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+        glfwWindowHint(GLFW_OPENGL_PROFILE,        GLFW_OPENGL_CORE_PROFILE);
 
         return true;
     }
@@ -229,7 +230,7 @@ namespace minecraft {
 
         config->window_mode = new_window_mode;
 
-        const GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+        const GLFWmonitor *monitor    = glfwGetPrimaryMonitor();
         const GLFWvidmode *video_mode = glfwGetVideoMode((GLFWmonitor*)monitor);
 
         if (config->window_mode == WindowMode_Windowed)

@@ -8,6 +8,7 @@ namespace minecraft {
     bool initialize_event_system(Event_System *event_system, bool is_logging_enabled)
     {
         event_system->is_logging_enabled = is_logging_enabled;
+        event_system->registry->entries = std::vector<Event_Entry>();
         event_system->registry->entries.reserve(128);
         return true;
     }

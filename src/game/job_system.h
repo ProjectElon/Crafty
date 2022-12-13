@@ -43,11 +43,13 @@ namespace minecraft {
         Job_Queue low_priority_queue;
     };
 
+    struct World;
+
     struct Job_System
     {
         static Job_System_Data internal_data;
 
-        static bool initialize();
+        static bool initialize(World *world);
         static void shutdown();
 
         static void dispatch(const Job& job, bool high_prority);

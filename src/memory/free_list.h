@@ -9,12 +9,12 @@ namespace minecraft {
     template<typename T, const i32 Count>
     struct Free_List
     {
-        std::vector<T> elements;
+        std::vector<T>   elements;
         std::vector<i32> free_elements;
 
         bool initialize()
         {
-            elements = std::vector<T>(Count);
+            elements      = std::vector<T>(Count);
             free_elements = std::vector<i32>(Count);
             reset();
             return true;
@@ -44,6 +44,7 @@ namespace minecraft {
         {
             i32 element_index = (u32)(element - elements.data());
             assert(element_index >= 0 && element_index < Count);
+
 #ifdef MC_DEBUG
             for (i32 i = 0; i < free_elements.size(); i++)
             {

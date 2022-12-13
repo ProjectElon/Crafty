@@ -7,41 +7,48 @@
 namespace minecraft {
 
     struct Chunk;
+    struct World;
     struct World_Region_Bounds;
 
     struct Load_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 
     struct Calculate_Chunk_Light_Propagation_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 
     struct Calculate_Chunk_Lighting_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 
     struct Update_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 
     struct Serialize_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 
     struct Serialize_And_Free_Chunk_Job alignas(std::hardware_constructive_interference_size)
     {
-        Chunk* chunk;
+        World *world;
+        Chunk *chunk;
         static void execute(void* job_data);
     };
 }

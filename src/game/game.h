@@ -10,6 +10,8 @@
 
 #include "renderer/camera.h"
 
+#include "game/world.h"
+
 struct GLFWwindow;
 
 namespace minecraft {
@@ -57,6 +59,7 @@ namespace minecraft {
         Game_Config  game_config;
         Event_System event_system;
         Input        game_input;
+        World        world;
         GLFWwindow  *window;
         Camera       camera;
         bool         minimized;

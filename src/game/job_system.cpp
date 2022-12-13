@@ -53,12 +53,11 @@ namespace minecraft {
         }
     }
 
-    static void do_light_thread_work()
+    static void do_light_thread_work(World *world)
     {
-        auto& light_propagation_queue        = World::light_propagation_queue;
-        auto& calculate_chunk_lighting_queue = World::calculate_chunk_lighting_queue;
-
-        auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
+        auto& light_propagation_queue        = world->light_propagation_queue;
+        auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
+        auto& update_chunk_jobs_queue        = world->update_chunk_jobs_queue;
 
         Circular_FIFO_Queue<Block_Query_Result> light_queue;
         light_queue.initialize();
@@ -69,7 +68,7 @@ namespace minecraft {
             {
                 Calculate_Chunk_Light_Propagation_Job job = light_propagation_queue.pop();
                 Chunk *chunk = job.chunk;
-                chunk->propagate_sky_light(&light_queue);
+                propagate_sky_light(world, chunk, &light_queue);
                 chunk->light_propagated = true;
                 chunk->in_light_propagation_queue = false;
             }
@@ -78,7 +77,7 @@ namespace minecraft {
             {
                 Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
                 Chunk *chunk = job.chunk;
-                chunk->calculate_lighting(&light_queue);
+                calculate_lighting(world, chunk, &light_queue);
                 chunk->in_light_calculation_queue = false;
             }
 
@@ -87,40 +86,38 @@ namespace minecraft {
                 auto block_query = light_queue.pop();
 
                 Block* block = block_query.block;
-                Block_Light_Info *block_light_info = block_query.chunk->get_block_light_info(block_query.block_coords);
-                const auto& info = block->get_info();
-                auto neighbours_query = World::get_neighbours(block_query.chunk, block_query.block_coords);
+                Block_Light_Info *block_light_info = get_block_light_info(block_query.chunk, block_query.block_coords);
+                const Block_Info* info = get_block_info(world, block);
+                auto neighbours_query = world_get_neighbours(block_query.chunk, block_query.block_coords);
 
                 for (i32 d = 0; d < 6; d++)
                 {
                     auto& neighbour_query = neighbours_query[d];
 
-                    if (World::is_block_query_valid(neighbour_query) &&
-                        World::is_block_query_in_world_region(neighbour_query, World::player_region_bounds))
+                    if (is_block_query_valid(neighbour_query) &&
+                        is_block_query_in_world_region(neighbour_query, world->player_region_bounds))
                     {
                         Block* neighbour = neighbour_query.block;
-                        const auto& neighbour_info = neighbour->get_info();
-                        if (neighbour_info.is_transparent())
+                        const auto* neighbour_info = get_block_info(world, neighbour);
+                        if (is_block_transparent(neighbour_info))
                         {
-                            Block_Light_Info *neighbour_block_light_info = neighbour_query.chunk->get_block_light_info(neighbour_query.block_coords);
+                            Block_Light_Info *neighbour_block_light_info = get_block_light_info(neighbour_query.chunk, neighbour_query.block_coords);
 
                             if ((i32)neighbour_block_light_info->sky_light_level <= (i32)block_light_info->sky_light_level - 2)
                             {
-                                World::set_block_sky_light_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->sky_light_level - 1);
+                                set_block_sky_light_level(world, neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->sky_light_level - 1);
                                 light_queue.push(neighbour_query);
                             }
 
                             if ((i32)neighbour_block_light_info->light_source_level <= (i32)block_light_info->light_source_level - 2)
                             {
-                                World::set_block_light_source_level(neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->light_source_level - 1);
+                                set_block_light_source_level(world, neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->light_source_level - 1);
                                 light_queue.push(neighbour_query);
                             }
                         }
                     }
                 }
             }
-
-            auto& update_chunk_jobs_queue = World::update_chunk_jobs_queue;
 
             while (!update_chunk_jobs_queue.is_empty())
             {
@@ -130,7 +127,7 @@ namespace minecraft {
         }
     }
 
-    bool Job_System::initialize()
+    bool Job_System::initialize(World *world)
     {
         u32 concurrent_thread_count = std::thread::hardware_concurrency();
 
@@ -158,7 +155,7 @@ namespace minecraft {
             internal_data.threads[i] = std::thread(execute_jobs);
         }
 
-        internal_data.light_thread = std::thread(do_light_thread_work);
+        internal_data.light_thread = std::thread(do_light_thread_work, world);
         return true;
     }
 

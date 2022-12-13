@@ -23,7 +23,7 @@ namespace minecraft {
         OPTICK_EVENT();
     }
 
-    void Physics::simulate(f32 delta_time, Registry *registry)
+    void Physics::simulate(f32 delta_time, World *world, Registry *registry)
     {
         auto& delta_time_accumulator = internal_data.delta_time_accumulator;
         auto& physics_delta_time = internal_data.delta_time;
@@ -66,11 +66,11 @@ namespace minecraft {
                         for (i32 x = min.x; x <= max.x; ++x)
                         {
                             glm::vec3 block_pos = glm::vec3(x - 0.5f, y - 0.5f, z - 0.5f);
-                            auto query = World::query_block(block_pos);
-                            if (World::is_block_query_valid(query))
+                            auto query = query_block(world, block_pos);
+                            if (is_block_query_valid(query))
                             {
-                                const Block_Info& block_info = query.block->get_info();
-                                if (block_info.is_solid())
+                                const Block_Info *block_info = get_block_info(world, query.block);
+                                if (is_block_solid(block_info))
                                 {
                                     Transform block_transform = {};
                                     block_transform.position = block_pos;

@@ -4,7 +4,6 @@
 #include "containers/string.h"
 
 #include "game/game.h"
-#include "game/world.h"
 #include "game/job_system.h"
 #include "game/jobs.h"
 #include "game/console_commands.h"
@@ -189,6 +188,7 @@ namespace minecraft {
         Game_Config  *game_config  = &game_state->game_config;
         Event_System *event_system = &game_state->event_system;
         Input        *game_input   = &game_state->game_input;
+        World        *game_world   = &game_state->world;
 
         // @todo(harlequin): load the game config from a file
         game_config->window_title               = "Minecraft";
@@ -201,7 +201,7 @@ namespace minecraft {
         game_config->window_mode                = WindowMode_Windowed;
 
         u32 opengl_major_version = 4;
-        u32 opengl_minor_version = 4;
+        u32 opengl_minor_version = 5;
         u32 opengl_back_buffer_samples = 16;
 
         if (!Platform::initialize(game_config,
@@ -227,7 +227,9 @@ namespace minecraft {
         // @Hack
         WindowMode desired_window_mode  = game_config->window_mode;
         game_config->window_mode        = WindowMode_Windowed;
-        Platform::switch_to_window_mode(game_state->window, game_config, desired_window_mode);
+        Platform::switch_to_window_mode(game_state->window,
+                                        game_config,
+                                        desired_window_mode);
 
         if (desired_window_mode == WindowMode_Windowed)
         {
@@ -270,12 +272,6 @@ namespace minecraft {
             return false;
         }
 
-        if (!Job_System::initialize())
-        {
-            fprintf(stderr, "[ERROR]: failed to initialize job system\n");
-            return false;
-        }
-
         i32 physics_update_rate = 120;
 
         if (!Physics::initialize(physics_update_rate))
@@ -296,10 +292,6 @@ namespace minecraft {
             fprintf(stderr, "[ERROR] failed to initialize profiler\n");
             return false;
         }
-
-        // setting the max number of open files using fopen
-        i32 new_max = _setmaxstdio(8192);
-        assert(new_max == 8192);
 
         register_event(event_system, EventType_Quit,             on_quit);
         register_event(event_system, EventType_KeyPress,         on_key_press, game_state);
@@ -386,11 +378,21 @@ namespace minecraft {
         camera.initialize(camera_position, fov);
         register_event(event_system, EventType_Resize, on_resize, &camera);
 
-        // @todo(harlequin): game menu to add worlds
+        // @todo(harlequin): game menu to add worlds and remove std::string
         std::string world_name = "harlequin";
         std::string world_path = "../assets/worlds/" + world_name;
-        World::initialize(world_path);
-        Inventory::deserialize();
+
+        initialize_world(game_world, world_path);
+        game_world->sky_light_level = 1.0f;
+        game_world->chunk_radius    = 8;
+
+        Inventory::deserialize(world_path);
+
+        if (!Job_System::initialize(game_world))
+        {
+            fprintf(stderr, "[ERROR]: failed to initialize job system\n");
+            return false;
+        }
 
         game_state->show_debug_stats_hud  = false;
         game_state->is_inventory_active   = false;
@@ -411,7 +413,7 @@ namespace minecraft {
 
     void shutdown_game(Game_State *game_state)
     {
-        World::schedule_save_chunks_jobs();
+        schedule_save_chunks_jobs(&game_state->world);
         Job_System::wait_for_jobs_to_finish();
 
         game_state->is_running = false;
@@ -424,7 +426,7 @@ namespace minecraft {
         Dropdown_Console::shutdown();
         UI::shutdown();
 
-        Inventory::shutdown();
+        Inventory::shutdown(game_state->world.path);
 
         Opengl_2D_Renderer::shutdown();
         Opengl_Debug_Renderer::shutdown();
@@ -440,13 +442,14 @@ namespace minecraft {
     {
         Game_Memory *game_memory = game_state->game_memory;
         Input       *game_input  = &game_state->game_input;
+        World       *game_world  = &game_state->world;
 
         f32 frame_timer            = 0;
         u32 last_frames_per_second = 0;
         u32 frames_per_second      = 0;
 
         Camera& camera      = game_state->camera;
-        auto& loaded_chunks = World::loaded_chunks;
+        auto& loaded_chunks = game_world->loaded_chunks;
         Registry& registry  = ECS::internal_data.registry;
 
         {
@@ -478,7 +481,7 @@ namespace minecraft {
         f32 game_timer     = 0.0f;
         i32 game_time      = 43200; // todo(harlequin): game time to real time function
 
-        World_Region_Bounds& player_region_bounds = World::player_region_bounds;
+        World_Region_Bounds& player_region_bounds = game_world->player_region_bounds;
 
         while (game_state->is_running)
         {
@@ -536,12 +539,12 @@ namespace minecraft {
             if (game_time >= 0 && game_time <= 43200)
             {
                 f32 t = (f32)game_time / 43200.0f;
-                World::sky_light_level = glm::ceil(glm::lerp(1.0f, 15.0f, t));
+                game_world->sky_light_level = glm::ceil(glm::lerp(1.0f, 15.0f, t));
             } // day time
             else if (game_time >= 43200 && game_time <= 86400)
             {
                 f32 t = ((f32)game_time - 43200.0f) / 43200.0f;
-                World::sky_light_level = glm::ceil(glm::lerp(15.0f, 1.0f, t));
+                game_world->sky_light_level = glm::ceil(glm::lerp(15.0f, 1.0f, t));
             }
 
             {
@@ -554,25 +557,30 @@ namespace minecraft {
                 update_input(game_input, game_state->window);
             }
 
-            glm::vec2 player_chunk_coords = World::world_position_to_chunk_coords(camera.position);
-            World::player_region_bounds   = World::get_world_bounds_from_chunk_coords(player_chunk_coords);
+            glm::vec2 player_chunk_coords    = world_position_to_chunk_coords(camera.position);
+            game_world->player_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
+                                                                                  player_chunk_coords);
 
-            World::load_chunks_at_region(player_region_bounds);
-            World::schedule_chunk_lighting_jobs(&player_region_bounds);
+            load_chunks_at_region(game_world, player_region_bounds);
+            schedule_chunk_lighting_jobs(game_world, &player_region_bounds);
 
             glm::vec2 mouse_delta = get_mouse_delta(game_input);
 
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
-            Block_Query_Result select_query = World::select_block(camera.position, camera.forward, max_block_select_dist_in_cube_units, &ray_cast_result);
+            Block_Query_Result select_query = select_block(game_world,
+                                                           camera.position,
+                                                           camera.forward,
+                                                           max_block_select_dist_in_cube_units,
+                                                           &ray_cast_result);
             const char *back_facing_normal_label = "";
 
             if (ray_cast_result.hit &&
-                World::is_block_query_valid(select_query) &&
+                is_block_query_valid(select_query) &&
                 Dropdown_Console::is_closed() &&
                 !game_state->is_inventory_active)
             {
-                glm::vec3 block_position = select_query.chunk->get_block_position(select_query.block_coords);
+                glm::vec3 block_position = get_block_position(select_query.chunk, select_query.block_coords);
                 // Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
                 Block_Query_Result block_facing_normal_query = {};
@@ -584,42 +592,42 @@ namespace minecraft {
 
                 if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
                     normal = { 0.0f, 1.0f, 0.0f };
                     back_facing_normal_label = "face: top";
                 }
                 else if (glm::epsilonEqual(hit_point.y, block_position.y - 0.5f, eps)) // bottom face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
                     normal = { 0.0f, -1.0f, 0.0f };
                     back_facing_normal_label = "face: bottom";
                 }
                 else if (glm::epsilonEqual(hit_point.x, block_position.x + 0.5f, eps)) // right face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
                     normal = { 1.0f, 0.0f, 0.0f };
                     back_facing_normal_label = "face: right";
                 }
                 else if (glm::epsilonEqual(hit_point.x, block_position.x - 0.5f, eps)) // left face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
                     normal = { -1.0f, 0.0f, 0.0f };
                     back_facing_normal_label = "face: left";
                 }
                 else if (glm::epsilonEqual(hit_point.z, block_position.z - 0.5f, eps)) // front face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
                     normal = { 0.0f, 0.0f, -1.0f };
                     back_facing_normal_label = "face: front";
                 }
                 else if (glm::epsilonEqual(hit_point.z, block_position.z + 0.5f, eps)) // back face
                 {
-                    block_facing_normal_query = World::get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = world_get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
                     normal = { 0.0f, 0.0f, 1.0f };
                     back_facing_normal_label = "face: back";
                 }
 
-                bool block_facing_normal_is_valid = World::is_block_query_valid(block_facing_normal_query);
+                bool block_facing_normal_is_valid = is_block_query_valid(block_facing_normal_query);
 
                 Entity player = registry.find_entity_by_tag(EntityTag_Player);
                 bool is_block_facing_normal_colliding_with_player = false;
@@ -630,7 +638,7 @@ namespace minecraft {
                     auto player_box_collider = registry.get_component< Box_Collider >(player);
 
                     Transform block_transform =  {};
-                    block_transform.position    = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                    block_transform.position    = get_block_position(block_facing_normal_query.chunk, block_facing_normal_query.block_coords);
                     block_transform.scale       = { 1.0f, 1.0f, 1.0f };
                     block_transform.orientation = { 0.0f, 0.0f, 0.0f };
 
@@ -650,7 +658,7 @@ namespace minecraft {
 
                 if (can_place_block)
                 {
-                    glm::vec3 block_facing_normal_position = block_facing_normal_query.chunk->get_block_position(block_facing_normal_query.block_coords);
+                    glm::vec3 block_facing_normal_position = get_block_position(block_facing_normal_query.chunk, block_facing_normal_query.block_coords);
                     glm::ivec2 chunk_coords = block_facing_normal_query.chunk->world_coords;
                     glm::ivec3 block_coords = block_facing_normal_query.block_coords;
 
@@ -673,8 +681,9 @@ namespace minecraft {
                                                                                    block_coords.y,
                                                                                    block_coords.z);
 
-                    Block_Light_Info* light_info = block_facing_normal_query.chunk->get_block_light_info(block_facing_normal_query.block_coords);
-                    i32 sky_light_level          = light_info->get_sky_light_level();
+                    Block_Light_Info* light_info = get_block_light_info(block_facing_normal_query.chunk,
+                                                                        block_facing_normal_query.block_coords);
+                    i32 sky_light_level          = get_sky_light_level(game_world, light_info);
 
                     block_facing_normal_sky_light_level_text = push_formatted_string8(frame_arena.arena,
                                                                                       "sky light level: %d",
@@ -698,7 +707,7 @@ namespace minecraft {
                         bool is_active_slot_empty = slot.block_id == BlockId_Air && slot.count == 0;
                         if (!is_active_slot_empty)
                         {
-                            World::set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, slot.block_id);
+                            set_block_id(block_facing_normal_query.chunk, block_facing_normal_query.block_coords, slot.block_id);
                             slot.count--;
                             if (slot.count == 0)
                             {
@@ -712,7 +721,7 @@ namespace minecraft {
                 {
                     // @todo(harlequin): this solves the problem but do we really want this ?
                     bool any_neighbouring_water_block = false;
-                    auto neighours = select_query.chunk->get_neighbours(select_query.block_coords);
+                    auto neighours = get_neighbours(select_query.chunk, select_query.block_coords);
                     for (const auto& neighour : neighours)
                     {
                         if (neighour->id == BlockId_Water)
@@ -724,14 +733,14 @@ namespace minecraft {
 
                     i32 block_id = select_query.block->id;
                     Inventory::add_block(block_id);
-                    World::set_block_id(select_query.chunk, select_query.block_coords, any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
+                    set_block_id(select_query.chunk, select_query.block_coords, any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
                 }
             }
 
             bool is_under_water = false;
-            auto block_at_camera = World::query_block(camera.position);
+            auto block_at_camera = query_block(game_world, camera.position);
 
-            if (World::is_block_query_valid(block_at_camera))
+            if (is_block_query_valid(block_at_camera))
             {
                 if (block_at_camera.block->id == BlockId_Water)
                 {
@@ -753,10 +762,10 @@ namespace minecraft {
                         if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
                         if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
 
-                        glm::vec3 angles = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
+                        glm::vec3 angles      = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
                         glm::quat orientation = glm::quat(angles);
-                        glm::vec3 forward = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
-                        glm::vec3 right = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
+                        glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
+                        glm::vec3 right       = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
 
                         controller->movement = { 0.0f, 0.0f, 0.0f };
 
@@ -822,7 +831,7 @@ namespace minecraft {
 
             {
                 PROFILE_BLOCK("Physics");
-                Physics::simulate(delta_time, &registry);
+                Physics::simulate(delta_time, game_world, &registry);
             }
 
             {
@@ -852,7 +861,7 @@ namespace minecraft {
 
             f32 normalize_color_factor = 1.0f / 255.0f;
             glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
-            glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)World::sky_light_level / 15.0f);
+            glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)game_world->sky_light_level / 15.0f);
 
             glm::vec4 tint_color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -879,12 +888,12 @@ namespace minecraft {
 
                 {
                     PROFILE_BLOCK("Opengl_Renderer::render_chunks");
-                    Opengl_Renderer::render_chunks_at_region(&player_region_bounds, &camera);
+                    Opengl_Renderer::render_chunks_at_region(game_world, &player_region_bounds, &camera);
                 }
 
                 {
                     PROFILE_BLOCK("Opengl_Renderer::end");
-                    Opengl_Renderer::end(&select_query);
+                    Opengl_Renderer::end(game_world->chunk_radius, game_world->sky_light_level, &select_query);
                 }
             }
 
@@ -954,11 +963,11 @@ namespace minecraft {
 
                     chunk_radius_text = push_formatted_string8(frame_arena.arena,
                                                                "chunk radius: %d",
-                                                               World::chunk_radius);
+                                                               game_world->chunk_radius);
 
                     global_sky_light_level_text = push_formatted_string8(frame_arena.arena,
                                                                          "global sky light level: %d",
-                                                                         (u32)World::sky_light_level);
+                                                                         (u32)game_world->sky_light_level);
 
                     i32 hours = game_time / (60 * 60);
                     i32 minutes = (game_time % (60 * 60)) / 60;
@@ -1013,10 +1022,10 @@ namespace minecraft {
 
                 if (game_state->is_inventory_active)
                 {
-                    Inventory::draw(game_input);
+                    Inventory::draw(game_world, game_input);
                 }
 
-                Inventory::draw_hotbar();
+                Inventory::draw_hotbar(game_world);
 
                 glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
                 // todo(harlequin): game_assets
@@ -1049,7 +1058,7 @@ namespace minecraft {
                 Opengl_Renderer::signal_gpu_for_work();
             }
 
-            World::free_chunks_out_of_region(player_region_bounds);
+            free_chunks_out_of_region(game_world, player_region_bounds);
 
             {
                 PROFILE_BLOCK("swap buffers");

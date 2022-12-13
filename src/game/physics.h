@@ -32,6 +32,7 @@ namespace minecraft {
     };
 
     struct Registry;
+    struct World;
 
     struct Physics
     {
@@ -39,7 +40,7 @@ namespace minecraft {
 
         static bool initialize(i32 update_rate);
         static void shutdown();
-        static void simulate(f32 delta_time, Registry *registry);
+        static void simulate(f32 delta_time, World *world, Registry *registry);
 
         static bool box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);
         static bool is_colliding(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1);

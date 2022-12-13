@@ -46,9 +46,9 @@ namespace minecraft {
         return true;
     }
 
-    void Inventory::shutdown()
+    void Inventory::shutdown(const std::string& world_path)
     {
-        serialize();
+        serialize(world_path);
     }
 
     void Inventory::add_block(u16 block_id)
@@ -246,7 +246,7 @@ namespace minecraft {
         }
     }
 
-    static void draw_slot_at_index(i32 slot_index, glm::vec2 mouse)
+    static void draw_slot_at_index(World *world, i32 slot_index, glm::vec2 mouse)
     {
         auto& inventory_hud_pos = Inventory::internal_data.inventory_hud_pos;
         auto& inventory_hud_size = Inventory::internal_data.inventory_hud_size;
@@ -266,7 +266,7 @@ namespace minecraft {
 
         if (slot.block_id)
         {
-            const Block_Info& info = World::block_infos[slot.block_id];
+            const Block_Info& info = world->block_infos[slot.block_id];
             UV_Rect& side_texture_uv_rect = texture_uv_rects[info.side_texture_id];
             glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -297,7 +297,7 @@ namespace minecraft {
         }
     }
 
-    void Inventory::draw(Input *input)
+    void Inventory::draw(World *world, Input *input)
     {
         const glm::vec2& mouse = input->mouse_position;
 
@@ -316,13 +316,13 @@ namespace minecraft {
         {
             if (slot_index != internal_data.dragging_slot_index)
             {
-                draw_slot_at_index(slot_index, mouse);
+                draw_slot_at_index(world, slot_index, mouse);
             }
         }
 
         if (internal_data.dragging_slot_index != -1)
         {
-            draw_slot_at_index(internal_data.dragging_slot_index, mouse);
+            draw_slot_at_index(world, internal_data.dragging_slot_index, mouse);
         }
     }
 
@@ -338,12 +338,12 @@ namespace minecraft {
             else if (is_key_pressed(input, numpad_key_code))
             {
                 i32 slot_index = numpad_key_code - MC_KEY_KP_1;
-                internal_data.active_hot_bar_slot_index = slot_index;
+            internal_data.active_hot_bar_slot_index = slot_index;
             }
         }
     }
 
-    void Inventory::draw_hotbar()
+    void Inventory::draw_hotbar(World *world)
     {
         glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
 
@@ -373,7 +373,7 @@ namespace minecraft {
 
             if (slot.block_id)
             {
-                const Block_Info& info = World::block_infos[slot.block_id];
+                const Block_Info& info = world->block_infos[slot.block_id];
                 UV_Rect& side_texture_uv_rect = texture_uv_rects[info.side_texture_id];
                 glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -404,9 +404,9 @@ namespace minecraft {
         }
     }
 
-    void Inventory::serialize()
+    void Inventory::serialize(const std::string& world_path)
     {
-        std::string inventory_filepath = World::path + "/inventory";
+        std::string inventory_filepath = world_path + "/inventory";
         FILE* file = fopen(inventory_filepath.c_str(), "wb");
         if (!file)
         {
@@ -417,9 +417,9 @@ namespace minecraft {
         fclose(file);
     }
 
-    void Inventory::deserialize()
+    void Inventory::deserialize(const std::string& world_path)
     {
-        std::string inventory_filepath = World::path + "/inventory";
+        std::string inventory_filepath = world_path + "/inventory";
 
         if (!std::filesystem::exists(inventory_filepath))
         {
