@@ -68,8 +68,7 @@ namespace minecraft {
         return { glm::floor(position.x * one_over_16), glm::floor(position.z * one_over_16) };
     }
 
-    // todo(harlequin): remove std::string
-    bool initialize_chunk(Chunk *chunk, const glm::ivec2& world_coords, const std::string& world_path)
+    bool initialize_chunk(Chunk *chunk, const glm::ivec2& world_coords, String8 world_path)
     {
         chunk->world_coords = world_coords;
         chunk->position = { world_coords.x * MC_CHUNK_WIDTH, 0.0f, world_coords.y * MC_CHUNK_DEPTH };
@@ -117,10 +116,11 @@ namespace minecraft {
             chunk->neighbours[i] = nullptr;
         }
 
-        // todo(harlequin): remove std::stringstream
-        std::stringstream ss;
-        ss << world_path << "/chunk_" << chunk->world_coords.x << "_" << chunk->world_coords.y << ".pkg";
-        chunk->file_path = ss.str();
+        sprintf(chunk->file_path,
+                "%s/chunk_%d_%d.pkg",
+                world_path.data,
+                chunk->world_coords.x,
+                chunk->world_coords.y);
 
         return true;
     }
@@ -300,14 +300,14 @@ namespace minecraft {
         u16 block_id;
     };
 
-    void serialize_chunk(Chunk *chunk, i32 seed, const std::string& world_path)
+    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path)
     {
         assert(chunk->loaded);
 
         // todo(harlequin): temprary
         Chunk *original_chunk = new Chunk;
         initialize_chunk(original_chunk, chunk->world_coords, world_path);
-        generate_chunk(original_chunk, seed);
+         generate_chunk(original_chunk, seed);
 
         u32 block_count = 0;
         Block_Serialization_Info serialized_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
@@ -393,11 +393,12 @@ namespace minecraft {
 
         if (serialized_block_count)
         {
-            FILE *file = fopen(chunk->file_path.c_str(), "wb");
+
+            FILE *file = fopen(chunk->file_path, "wb");
 
             if (file == NULL)
             {
-                fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", chunk->file_path.c_str(), strerror(errno));
+                fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", chunk->file_path, strerror(errno));
                 return;
             }
 
@@ -442,11 +443,11 @@ namespace minecraft {
             // todo(harlequin): use File_System
             if (std::filesystem::exists(std::filesystem::path(chunk->file_path)))
             {
-                i32 result = remove(chunk->file_path.c_str());
+                i32 result = remove(chunk->file_path);
 
                 if (result != 0)
                 {
-                    fprintf(stderr, "[ERROR]: failed to delete file: %s\n", chunk->file_path.c_str());
+                    fprintf(stderr, "[ERROR]: failed to delete file: %s\n", chunk->file_path);
                 }
             }
         }
@@ -458,10 +459,10 @@ namespace minecraft {
     {
         assert(!chunk->loaded);
 
-        FILE *file = fopen(chunk->file_path.c_str(), "rb");
+        FILE *file = fopen(chunk->file_path, "rb");
         if (file == NULL)
         {
-            fprintf(stderr, "[ERROR]: failed to open file %s for reading: %s\n", chunk->file_path.c_str(), strerror(errno));
+            fprintf(stderr, "[ERROR]: failed to open file %s for reading: %s\n", chunk->file_path, strerror(errno));
             return;
         }
 
@@ -726,19 +727,23 @@ namespace minecraft {
         return block_coords.y / World::sub_chunk_height;
     }
 
-    bool initialize_world(World *world, const std::string& world_path)
+    bool initialize_world(World *world, String8 world_path)
     {
         namespace fs = std::filesystem;
 
         // todo(harlequin): use File_System.h
-        if (!fs::exists(fs::path(world_path)))
+        if (!fs::exists(fs::path(world_path.data)))
         {
-            fs::create_directories(fs::path(world_path));
+            fs::create_directories(fs::path(world_path.data));
         }
 
         world->path = world_path;
-        std::string meta_file_path = world_path + "/meta";
-        FILE* meta_file = fopen(meta_file_path.c_str(), "rb");
+
+        // @todo(harlequin): Temprary
+        char meta_file_path[256];
+        sprintf(meta_file_path, "%s/meta", world_path.data);
+
+        FILE* meta_file = fopen(meta_file_path, "rb");
 
         if (meta_file)
         {
@@ -748,14 +753,18 @@ namespace minecraft {
         {
             srand((u32)time(nullptr));
             world->seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000000.0f);
-            meta_file = fopen(meta_file_path.c_str(), "wb");
+            meta_file = fopen(meta_file_path, "wb");
             fprintf(meta_file, "%d", world->seed);
         }
 
         fclose(meta_file);
 
+        world->loaded_chunks = robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash >();
         world->loaded_chunks.reserve(2 * world->chunk_capacity);
+
         world->chunk_pool.initialize();
+
+        world->pending_free_chunks = std::vector<Chunk*>();
         world->pending_free_chunks.reserve(world->chunk_capacity);
 
         world->update_chunk_jobs_queue.initialize();
@@ -892,6 +901,7 @@ namespace minecraft {
                 chunk->pending_for_save = true;
 
                 Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
+                serialize_and_free_chunk_job.world = world;
                 serialize_and_free_chunk_job.chunk = chunk;
                 Job_System::schedule(serialize_and_free_chunk_job, false);
 
@@ -956,7 +966,7 @@ namespace minecraft {
             neighbour->light_calculated = false;
         }
 
-        Block *block = minecraft::get_block(chunk, block_coords);
+        Block *block = get_block(chunk, block_coords);
         block->id = block_id;
 
         i32 sub_chunk_index = get_sub_chunk_index(block_coords);
@@ -991,8 +1001,8 @@ namespace minecraft {
     // todo(harlequin): remove *world
     void set_block_sky_light_level(World *world, Chunk *chunk, const glm::ivec3& block_coords, u8 light_level)
     {
-        Block *block = minecraft::get_block(chunk, block_coords);
-        Block_Light_Info *light_info = minecraft::get_block_light_info(chunk, block_coords);
+        Block *block = get_block(chunk, block_coords);
+        Block_Light_Info *light_info = get_block_light_info(chunk, block_coords);
         light_info->sky_light_level = light_level;
 
         i32 sub_chunk_index = get_sub_chunk_index(block_coords);
@@ -1044,8 +1054,8 @@ namespace minecraft {
     // todo(harlequin): remove *world
     void set_block_light_source_level(World *world, Chunk *chunk, const glm::ivec3& block_coords, u8 light_level)
     {
-        Block *block = minecraft::get_block(chunk, block_coords);
-        Block_Light_Info *light_info = minecraft::get_block_light_info(chunk, block_coords);
+        Block *block = get_block(chunk, block_coords);
+        Block_Light_Info *light_info = get_block_light_info(chunk, block_coords);
         light_info->light_source_level = light_level;
 
         i32 sub_chunk_index = get_sub_chunk_index(block_coords);
@@ -1112,7 +1122,7 @@ namespace minecraft {
        if (chunk)
        {
             glm::ivec3 block_coords = world_position_to_block_coords(world, position);
-            return minecraft::get_block(chunk, block_coords);
+            return get_block(chunk, block_coords);
        }
        return &World::null_block;
     }
@@ -1128,7 +1138,7 @@ namespace minecraft {
                 block_coords.y >= 0 && block_coords.y < MC_CHUNK_HEIGHT &&
                 block_coords.z >= 0 && block_coords.z < MC_CHUNK_WIDTH)
             {
-                return { block_coords, minecraft::get_block(chunk, block_coords), chunk };
+                return { block_coords, get_block(chunk, block_coords), chunk };
             }
         }
         return { { -1, -1, -1 }, &World::null_block, nullptr };
@@ -1205,7 +1215,7 @@ namespace minecraft {
             result.block_coords = { block_coords.x, block_coords.y, block_coords.z - 1 };
         }
 
-        result.block = minecraft::get_block(result.chunk, result.block_coords);
+        result.block = get_block(result.chunk, result.block_coords);
         return result;
     }
 

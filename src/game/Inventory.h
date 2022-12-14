@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include "containers/string.h"
 #include "game/math.h"
 #include <glm/glm.hpp>
 
@@ -69,7 +70,7 @@ namespace minecraft {
         static bool initialize(Bitmap_Font *font,
                                Opengl_Texture *hud_sprite);
         // todo(harlequin): remove std::string
-        static void shutdown(const std::string& path);
+        static void shutdown(String8 path);
 
         static void add_block(u16 block_id);
 
@@ -80,7 +81,7 @@ namespace minecraft {
         static void handle_hotbar_input(Input *input);
         static void draw_hotbar(World *world);
 
-        static void serialize(const std::string& world_path);
-        static void deserialize(const std::string& world_path);
+        static void serialize(String8 path);
+        static void deserialize(String8 path);
     };
 }

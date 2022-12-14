@@ -29,8 +29,6 @@ typedef double   f64;
 #define MC_DebugBreak() __builtin_trap()
 #endif
 
-#define OPENGL_DEBUGGING 1
-
 struct Defer_Holder
 {
     std::function<void()> callback;

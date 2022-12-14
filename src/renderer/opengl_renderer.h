@@ -12,6 +12,8 @@
 #include <mutex>
 #include <atomic>
 
+#define OPENGL_DEBUGGING 1
+
 namespace minecraft {
 
     struct World;
@@ -99,12 +101,14 @@ namespace minecraft {
         u32 uv_buffer_id;
         u32 uv_texture_id;
 
+        u32 uv_uniform_buffer_id;
+
         Opengl_Renderer_Stats stats;
         std::atomic<u64> sub_chunk_used_memory;
 
         u16 sky_light_level; // todo(harlequin): to be removed
 
-        bool should_trace_debug_messsage = true;
+        bool should_trace_debug_message = true;
 
         glm::vec4 sky_color;
         glm::vec4 tint_color;
@@ -117,6 +121,12 @@ namespace minecraft {
         Opengl_Shader screen_shader;
         Opengl_Shader line_shader;
     };
+
+    void gl_check_error(const char *function_name, const char *file, i32 line);
+    #define GLCall(Function) {\
+        Function;\
+        gl_check_error(#Function, __FILE__, __LINE__);\
+    }
 
     struct Opengl_Renderer
     {

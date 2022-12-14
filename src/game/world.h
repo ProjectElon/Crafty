@@ -4,9 +4,11 @@
 
 #include "meta/spritesheet_meta.h"
 #include "memory/free_list.h"
+#include "memory/memory_arena.h"
 #include "game/math.h"
 #include "game/jobs.h"
 #include "game/console_commands.h"
+#include "containers/string.h"
 #include "containers/robin_hood.h"
 #include "containers/queue.h"
 
@@ -14,7 +16,6 @@
 
 #include <mutex>
 #include <algorithm>
-#include <string>
 #include <unordered_map> // todo(harlequin): containers
 #include <array>
 #include <queue>
@@ -153,7 +154,6 @@ namespace minecraft {
 
     struct Sub_Chunk_Render_Data
     {
-
         std::atomic<i32> bucket_index;
         Sub_Chunk_Bucket opaque_buckets[2];
         Sub_Chunk_Bucket transparent_buckets[2];
@@ -198,7 +198,8 @@ namespace minecraft {
     {
         glm::ivec2  world_coords;
         glm::vec3   position;
-        std::string file_path; // @todo(harlequin): replace std::string
+        char        file_path[256];
+
         Chunk*      neighbours[ChunkNeighbour_Count];
 
         std::atomic<bool> pending_for_load;
@@ -228,13 +229,13 @@ namespace minecraft {
         Sub_Chunk_Render_Data sub_chunks_render_data[MC_CHUNK_HEIGHT / MC_SUB_CHUNK_HEIGHT];
     };
 
-    bool initialize_chunk(Chunk *chunk, const glm::ivec2 &world_coords, const std::string& world_path);
+    bool initialize_chunk(Chunk *chunk, const glm::ivec2 &world_coords, String8 world_path);
     void generate_chunk(Chunk *chunk, i32 seed);
 
     void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
     void calculate_lighting(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
 
-    void serialize_chunk(Chunk *chunk, i32 seed, const std::string& world_path);
+    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path);
     void deserialize_chunk(Chunk *chunk);
 
     i32 get_block_index(const glm::ivec3& block_coords);
@@ -295,10 +296,12 @@ namespace minecraft {
         static Block            null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
+        // @todo(harlequin): to be removed
         robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
-        std::string                                                      path;
+        String8                                                          path;
         i32                                                              seed;
 
+        // @todo(harlequin): to be removed
         minecraft::Free_List< minecraft::Chunk, chunk_capacity >   chunk_pool;
         std::vector<Chunk*>                                        pending_free_chunks;
 
@@ -307,7 +310,7 @@ namespace minecraft {
         Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job>          calculate_chunk_lighting_queue;
     };
 
-    bool initialize_world(World *world, const std::string& path);
+    bool initialize_world(World *world, String8 path);
     void shutdown_world(World *world);
 
     void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds);

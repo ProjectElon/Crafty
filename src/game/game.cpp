@@ -378,10 +378,8 @@ namespace minecraft {
         camera.initialize(camera_position, fov);
         register_event(event_system, EventType_Resize, on_resize, &camera);
 
-        // @todo(harlequin): game menu to add worlds and remove std::string
-        std::string world_name = "harlequin";
-        std::string world_path = "../assets/worlds/" + world_name;
-
+        // @todo(harlequin): game menu to add worlds
+        String8 world_path = push_formatted_string8(&game_memory->transient_arena, "../assets/worlds/harlequin");
         initialize_world(game_world, world_path);
         game_world->sky_light_level = 1.0f;
         game_world->chunk_radius    = 8;
@@ -416,7 +414,6 @@ namespace minecraft {
         schedule_save_chunks_jobs(&game_state->world);
         Job_System::wait_for_jobs_to_finish();
 
-        game_state->is_running = false;
         Job_System::shutdown();
 
         ECS::shutdown();
@@ -426,6 +423,7 @@ namespace minecraft {
         Dropdown_Console::shutdown();
         UI::shutdown();
 
+        // @todo(harlequin): inventroy clean up
         Inventory::shutdown(game_state->world.path);
 
         Opengl_2D_Renderer::shutdown();

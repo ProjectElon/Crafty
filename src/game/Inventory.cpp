@@ -46,9 +46,9 @@ namespace minecraft {
         return true;
     }
 
-    void Inventory::shutdown(const std::string& world_path)
+    void Inventory::shutdown(String8 path)
     {
-        serialize(world_path);
+        serialize(path);
     }
 
     void Inventory::add_block(u16 block_id)
@@ -404,32 +404,35 @@ namespace minecraft {
         }
     }
 
-    void Inventory::serialize(const std::string& world_path)
+    void Inventory::serialize(String8 path)
     {
-        std::string inventory_filepath = world_path + "/inventory";
-        FILE* file = fopen(inventory_filepath.c_str(), "wb");
+        char inventory_file_path[256];
+        sprintf(inventory_file_path, "%s/inventory", path.data);
+
+        FILE* file = fopen(inventory_file_path, "wb");
         if (!file)
         {
-            fprintf(stderr, "[ERROR]: failed to open file: %s for writing\n", inventory_filepath.c_str());
+            fprintf(stderr, "[ERROR]: failed to open file: %s for writing\n", inventory_file_path);
             return;
         }
         fwrite(internal_data.slots, sizeof(internal_data.slots), 1, file);
         fclose(file);
     }
 
-    void Inventory::deserialize(const std::string& world_path)
+    void Inventory::deserialize(String8 path)
     {
-        std::string inventory_filepath = world_path + "/inventory";
+        char inventory_file_path[256];
+        sprintf(inventory_file_path, "%s/inventory", path.data);
 
-        if (!std::filesystem::exists(inventory_filepath))
+        if (!std::filesystem::exists(inventory_file_path))
         {
             return;
         }
 
-        FILE* file = fopen(inventory_filepath.c_str(), "rb");
+        FILE* file = fopen(inventory_file_path, "rb");
         if (!file)
         {
-            fprintf(stderr, "[ERROR]: failed to open file: %s for reading\n", inventory_filepath.c_str());
+            fprintf(stderr, "[ERROR]: failed to open file: %s for reading\n", inventory_file_path);
             return;
         }
         fread(internal_data.slots, sizeof(internal_data.slots), 1, file);
