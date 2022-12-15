@@ -11,6 +11,7 @@
 #include "renderer/camera.h"
 
 #include "game/world.h"
+#include "game/inventory.h"
 
 struct GLFWwindow;
 
@@ -18,9 +19,10 @@ namespace minecraft {
 
     enum WindowMode
     {
-        WindowMode_Fullscreen           = 0,
-        WindowMode_BorderlessFullscreen = 1,
-        WindowMode_Windowed             = 2
+        WindowMode_None,
+        WindowMode_Fullscreen,
+        WindowMode_BorderlessFullscreen,
+        WindowMode_Windowed
     };
 
     enum CursorMode
@@ -53,33 +55,60 @@ namespace minecraft {
         Memory_Arena transient_arena;
     };
 
+    struct Game_Debug_State
+    {
+        String8 frames_per_second_text;
+        String8 frame_time_text;
+        String8 vertex_count_text;
+        String8 face_count_text;
+        String8 sub_chunk_bucket_capacity_text;
+        String8 sub_chunk_bucket_count_text;
+        String8 sub_chunk_bucket_total_memory_text;
+        String8 sub_chunk_bucket_allocated_memory_text;
+        String8 sub_chunk_bucket_used_memory_text;
+        String8 player_position_text;
+        String8 player_chunk_coords_text;
+        String8 chunk_radius_text;
+        String8 game_time_text;
+        String8 global_sky_light_level_text;
+        String8 block_facing_normal_chunk_coords_text;
+        String8 block_facing_normal_block_coords_text;
+        String8 block_facing_normal_face_text;
+        String8 block_facing_normal_sky_light_level_text;
+        String8 block_facing_normal_light_source_level_text;
+        String8 block_facing_normal_light_level_text;
+    };
+
     struct Game_State
     {
         Game_Memory *game_memory;
         Game_Config  game_config;
+        GLFWwindow  *window;
+
         Event_System event_system;
         Input        game_input;
         World        world;
-        GLFWwindow  *window;
+        Inventory    inventory;
         Camera       camera;
-        bool         minimized;
+
+        bool         is_minimized;
         bool         is_running;
-        bool         show_debug_stats_hud;
         bool         is_inventory_active;
         CursorMode   cursor_mode;
 
         // todo(harlequin): game_assets
         void        *ingame_crosshair_texture;
         void        *inventory_crosshair_texture;
+
+        bool             is_visual_debugging_enabled;
+        Game_Debug_State debug_state;
     };
 
     bool initialize_game(Game_State *game_state);
     void shutdown_game(Game_State *game_state);
     void run_game(Game_State *game_state);
 
-    void toggle_show_debug_status_hud(Game_State *game_state);
+    void toggle_visual_debugging(Game_State *game_state);
     void toggle_inventory(Game_State *game_state);
     void set_cursor_mode(Game_State *game_state, CursorMode mode);
-
-    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...);
 }

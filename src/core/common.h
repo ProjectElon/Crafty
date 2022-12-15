@@ -47,3 +47,20 @@ struct Defer_Holder
 #define defer0(x) defer_holder##x
 #define defer1(x) defer0(x)
 #define defer Defer_Holder defer1(__COUNTER__) = [&]()
+
+#define MC_ASSERTIONS 1
+#if MC_ASSERTIONS
+#define Assert(Expression) \
+{ \
+    if ((Expression))\
+    {\
+    }\
+    else \
+    { \
+        fprintf(stderr, "Assertion: %s failed @%s --> %s:%d", #Expression, __FUNCTION__, __FILE__, __LINE__); \
+        MC_DebugBreak(); \
+    } \
+}
+#else
+#define Assert(Expression)
+#endif

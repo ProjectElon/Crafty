@@ -314,7 +314,7 @@ namespace minecraft {
     void shutdown_world(World *world);
 
     void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds);
-    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds);
+    void free_chunks_out_of_region(World *world);
 
     glm::ivec3 world_position_to_block_coords(World *world, const glm::vec3& position);
     World_Region_Bounds get_world_bounds_from_chunk_coords(i32 chunk_radius, const glm::ivec2& chunk_coords);

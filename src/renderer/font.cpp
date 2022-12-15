@@ -97,7 +97,7 @@ namespace minecraft {
 
         for (i32 i = 0; i < text.count; i++)
         {
-            assert(text.data[i] >= ' ' && text.data[i] <= '~');
+            Assert(text.data[i] >= ' ' && text.data[i] <= '~');
 
             stbtt_aligned_quad quad;
             stbtt_GetPackedQuad(this->glyphs,
@@ -121,7 +121,7 @@ namespace minecraft {
 
         for (i32 i = 0; i < text.length(); i++)
         {
-            assert(text[i] >= ' ' && text[i] <= '~');
+            Assert(text[i] >= ' ' && text[i] <= '~');
 
             stbtt_aligned_quad quad;
             stbtt_GetPackedQuad(this->glyphs,

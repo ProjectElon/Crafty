@@ -9,7 +9,6 @@
 #include <glm/glm.hpp>
 
 #include <vector>
-#include <string> // @Temprary
 
 namespace minecraft {
 
@@ -83,6 +82,7 @@ namespace minecraft {
                                 const glm::vec2& text_size,
                                 const glm::vec2& position,
                                 const glm::vec4& color);
+
 
         static void end();
     };

@@ -55,10 +55,10 @@ namespace minecraft {
 
     struct Entity_Info
     {
-        EntityTag tag;
+        EntityTag       tag;
         EntityArchetype archetype;
-        u32 generation;
-        Component_Mask mask;
+        u32             generation;
+        Component_Mask  mask;
     };
 
     struct Registry
@@ -88,7 +88,7 @@ namespace minecraft {
         T* add_component(Entity entity)
         {
             u32 component_id = get_component_id< T >();
-            assert(component_id < max_component_count);
+            Assert(component_id < max_component_count);
 
             auto& pool = component_pools[component_id];
 

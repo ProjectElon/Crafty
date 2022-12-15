@@ -18,7 +18,7 @@ namespace minecraft {
             return GL_RGBA;
             break;
         default:
-            assert(false);
+            Assert(false && "unsupported texture format");
             break;
         }
 
@@ -36,7 +36,7 @@ namespace minecraft {
             return GL_RGBA8;
             break;
         default:
-            assert(false);
+            Assert(false && "unsupported internal format");
             break;
         }
 
@@ -119,7 +119,7 @@ namespace minecraft {
         }
         else
         {
-            assert(false);
+            Assert(false && "unsupported channel count");
         }
 
         bool success = initialize(data, (u32)width, (u32)height, (TextureFormat)texture_format, usage);

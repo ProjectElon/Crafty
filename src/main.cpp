@@ -30,7 +30,8 @@ int main()
     game_memory.transient_arena = create_memory_arena(game_memory.transient_memory,
                                                       game_memory.transient_memory_size);
 
-    Game_State *game_state  = ArenaPushZero(&game_memory.permanent_arena, Game_State);
+    Game_State *game_state  = ArenaPushZero(&game_memory.permanent_arena,
+                                            Game_State);
     game_state->game_memory = &game_memory;
 
     bool success = initialize_game(game_state);

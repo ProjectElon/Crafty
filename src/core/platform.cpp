@@ -113,12 +113,12 @@ namespace minecraft {
     }
 
     bool Platform::initialize(Game_Config *config,
-                              u32 opengl_major_version,
-                              u32 opengl_minor_version)
+                              u32          opengl_major_version,
+                              u32          opengl_minor_version)
     {
-        // setting the max number of open files using fopen
+        // setting the max number of simultaneously open files using fopen
         i32 new_max = _setmaxstdio(8192);
-        assert(new_max == 8192);
+        Assert(new_max == 8192);
 
         if (!glfwInit())
         {

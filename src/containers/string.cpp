@@ -1,5 +1,8 @@
 #include "string.h"
-#include <cstring>
+#include "memory/memory_arena.h"
+
+#include <string.h>
+#include <stdarg.h>
 #include <assert.h>
 
 namespace minecraft {
@@ -149,9 +152,9 @@ namespace minecraft {
     
     String8 sub_string(String8 *string, u32 start, u32 count)
     {
-        assert(count > 0);
-        assert(start < string->count); // out of bounds
-        assert(start + count <= string->count); // out of bounds
+        Assert(count > 0);
+        Assert(start < string->count); // out of bounds
+        Assert(start + count <= string->count); // out of bounds
         
         String8 sub_string;
         sub_string.count = count;
@@ -178,4 +181,52 @@ namespace minecraft {
         
         return (result % m + m) % m;
     }
+
+    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...)
+    {
+        String8 result = {};
+
+        va_list args;
+        va_start(args, format);
+
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            if (arena->allocated + count + 1 <= arena->size)
+            {
+                result.data       = buffer;
+                result.count      = (u32)count;
+                arena->allocated += (u32)count + 1;
+            }
+        }
+        va_end(args);
+        return result;
+    }
+
+    String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...)
+    {
+        String8 result = {};
+
+        va_list args;
+        va_start(args, format);
+
+        Memory_Arena *arena = temp_arena->arena;
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            if (arena->allocated + count + 1 <= arena->size)
+            {
+                result.data       = buffer;
+                result.count      = (u32)count;
+                arena->allocated += (u32)count + 1;
+            }
+        }
+        va_end(args);
+        return result;
+    }
+
 }

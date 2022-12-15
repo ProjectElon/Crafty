@@ -12,7 +12,7 @@
 #include <mutex>
 #include <atomic>
 
-#define OPENGL_DEBUGGING 1
+#define OPENGL_DEBUGGING 0
 
 namespace minecraft {
 
@@ -61,7 +61,6 @@ namespace minecraft {
 
     struct Opengl_Renderer_Data
     {
-        glm::vec2 new_frame_buffer_size;
         glm::vec2 frame_buffer_size;
 
         u32 opaque_frame_buffer_id;

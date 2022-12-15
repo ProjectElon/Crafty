@@ -32,7 +32,7 @@ namespace minecraft {
 
         T* allocate()
         {
-            assert(free_elements.size());
+            Assert(free_elements.size());
 
             i32 free_element_index = free_elements.back();
             free_elements.pop_back();
@@ -43,12 +43,12 @@ namespace minecraft {
         void reclame(T *element)
         {
             i32 element_index = (u32)(element - elements.data());
-            assert(element_index >= 0 && element_index < Count);
+            Assert(element_index >= 0 && element_index < Count);
 
 #ifdef MC_DEBUG
             for (i32 i = 0; i < free_elements.size(); i++)
             {
-                assert(element_index != free_elements[i]);
+                Assert(element_index != free_elements[i]);
             }
 #endif
             free_elements.push_back(element_index);

@@ -6,9 +6,11 @@
 #include "renderer/opengl_renderer.h"
 #include "renderer/opengl_2d_renderer.h"
 #include "renderer/font.h"
-
+#include "memory/memory_arena.h"
+#include "containers/string.h"
 #include <filesystem>
 #include <sstream>
+
 
 namespace minecraft {
 
@@ -18,46 +20,48 @@ namespace minecraft {
         1x1 padding between slots
     */
 
-    bool Inventory::initialize(Bitmap_Font *font, Opengl_Texture *hud_sprite)
+    bool initialize_inventory(Inventory      *inventory,
+                              Bitmap_Font    *font,
+                              Opengl_Texture *hud_sprite)
     {
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
-            Inventory_Slot& slot = internal_data.slots[slot_index];
+            Inventory_Slot& slot = inventory->slots[slot_index];
             slot.block_id = BlockId_Air;
             slot.count = 0;
         }
 
-        internal_data.active_hot_bar_slot_index = 0;
-        internal_data.dragging_slot_index = -1;
-        internal_data.is_dragging = false;
-        internal_data.dragging_slot_offset = { 0.0f, 0.0f };
-        internal_data.font = font;
-        internal_data.hud_sprite = hud_sprite;
+        inventory->active_hot_bar_slot_index = 0;
+        inventory->dragging_slot_index = INVENTORY_INVALID_SLOT_INDEX;
+        inventory->is_dragging = false;
+        inventory->dragging_slot_offset = { 0.0f, 0.0f };
+        inventory->font = font;
+        inventory->hud_sprite = hud_sprite;
 
         f32 hud_sprite_width  = (f32)hud_sprite->width;
         f32 hud_sprite_height = (f32)hud_sprite->height;
 
-        internal_data.inventory_slot_uv_rect        = convert_texture_rect_to_uv_rect({ 0, 176, 32, 32 },   hud_sprite_width, hud_sprite_height);
-        internal_data.active_inventory_slot_uv_rect = convert_texture_rect_to_uv_rect({ 0, 144, 32, 32 },   hud_sprite_width, hud_sprite_height);
-        internal_data.inventory_hud_uv_rect         = convert_texture_rect_to_uv_rect({ 276, 0, 216, 194 }, hud_sprite_width, hud_sprite_height);
+        inventory->inventory_slot_uv_rect        = convert_texture_rect_to_uv_rect({ 0, 176, 32, 32 },   hud_sprite_width, hud_sprite_height);
+        inventory->active_inventory_slot_uv_rect = convert_texture_rect_to_uv_rect({ 0, 144, 32, 32 },   hud_sprite_width, hud_sprite_height);
+        inventory->inventory_hud_uv_rect         = convert_texture_rect_to_uv_rect({ 276, 0, 216, 194 }, hud_sprite_width, hud_sprite_height);
 
-        internal_data.hot_bar_scale = 0.3f;
+        inventory->hot_bar_scale = 0.3f;
 
         return true;
     }
 
-    void Inventory::shutdown(String8 path)
+    void shutdown_inventory(Inventory *inventory, String8 path)
     {
-        serialize(path);
+        serialize_inventory(inventory, path);
     }
 
-    void Inventory::add_block(u16 block_id)
+    void add_block_to_inventory(Inventory *inventory, u16 block_id)
     {
         bool found = false;
 
         for (i32 slot_index = 0; slot_index < INVENTORY_HOT_BAR_SLOT_COUNT + INVENTORY_SLOT_COUNT; slot_index++)
         {
-            Inventory_Slot &slot = internal_data.slots[slot_index];
+            Inventory_Slot &slot = inventory->slots[slot_index];
 
             if (slot.block_id == block_id)
             {
@@ -74,7 +78,7 @@ namespace minecraft {
         {
             for (i32 slot_index = 0; slot_index < INVENTORY_HOT_BAR_SLOT_COUNT + INVENTORY_SLOT_COUNT; slot_index++)
             {
-                Inventory_Slot &slot = internal_data.slots[slot_index];
+                Inventory_Slot &slot = inventory->slots[slot_index];
                 bool is_slot_empty = slot.block_id == BlockId_Air && slot.count == 0;
                 if (is_slot_empty)
                 {
@@ -92,15 +96,14 @@ namespace minecraft {
         }
     }
 
-    void Inventory::calculate_slot_positions_and_sizes()
+    void calculate_slot_positions_and_sizes(Inventory *inventory, const glm::vec2& frame_buffer_size)
     {
-        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
-        f32 hot_bar_size_x = frame_buffer_size.x * internal_data.hot_bar_scale;
-        auto& inventory_hud_pos = internal_data.inventory_hud_pos;
-        auto& inventory_hud_size = internal_data.inventory_hud_size;
-        auto& slot_size = internal_data.slot_size;
-        auto& slot_padding = internal_data.slot_padding;
-        auto& slot_positions = internal_data.slot_positions;
+        f32 hot_bar_size_x = frame_buffer_size.x * inventory->hot_bar_scale;
+        auto& inventory_hud_pos = inventory->inventory_hud_pos;
+        auto& inventory_hud_size = inventory->inventory_hud_size;
+        auto& slot_size = inventory->slot_size;
+        auto& slot_padding = inventory->slot_padding;
+        auto& slot_positions = inventory->slot_positions;
         inventory_hud_pos = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
         inventory_hud_size = { frame_buffer_size.x * 0.4f, frame_buffer_size.x * 0.4f };
         slot_size = { (21.0f / 216.0f) * inventory_hud_size.x, (21.0f / 194.0f) * inventory_hud_size.y };
@@ -153,7 +156,7 @@ namespace minecraft {
         {
             for (i32 col = 0; col < 9; col++)
             {
-                Inventory_Slot& slot = internal_data.hot_bar[col];
+                Inventory_Slot& slot = inventory->hot_bar[col];
                 f32 slot_x = current_slot_x + (slot_size.x + slot_padding.x) * col;
                 f32 slot_y = current_slot_y + (slot_size.y + slot_padding.y) * row;
                 slot_positions[slot_index++] = make_rectangle2(slot_x, slot_y, slot_size.x, slot_size.y);
@@ -161,48 +164,48 @@ namespace minecraft {
         }
     }
 
-    void Inventory::handle_input(Input *input)
+    void handle_inventory_input(Inventory *inventory, Input *input)
     {
         const glm::vec2& mouse = input->mouse_position;
 
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
-            Inventory_Slot &slot = internal_data.slots[slot_index];
-            const Rectangle2 &slot_rect = internal_data.slot_positions[slot_index];
+            Inventory_Slot &slot = inventory->slots[slot_index];
+            const Rectangle2 &slot_rect = inventory->slot_positions[slot_index];
             bool is_slot_empty = slot.count == 0 && slot.block_id == BlockId_Air;
 
             if (!is_slot_empty &&
                 is_point_inside_rectangle2(mouse, slot_rect) &&
                 is_button_held(input, MC_MOUSE_BUTTON_LEFT) &&
-                !internal_data.is_dragging)
+                !inventory->is_dragging)
             {
-                internal_data.is_dragging = true;
-                internal_data.dragging_slot_index = slot_index;
-                internal_data.dragging_slot = slot;
-                internal_data.dragging_slot_offset = mouse - slot_rect.min;
+                inventory->is_dragging = true;
+                inventory->dragging_slot_index = slot_index;
+                inventory->dragging_slot = slot;
+                inventory->dragging_slot_offset = mouse - slot_rect.min;
                 break;
             }
         }
 
-        auto& inventory_hud_pos = internal_data.inventory_hud_pos;
-        auto& inventory_hud_size = internal_data.inventory_hud_size;
-        auto& slot_size = internal_data.slot_size;
-        auto& slot_padding = internal_data.slot_padding;
-        auto& slot_positions = internal_data.slot_positions;
+        auto& inventory_hud_pos = inventory->inventory_hud_pos;
+        auto& inventory_hud_size = inventory->inventory_hud_size;
+        auto& slot_size = inventory->slot_size;
+        auto& slot_padding = inventory->slot_padding;
+        auto& slot_positions = inventory->slot_positions;
         auto half_slot_size = slot_size * 0.5f;
 
-        if (is_button_released(input, MC_MOUSE_BUTTON_LEFT) && internal_data.is_dragging)
+        if (is_button_released(input, MC_MOUSE_BUTTON_LEFT) && inventory->is_dragging)
         {
-            i32 closest_slot_index = -1;
+            i32 closest_slot_index = INVENTORY_INVALID_SLOT_INDEX;
             f32 best_distance_squared = Infinity32;
 
             for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
             {
-                Inventory_Slot &slot = internal_data.slots[slot_index];
-                const Rectangle2 &slot_rect = internal_data.slot_positions[slot_index];
+                Inventory_Slot &slot = inventory->slots[slot_index];
+                const Rectangle2 &slot_rect = inventory->slot_positions[slot_index];
 
                 glm::vec2 slot_center_p = slot_rect.min + half_slot_size;
-                glm::vec2 mouse_to_slot = (mouse - internal_data.dragging_slot_offset + half_slot_size) - slot_center_p;
+                glm::vec2 mouse_to_slot = (mouse - inventory->dragging_slot_offset + half_slot_size) - slot_center_p;
 
                 f32 distance_to_slot_squared = glm::dot(mouse_to_slot, mouse_to_slot);
                 if (distance_to_slot_squared < best_distance_squared)
@@ -212,19 +215,19 @@ namespace minecraft {
                 }
             }
 
-            if (internal_data.dragging_slot_index != closest_slot_index)
+            if (inventory->dragging_slot_index != closest_slot_index)
             {
-                Inventory_Slot& closest_slot = internal_data.slots[closest_slot_index];
+                Inventory_Slot& closest_slot = inventory->slots[closest_slot_index];
 
-                if (closest_slot.block_id != internal_data.dragging_slot.block_id)
+                if (closest_slot.block_id != inventory->dragging_slot.block_id)
                 {
-                    Inventory_Slot temp_slot = internal_data.slots[closest_slot_index];
-                    internal_data.slots[closest_slot_index] = internal_data.dragging_slot;
-                    internal_data.slots[internal_data.dragging_slot_index] = temp_slot;
+                    Inventory_Slot temp_slot = inventory->slots[closest_slot_index];
+                    inventory->slots[closest_slot_index] = inventory->dragging_slot;
+                    inventory->slots[inventory->dragging_slot_index] = temp_slot;
                 }
                 else
                 {
-                    Inventory_Slot& dragging_slot = internal_data.slots[internal_data.dragging_slot_index];
+                    Inventory_Slot& dragging_slot = inventory->slots[inventory->dragging_slot_index];
                     i32 closest_slot_capacity = 64 - closest_slot.count;
 
                     if (closest_slot_capacity >= dragging_slot.count)
@@ -241,27 +244,31 @@ namespace minecraft {
                 }
             }
 
-            internal_data.is_dragging = false;
-            internal_data.dragging_slot_index = -1;
+            inventory->is_dragging         = false;
+            inventory->dragging_slot_index = INVENTORY_INVALID_SLOT_INDEX;
         }
     }
 
-    static void draw_slot_at_index(World *world, i32 slot_index, glm::vec2 mouse)
+    static void draw_slot_at_index(Inventory *inventory,
+                                   World *world,
+                                   i32 slot_index,
+                                   glm::vec2 mouse,
+                                   Temprary_Memory_Arena *temp_arena)
     {
-        auto& inventory_hud_pos = Inventory::internal_data.inventory_hud_pos;
-        auto& inventory_hud_size = Inventory::internal_data.inventory_hud_size;
-        auto& slot_size = Inventory::internal_data.slot_size;
-        auto& slot_positions = Inventory::internal_data.slot_positions;
-        auto half_slot_size = slot_size * 0.5f;
+        auto& inventory_hud_pos  = inventory->inventory_hud_pos;
+        auto& inventory_hud_size = inventory->inventory_hud_size;
+        auto& slot_size          = inventory->slot_size;
+        auto& slot_positions     = inventory->slot_positions;
+        auto half_slot_size      = slot_size * 0.5f;
 
-        Inventory_Slot &slot = Inventory::internal_data.slots[slot_index];
-        Rectangle2 slot_rect = Inventory::internal_data.slot_positions[slot_index];
+        Inventory_Slot &slot = inventory->slots[slot_index];
+        Rectangle2 slot_rect = inventory->slot_positions[slot_index];
 
         glm::vec2 slot_pos = slot_rect.min;
 
-        if (slot_index == Inventory::internal_data.dragging_slot_index)
+        if (slot_index == inventory->dragging_slot_index)
         {
-            slot_pos = mouse - Inventory::internal_data.dragging_slot_offset;
+            slot_pos = mouse - inventory->dragging_slot_offset;
         }
 
         if (slot.block_id)
@@ -287,67 +294,71 @@ namespace minecraft {
                                           side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                           side_texture_uv_rect.bottom_left);
 
-            Bitmap_Font* font = Inventory::internal_data.font;
+            Bitmap_Font* font = inventory->font;
+            String8 slot_text = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
+            auto text_size = font->get_string_size(slot_text);
 
-            std::stringstream ss;
-            ss << (u32)slot.count;
-            std::string text = ss.str();
-            auto text_size = font->get_string_size(text);
-            Opengl_2D_Renderer::draw_string(font, text, text_size, slot_pos + half_slot_size, { 1.0f, 1.0f, 1.0f, 1.0f });
+            Opengl_2D_Renderer::draw_string(font,
+                                            slot_text,
+                                            text_size,
+                                            slot_pos + half_slot_size,
+                                            { 1.0f, 1.0f, 1.0f, 1.0f });
         }
     }
 
-    void Inventory::draw(World *world, Input *input)
+    void draw_inventory(Inventory *inventory, World *world, Input *input, Temprary_Memory_Arena *temp_arena)
     {
         const glm::vec2& mouse = input->mouse_position;
 
-        auto& inventory_hud_pos = Inventory::internal_data.inventory_hud_pos;
-        auto& inventory_hud_size = Inventory::internal_data.inventory_hud_size;
+        auto& inventory_hud_pos  = inventory->inventory_hud_pos;
+        auto& inventory_hud_size = inventory->inventory_hud_size;
 
         Opengl_2D_Renderer::draw_rect(inventory_hud_pos,
                                       inventory_hud_size,
                                       0.0f,
                                       { 1.0f, 1.0f, 1.0f, 1.0f },
-                                      internal_data.hud_sprite,
-                                      internal_data.inventory_hud_uv_rect.top_right - internal_data.inventory_hud_uv_rect.bottom_left,
-                                      internal_data.inventory_hud_uv_rect.bottom_left);
+                                      inventory->hud_sprite,
+                                      inventory->inventory_hud_uv_rect.top_right - inventory->inventory_hud_uv_rect.bottom_left,
+                                      inventory->inventory_hud_uv_rect.bottom_left);
 
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
-            if (slot_index != internal_data.dragging_slot_index)
+            if (slot_index != inventory->dragging_slot_index)
             {
-                draw_slot_at_index(world, slot_index, mouse);
+                draw_slot_at_index(inventory, world, slot_index, mouse, temp_arena);
             }
         }
 
-        if (internal_data.dragging_slot_index != -1)
+        if (inventory->dragging_slot_index != INVENTORY_INVALID_SLOT_INDEX)
         {
-            draw_slot_at_index(world, internal_data.dragging_slot_index, mouse);
+            draw_slot_at_index(inventory,
+                               world,
+                               inventory->dragging_slot_index,
+                               mouse,
+                               temp_arena);
         }
     }
 
-    void Inventory::handle_hotbar_input(Input *input)
+    void handle_hotbar_input(Inventory *inventory, Input *input)
     {
         for (i32 key_code = MC_KEY_1, numpad_key_code = MC_KEY_KP_1; key_code <= MC_KEY_9; key_code++, numpad_key_code++)
         {
             if (is_key_pressed(input, key_code))
             {
                 i32 slot_index = key_code - MC_KEY_1;
-                internal_data.active_hot_bar_slot_index = slot_index;
+                inventory->active_hot_bar_slot_index = slot_index;
             }
             else if (is_key_pressed(input, numpad_key_code))
             {
                 i32 slot_index = numpad_key_code - MC_KEY_KP_1;
-            internal_data.active_hot_bar_slot_index = slot_index;
+                inventory->active_hot_bar_slot_index = slot_index;
             }
         }
     }
 
-    void Inventory::draw_hotbar(World *world)
+    void draw_hotbar(Inventory *inventory, World *world, const glm::vec2& frame_buffer_size, Temprary_Memory_Arena *temp_arena)
     {
-        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
-
-        f32 hot_bar_size_x = frame_buffer_size.x * internal_data.hot_bar_scale;
+        f32 hot_bar_size_x = frame_buffer_size.x * inventory->hot_bar_scale;
 
         f32 slot_width = hot_bar_size_x / INVENTORY_HOT_BAR_SLOT_COUNT;
         f32 slot_height = slot_width;
@@ -359,13 +370,13 @@ namespace minecraft {
         
         for (i32 slot_index = 0; slot_index < INVENTORY_HOT_BAR_SLOT_COUNT; slot_index++)
         {
-            Inventory_Slot& slot = internal_data.hot_bar[slot_index];
+            Inventory_Slot& slot = inventory->hot_bar[slot_index];
 
-            UV_Rectangle* slot_uv_rect = &internal_data.inventory_slot_uv_rect;
+            UV_Rectangle* slot_uv_rect = &inventory->inventory_slot_uv_rect;
 
-            if (internal_data.active_hot_bar_slot_index == slot_index)
+            if (inventory->active_hot_bar_slot_index == slot_index)
             {
-                slot_uv_rect = &internal_data.active_inventory_slot_uv_rect;
+                slot_uv_rect = &inventory->active_inventory_slot_uv_rect;
             }
 
             f32 slot_center_x = hot_bar_start_x + slot_index * slot_width + half_slot_width;
@@ -385,27 +396,30 @@ namespace minecraft {
                                               side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                               side_texture_uv_rect.bottom_left);
 
-                std::stringstream ss;
-                ss << (u32)slot.count;
 
-                Bitmap_Font* font = internal_data.font;
-                std::string text = ss.str();
-                auto text_size = font->get_string_size(text);
-                Opengl_2D_Renderer::draw_string(font, text, text_size, { slot_center_x, slot_center_y }, { 1.0f, 1.0f, 1.0f, 1.0f });
+                Bitmap_Font* font = inventory->font;
+                String8 slot_text = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
+                auto text_size    = font->get_string_size(slot_text);
+                Opengl_2D_Renderer::draw_string(font,
+                                                slot_text,
+                                                text_size,
+                                                { slot_center_x, slot_center_y },
+                                                { 1.0f, 1.0f, 1.0f, 1.0f });
             }
 
             Opengl_2D_Renderer::draw_rect({ slot_center_x, slot_center_y },
                                           { slot_width, slot_height },
                                           0.0f,
                                           { 1.0f, 1.0f, 1.0f, 1.0f },
-                                          internal_data.hud_sprite,
+                                          inventory->hud_sprite,
                                           slot_uv_rect->top_right - slot_uv_rect->bottom_left,
                                           slot_uv_rect->bottom_left);
         }
     }
 
-    void Inventory::serialize(String8 path)
+    void serialize_inventory(Inventory *inventory, String8 path)
     {
+        // @todo(harlequin): Temparary
         char inventory_file_path[256];
         sprintf(inventory_file_path, "%s/inventory", path.data);
 
@@ -415,12 +429,13 @@ namespace minecraft {
             fprintf(stderr, "[ERROR]: failed to open file: %s for writing\n", inventory_file_path);
             return;
         }
-        fwrite(internal_data.slots, sizeof(internal_data.slots), 1, file);
+        fwrite(inventory->slots, sizeof(inventory->slots), 1, file);
         fclose(file);
     }
 
-    void Inventory::deserialize(String8 path)
+    void deserialize_inventory(Inventory *inventory, String8 path)
     {
+        // @todo(harlequin): Temparary
         char inventory_file_path[256];
         sprintf(inventory_file_path, "%s/inventory", path.data);
 
@@ -435,9 +450,7 @@ namespace minecraft {
             fprintf(stderr, "[ERROR]: failed to open file: %s for reading\n", inventory_file_path);
             return;
         }
-        fread(internal_data.slots, sizeof(internal_data.slots), 1, file);
+        fread(inventory->slots, sizeof(inventory->slots), 1, file);
         fclose(file);
     }
-
-    Inventory_Data Inventory::internal_data;
 }

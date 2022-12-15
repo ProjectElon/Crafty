@@ -1,8 +1,11 @@
 #pragma once
 
+#include "core/common.h"
+
 #define DEFAULT_QUEUE_SIZE 65536
 
 namespace minecraft {
+
     template<typename T>
     struct Circular_FIFO_Queue
     {
@@ -35,7 +38,7 @@ namespace minecraft {
 
         inline T pop()
         {
-            assert(!is_empty());
+            Assert(!is_empty());
             T element = data[this->start_index];
             this->start_index++;
             if (this->start_index == count) this->start_index = 0;

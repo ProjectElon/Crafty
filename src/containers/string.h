@@ -1,9 +1,11 @@
 #pragma once
 
 #include "core/common.h"
-#include "memory/memory_arena.h"
 
 namespace minecraft {
+
+    struct Memory_Arena;
+    struct Temprary_Memory_Arena;
 
     struct String8
     {
@@ -28,4 +30,7 @@ namespace minecraft {
     String8 sub_string(String8 *string, u32 start, u32 count);
 
     u64 hash_string(String8 *string);
+
+    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...);
+    String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...);
 }

@@ -161,7 +161,7 @@ namespace minecraft {
             }
         }
 
-        assert(texture_index != -1);
+        Assert(texture_index != -1);
 
         glm::vec2 size = Opengl_Renderer::get_frame_buffer_size();
         glm::vec2 top_left_position = position;

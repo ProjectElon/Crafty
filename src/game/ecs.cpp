@@ -54,7 +54,7 @@ namespace minecraft {
     Entity Registry::create_entity(EntityArchetype archetype,
                                    EntityTag tag)
     {
-        assert(this->free_entities.size());
+        Assert(this->free_entities.size());
 
         u32 entity_index = this->free_entities.back();
         free_entities.pop_back();
@@ -74,7 +74,7 @@ namespace minecraft {
 
     void Registry::destroy_entity(Entity entity)
     {
-        assert(is_entity_valid(entity));
+        Assert(is_entity_valid(entity));
 
         Entity_Info& info = this->entities[entity];
         if (info.tag != EntityTag_None)
@@ -98,7 +98,7 @@ namespace minecraft {
         {
             return make_entity(this->entities.size(), 0);
         }
-        u32 entity_index = it->second;
+        u32 entity_index  = (u32)it->second;
         Entity_Info& info = this->entities[entity_index];
         return make_entity(entity_index, info.generation);
     }
