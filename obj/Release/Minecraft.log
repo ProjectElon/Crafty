@@ -1,5 +1,1 @@
-﻿  opengl_renderer.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(238,41): warning C4244: '=': conversion from 'float' to 'u16', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1474,61): warning C4244: 'argument': conversion from 'i32' to 'f32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1522,66): warning C4244: 'argument': conversion from 'i32' to 'f32', possible loss of data
-  Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
+﻿  Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

@@ -96,7 +96,6 @@ project("Minecraft")
     {
         "opengl32.lib",
         "glfw3dll.lib",
-        "OptickCore.lib"
     }
 
     defines

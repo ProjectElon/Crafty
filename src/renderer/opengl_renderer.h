@@ -105,8 +105,6 @@ namespace minecraft {
         Opengl_Renderer_Stats stats;
         std::atomic<u64> sub_chunk_used_memory;
 
-        u16 sky_light_level; // todo(harlequin): to be removed
-
         bool should_trace_debug_message = true;
 
         glm::vec4 sky_color;

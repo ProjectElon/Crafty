@@ -197,7 +197,6 @@ namespace minecraft {
         glm::ivec2  world_coords;
         glm::vec3   position;
         char        file_path[256];
-
         Chunk*      neighbours[ChunkNeighbour_Count];
 
         std::atomic<bool> pending_for_load;
@@ -211,6 +210,7 @@ namespace minecraft {
         std::atomic<bool> pending_for_update;
         std::atomic<bool> pending_for_save;
         std::atomic<bool> unload;
+        std::atomic<bool> freed;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
@@ -250,19 +250,11 @@ namespace minecraft {
     Block* get_neighbour_block_from_back(Chunk   *chunk, const glm::ivec3& block_coords);
     std::array<Block*, 6> get_neighbours(Chunk   *chunk, const glm::ivec3& block_coords);
 
-    struct Chunk_Hash
-    {
-        std::size_t operator()(const glm::ivec2& coord) const
-        {
-            return (size_t)coord.x | ((size_t)coord.y << (size_t)32);
-        }
-    };
-
     struct Block_Query_Result
     {
-        glm::ivec3 block_coords;
-        Block *block;
-        Chunk *chunk;
+        glm::ivec3  block_coords;
+        Block      *block;
+        Chunk      *chunk;
     };
 
     struct World_Region_Bounds
@@ -313,8 +305,6 @@ namespace minecraft {
         static Block            null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
-        // robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks; // @todo(harlequin): to be removed
-
         u32         free_chunk_count;
         Chunk_Node  chunk_nodes[chunk_capacity];
         Chunk_Node *free_chunk_list_head;
@@ -322,7 +312,7 @@ namespace minecraft {
         static constexpr i64 chunk_hash_table_capacity = chunk_capacity;
         chunk_entry chunk_hash_table[chunk_hash_table_capacity];
 
-        std::vector< Chunk* >                                      pending_free_chunks; // @todo(harlequin): to be removed
+        // std::vector< Chunk* >                                      pending_free_chunks; // @todo(harlequin): to be removed
 
         Circular_FIFO_Queue<Update_Chunk_Job>                      update_chunk_jobs_queue;
         Circular_FIFO_Queue<Calculate_Chunk_Light_Propagation_Job> light_propagation_queue;
@@ -335,9 +325,11 @@ namespace minecraft {
     Chunk *allocate_chunk(World *world);
     void free_chunk(World *world, Chunk *chunk);
 
-    inline u64 get_chunk_hash(glm::ivec2 coords)
+    // todo(harlequin): hash function from https://carmencincotti.com/2022-10-31/spatial-hash-maps-part-one/
+    inline i64 get_chunk_hash(glm::ivec2 coords)
     {
-        return ((u64)coords.x | ((u64)coords.y << (u64)32)) % World::chunk_hash_table_capacity;
+        // return glm::abs((i64)coords.x | ((i64)coords.y << (i64)32)) % World::chunk_hash_table_capacity;
+        return glm::abs(((i64)coords.x * (i64)92837111) ^ ((i64)coords.y * (i64)689287499)) % World::chunk_hash_table_capacity;
     }
 
     bool insert_chunk(World *world, Chunk *chunk);
@@ -345,14 +337,12 @@ namespace minecraft {
     Chunk *get_chunk(World *world, glm::ivec2 coords);
 
     void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds);
-    void free_chunks_out_of_region(World *world);
+    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds);
 
     bool is_chunk_in_region_bounds(const glm::ivec2& chunk_coords, const World_Region_Bounds& region_bounds);
 
     glm::ivec3 world_position_to_block_coords(World *world, const glm::vec3& position);
     World_Region_Bounds get_world_bounds_from_chunk_coords(i32 chunk_radius, const glm::ivec2& chunk_coords);
-
-    // Chunk* get_chunk(World *world, const glm::ivec2& chunk_coords);
 
     Block* get_block(World *world, const glm::vec3& position);
     Block_Query_Result query_block(World *world, const glm::vec3& position);

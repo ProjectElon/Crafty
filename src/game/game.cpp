@@ -986,7 +986,7 @@ namespace minecraft {
             Opengl_2D_Renderer::begin();
             Opengl_2D_Renderer::end();
 
-            free_chunks_out_of_region(game_world);
+            free_chunks_out_of_region(game_world, game_world->player_region_bounds);
 
             Opengl_Renderer::swap_buffers(game_state->window);
 

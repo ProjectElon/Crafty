@@ -108,6 +108,7 @@ namespace minecraft {
         chunk->pending_for_save     = false;
         chunk->pending_for_update   = false;
         chunk->unload               = false;
+        chunk->freed                = false;
 
         for (i32 i = 0; i < ChunkNeighbour_Count; i++)
         {
@@ -769,8 +770,8 @@ namespace minecraft {
         world->free_chunk_count     = World::chunk_capacity;
         world->free_chunk_list_head = &world->chunk_nodes[0];
 
-        world->pending_free_chunks  = std::vector<Chunk*>();
-        world->pending_free_chunks.reserve(world->chunk_capacity);
+        // world->pending_free_chunks  = std::vector<Chunk*>();
+        // world->pending_free_chunks.reserve(world->chunk_capacity);
 
         world->update_chunk_jobs_queue.initialize();
         world->calculate_chunk_lighting_queue.initialize();
@@ -1018,46 +1019,8 @@ namespace minecraft {
         }
     }
 
-    void free_chunks_out_of_region(World *world)
+    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds)
     {
-        auto& pending_free_chunks = world->pending_free_chunks;
-        const World_Region_Bounds& region_bounds = world->player_region_bounds;
-
-        // for (auto it = world->loaded_chunks.begin(); it != world->loaded_chunks.end();)
-        // {
-        //     auto chunk_coords = it->first;
-        //     Chunk* chunk = it->second;
-
-        //     bool out_of_bounds = chunk_coords.x < region_bounds.min.x - World::pending_free_chunk_radius ||
-        //                          chunk_coords.x > region_bounds.max.x + World::pending_free_chunk_radius ||
-        //                          chunk_coords.y < region_bounds.min.y - World::pending_free_chunk_radius ||
-        //                          chunk_coords.y > region_bounds.max.y + World::pending_free_chunk_radius;
-
-        //     if (out_of_bounds &&
-        //         !chunk->pending_for_load &&
-        //          chunk->loaded &&
-        //         !chunk->pending_for_lighting &&
-        //         !chunk->in_light_propagation_queue &&
-        //         !chunk->in_light_calculation_queue &&
-        //         !chunk->pending_for_update &&
-        //         !chunk->pending_for_save)
-        //     {
-        //         chunk->pending_for_save = true;
-
-        //         Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
-        //         serialize_and_free_chunk_job.world = world;
-        //         serialize_and_free_chunk_job.chunk = chunk;
-        //         Job_System::schedule(serialize_and_free_chunk_job, false);
-
-        //         pending_free_chunks.emplace_back(chunk);
-        //         it = world->loaded_chunks.erase(it);
-        //     }
-        //     else
-        //     {
-        //         ++it;
-        //     }
-        // }
-
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
             if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
@@ -1087,23 +1050,17 @@ namespace minecraft {
                 serialize_and_free_chunk_job.chunk = chunk;
                 Job_System::schedule(serialize_and_free_chunk_job, false);
 
-                pending_free_chunks.emplace_back(chunk);
                 remove_chunk(world, chunk->world_coords);
             }
         }
 
-        for (auto it = pending_free_chunks.begin(); it != pending_free_chunks.end();)
+        for (u32 i = 0; i < World::chunk_capacity; i++)
         {
-            Chunk* chunk = *it;
-
-            if (chunk->unload)
+            Chunk* chunk = &world->chunk_nodes[i].chunk;
+            if (chunk->unload && !chunk->freed)
             {
                 free_chunk(world, chunk);
-                it = pending_free_chunks.erase(it);
-            }
-            else
-            {
-                ++it;
+                chunk->freed = true;
             }
         }
     }

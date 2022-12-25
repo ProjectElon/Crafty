@@ -235,7 +235,6 @@ namespace minecraft {
         glBindVertexArray(0);
 
         internal_data.sub_chunk_used_memory = 0;
-        internal_data.sky_light_level = 15.0f;
 
         return true;
     }
@@ -289,8 +288,6 @@ namespace minecraft {
                                           u32 face_corner_id,
                                           u32 flags)
     {
-
-
         u32 result = 0;
 
         result |= block_coords.x;
@@ -311,8 +308,6 @@ namespace minecraft {
                                           u32 &out_face_corner_id,
                                           u32 &out_flags)
     {
-
-
         block_coords.x = vertex & BLOCK_X_MASK;
         block_coords.y = (vertex >> 4) & BLOCK_Y_MASK;
         block_coords.z = (vertex >> 12) & BLOCK_Z_MASK;
@@ -324,8 +319,6 @@ namespace minecraft {
 
     u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level, u32 ambient_occlusion_level)
     {
-
-
         u32 result = 0;
         result |= sky_light_level;
         result |= light_source_level << 4;
@@ -336,8 +329,6 @@ namespace minecraft {
 
     void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level, u32 &out_ambient_occlusion_level)
     {
-
-
         out_sky_light_level = vertex & SKY_LIGHT_LEVEL_MASK;
         out_light_source_level = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
         out_ambient_occlusion_level = (vertex >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK;
@@ -346,8 +337,6 @@ namespace minecraft {
 
     void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-
-
         Assert(internal_data.free_buckets.size());
         internal_data.free_buckets_mutex.lock();
         bucket->memory_id = internal_data.free_buckets.back();
@@ -359,8 +348,6 @@ namespace minecraft {
 
     void Opengl_Renderer::reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-
-
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
         bucket->current_vertex = internal_data.base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
         bucket->face_count = 0;
@@ -368,8 +355,6 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-
-
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
         internal_data.free_buckets_mutex.lock();
         internal_data.free_buckets.push_back(bucket->memory_id);
@@ -381,8 +366,6 @@ namespace minecraft {
 
     i32 Opengl_Renderer::allocate_sub_chunk_instance()
     {
-
-
         Assert(internal_data.free_buckets.size());
         internal_data.free_instances_mutex.lock();
         i32 instance_memory_id = internal_data.free_instances.back();
@@ -393,8 +376,6 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk_instance(i32 instance_memory_id)
     {
-
-
         internal_data.free_instances_mutex.lock();
         internal_data.free_instances.push_back(instance_memory_id);
         internal_data.free_instances_mutex.unlock();
@@ -402,8 +383,6 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
-
-
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         if (render_data.instance_memory_id != -1)
@@ -437,8 +416,6 @@ namespace minecraft {
 
     void Opengl_Renderer::update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index)
     {
-
-
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         i32 bucket_index = render_data.bucket_index + 1;
@@ -478,8 +455,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto top_query = world_get_neighbour_block_from_top(chunk, block_coords);
@@ -554,8 +529,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_bottom(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto bottom_query = world_get_neighbour_block_from_bottom(chunk, block_coords);
@@ -630,8 +603,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_right(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto right_query = world_get_neighbour_block_from_right(chunk, block_coords);
@@ -706,8 +677,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_left(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto left_query = world_get_neighbour_block_from_left(chunk, block_coords);
@@ -782,8 +751,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_back(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto back_query = world_get_neighbour_block_from_back(chunk, block_coords);
@@ -858,8 +825,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_front(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
         auto front_query = world_get_neighbour_block_from_front(chunk, block_coords);
@@ -934,8 +899,6 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-
-
         /*
           1----------2
           |\         |\
@@ -994,8 +957,6 @@ namespace minecraft {
                                                            u16 face,
                                                            u32 p0, u32 p1, u32 p2, u32 p3)
     {
-
-
         const Block_Info* block_info               = get_block_info(world, block);
         const Block_Info* block_facing_normal_info = get_block_info(world, block_facing_normal);
 
@@ -1105,8 +1066,6 @@ namespace minecraft {
 
     void submit_block_to_sub_chunk_render_data(World *world, Chunk *chunk, u32 sub_chunk_index, Block *block, const glm::ivec3& block_coords)
     {
-
-
         const Block_Info* block_info = get_block_info(world, block);
 
         u32 submitted_face_count = 0;
@@ -1315,8 +1274,6 @@ namespace minecraft {
 
     void Opengl_Renderer::render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index)
     {
-
-
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
         if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
