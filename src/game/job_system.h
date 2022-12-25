@@ -6,6 +6,7 @@
 #include <mutex>
 #include <atomic>
 #include <condition_variable>
+#include "memory/memory_arena.h"
 
 namespace minecraft {
 
@@ -15,7 +16,7 @@ namespace minecraft {
     struct Job
     {
         void *data;
-        void (*execute)(void *data);
+        void (*execute)(void *data, Temprary_Memory_Arena *temp_arena);
     };
 
     struct Job_Queue
@@ -33,6 +34,7 @@ namespace minecraft {
 
         u32 thread_count;
         std::thread threads[MC_MAX_THREAD_COUNT];
+        Memory_Arena arenas[MC_MAX_THREAD_COUNT];
 
         std::thread light_thread;
 
@@ -49,7 +51,7 @@ namespace minecraft {
     {
         static Job_System_Data internal_data;
 
-        static bool initialize(World *world);
+        static bool initialize(World *world, Memory_Arena *permenent_arena);
         static void shutdown();
 
         static void dispatch(const Job& job, bool high_prority);

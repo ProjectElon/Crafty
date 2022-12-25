@@ -34,17 +34,13 @@ namespace minecraft {
 
         for (u32 key_code = 0; key_code < MC_KEY_STATE_COUNT; key_code++)
         {
-            // todo(harlequin): why are we only allowing input when the console is closed here
             input->key_states[key_code] =
-                Dropdown_Console::is_closed() &&
                 glfwGetKey(window, key_code) == GLFW_PRESS;
         }
 
         for (u32 button_code = 0; button_code < MC_BUTTON_STATE_COUNT; button_code++)
         {
-            // todo(harlequin): why are we only allowing input when the console is closed here
             input->button_states[button_code] =
-                Dropdown_Console::is_closed() &&
                 glfwGetMouseButton(window, button_code) == GLFW_PRESS;
         }
 
@@ -53,37 +49,6 @@ namespace minecraft {
 
         input->previous_mouse_position = input->mouse_position;
         input->mouse_position          = { (f32)mouse_x, (f32)mouse_y };
-    }
-
-    void set_cursor_mode(Input *input, GLFWwindow *window, bool enabled)
-    {
-        glfwSetInputMode(window,
-                         GLFW_CURSOR,
-                         enabled ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_DISABLED);
-        input->is_cursor_visible = enabled;
-    }
-
-    void set_raw_mouse_motion(Input *input, GLFWwindow *window, bool enabled)
-    {
-        if (glfwRawMouseMotionSupported())
-        {
-            glfwSetInputMode(window,
-                             GLFW_RAW_MOUSE_MOTION,
-                             enabled ? GLFW_TRUE : GLFW_FALSE);
-            input->is_using_raw_mouse_motion = enabled;
-        }
-    }
-
-    void toggle_cursor(Input *input, GLFWwindow *window)
-    {
-        if (input->is_cursor_visible)
-        {
-            set_cursor_mode(input, window, false);
-        }
-        else
-        {
-            set_cursor_mode(input, window, true);
-        }
     }
 
     bool get_key(Input *input, u16 key_code)

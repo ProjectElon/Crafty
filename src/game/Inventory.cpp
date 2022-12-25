@@ -55,7 +55,7 @@ namespace minecraft {
         serialize_inventory(inventory, path);
     }
 
-    void add_block_to_inventory(Inventory *inventory, u16 block_id)
+    bool add_block_to_inventory(Inventory *inventory, u16 block_id)
     {
         bool found = false;
 
@@ -76,10 +76,12 @@ namespace minecraft {
 
         if (!found)
         {
-            for (i32 slot_index = 0; slot_index < INVENTORY_HOT_BAR_SLOT_COUNT + INVENTORY_SLOT_COUNT; slot_index++)
+            for (i32 slot_index = 0;
+                 slot_index < INVENTORY_HOT_BAR_SLOT_COUNT + INVENTORY_SLOT_COUNT;
+                 slot_index++)
             {
                 Inventory_Slot &slot = inventory->slots[slot_index];
-                bool is_slot_empty = slot.block_id == BlockId_Air && slot.count == 0;
+                bool is_slot_empty   = slot.block_id == BlockId_Air && slot.count == 0;
                 if (is_slot_empty)
                 {
                     slot.block_id = block_id;
@@ -90,10 +92,7 @@ namespace minecraft {
             }
         }
 
-        if (!found)
-        {
-            // todo(harlequin): inventory is full drop the item
-        }
+        return found;
     }
 
     void calculate_slot_positions_and_sizes(Inventory *inventory, const glm::vec2& frame_buffer_size)

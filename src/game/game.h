@@ -25,12 +25,6 @@ namespace minecraft {
         WindowMode_Windowed
     };
 
-    enum CursorMode
-    {
-        CursorMode_Locked,
-        CursorMode_Free
-    };
-
     struct Game_Config
     {
         const char *window_title;
@@ -41,6 +35,8 @@ namespace minecraft {
         u32         window_width;
         u32         window_height;
         WindowMode  window_mode;
+        bool        is_cursor_visible;
+        bool        is_raw_mouse_motion_enabled;
     };
 
     struct Game_Memory
@@ -87,14 +83,15 @@ namespace minecraft {
 
         Event_System event_system;
         Input        game_input;
-        World        world;
         Inventory    inventory;
         Camera       camera;
+
+        World        *world;
 
         bool         is_minimized;
         bool         is_running;
         bool         is_inventory_active;
-        CursorMode   cursor_mode;
+        bool         is_cursor_locked;
 
         // todo(harlequin): game_assets
         void        *ingame_crosshair_texture;
@@ -110,5 +107,4 @@ namespace minecraft {
 
     void toggle_visual_debugging(Game_State *game_state);
     void toggle_inventory(Game_State *game_state);
-    void set_cursor_mode(Game_State *game_state, CursorMode mode);
 }

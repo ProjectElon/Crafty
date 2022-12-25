@@ -306,4 +306,28 @@ namespace minecraft {
     {
         glfwTerminate();
     }
+
+    void Platform::set_cursor_visiblity(GLFWwindow *window, Game_Config *config, bool is_visible)
+    {
+        glfwSetInputMode(window,
+                         GLFW_CURSOR,
+                         is_visible ? GLFW_CURSOR_HIDDEN : GLFW_CURSOR_DISABLED);
+        config->is_cursor_visible = is_visible;
+    }
+
+    void Platform::set_raw_mouse_motion(GLFWwindow *window, Game_Config *config, bool is_enabled)
+    {
+        if (glfwRawMouseMotionSupported())
+        {
+            glfwSetInputMode(window,
+                             GLFW_RAW_MOUSE_MOTION,
+                             is_enabled ? GLFW_TRUE : GLFW_FALSE);
+            config->is_raw_mouse_motion_enabled = is_enabled;
+        }
+    }
+
+    void Platform::toggle_cursor_visiblity(GLFWwindow *window, Game_Config *config)
+    {
+        set_cursor_visiblity(window, config, !config->is_cursor_visible);
+    }
 }

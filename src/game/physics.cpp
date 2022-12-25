@@ -6,21 +6,17 @@
 #include "game/ecs.h"
 #include "game/world.h"
 
-#include <optick/optick.h>
-
 namespace minecraft {
 
     bool Physics::initialize(i32 update_rate)
     {
-        OPTICK_EVENT();
         internal_data.update_rate = update_rate;
-        internal_data.delta_time = 1.0f / (f32)update_rate;
+        internal_data.delta_time  = 1.0f / (f32)update_rate;
         return true;
     }
 
     void Physics::shutdown()
     {
-        OPTICK_EVENT();
     }
 
     void Physics::simulate(f32 delta_time, World *world, Registry *registry)
@@ -114,7 +110,6 @@ namespace minecraft {
 
     bool Physics::box_vs_box(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
     {
-        OPTICK_EVENT();
         glm::vec3 min0 = t0.position - (c0.size * 0.5f);
         glm::vec3 max0 = t0.position + (c0.size * 0.5f);
 
@@ -128,7 +123,6 @@ namespace minecraft {
 
     bool Physics::is_colliding(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
     {
-        OPTICK_EVENT();
         glm::vec3 min0 = t0.position - (c0.size * 0.5f);
         glm::vec3 max0 = t0.position + (c0.size * 0.5f);
 
@@ -158,7 +152,6 @@ namespace minecraft {
 
     static f32 get_collision_direction(CollisionFace face)
     {
-        OPTICK_EVENT();
         switch (face)
         {
             case CollisionFace_Back:
@@ -184,7 +177,6 @@ namespace minecraft {
                                     CollisionFace z_face,
                                     Box_Vs_Box_Collision_Info* out_info)
     {
-        OPTICK_EVENT();
         f32 x_dir = get_collision_direction(x_face);
         f32 y_dir = get_collision_direction(y_face);
         f32 z_dir = get_collision_direction(z_face);
@@ -213,7 +205,6 @@ namespace minecraft {
 
     Box_Vs_Box_Collision_Info Physics::get_static_collision_information(const Transform& t0, const Box_Collider& c0, const Transform& t1, const Box_Collider& c1)
     {
-        OPTICK_EVENT();
         Box_Vs_Box_Collision_Info collision_info;
 
         Box_Collider b1_expanded = c1;
@@ -264,7 +255,6 @@ namespace minecraft {
                                                                                    const Transform& t1,
                                                                                    const Box_Collider& bc1)
     {
-        OPTICK_EVENT();
         Box_Vs_Box_Collision_Info collision_info = Physics::get_static_collision_information(t0, bc0, t1, bc1);
         f32 dot = glm::dot(glm::normalize(collision_info.overlap), glm::normalize(rb.velocity));
         // We're already moving out of the collision, don't do anything

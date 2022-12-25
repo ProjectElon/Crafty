@@ -36,6 +36,10 @@ namespace minecraft {
 
         static void center_window(GLFWwindow *window, Game_Config *config);
 
+        static void set_cursor_visiblity(GLFWwindow *window, Game_Config *config, bool is_visible);
+        static void set_raw_mouse_motion(GLFWwindow *window, Game_Config *config, bool is_enabled);
+        static void toggle_cursor_visiblity(GLFWwindow *window, Game_Config *config);
+
         static f64 get_current_time_in_seconds();
     };
 }

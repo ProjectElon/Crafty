@@ -71,7 +71,7 @@ namespace minecraft {
 
     void shutdown_inventory(Inventory *inventory, String8 path);
 
-    void add_block_to_inventory(Inventory *inventory, u16 block_id);
+    bool add_block_to_inventory(Inventory *inventory, u16 block_id);
 
     void calculate_slot_positions_and_sizes(Inventory *inventory, const glm::vec2& frame_buffer_size);
     void handle_inventory_input(Inventory *inventory, Input *input);

@@ -95,8 +95,6 @@ namespace minecraft {
 
         glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, internal_data.uv_buffer_id);
 
-        GLCall(glBindTextureUnit(1, internal_data.uv_texture_id));
-
         glBindTexture(GL_TEXTURE_BUFFER, 0);
         glBindBuffer(GL_TEXTURE_BUFFER, 0);
 
@@ -250,8 +248,6 @@ namespace minecraft {
 
     void Opengl_Renderer::wait_for_gpu_to_finish_work()
     {
-        PROFILE_FUNCTION;
-
         if (gSync)
         {
             while (true)
@@ -265,8 +261,6 @@ namespace minecraft {
 
     void Opengl_Renderer::signal_gpu_for_work()
     {
-        PROFILE_FUNCTION;
-
         if (gSync)
         {
             glDeleteSync(gSync);
@@ -295,7 +289,7 @@ namespace minecraft {
                                           u32 face_corner_id,
                                           u32 flags)
     {
-        // PROFILE_FUNCTION;
+
 
         u32 result = 0;
 
@@ -317,7 +311,7 @@ namespace minecraft {
                                           u32 &out_face_corner_id,
                                           u32 &out_flags)
     {
-        // PROFILE_FUNCTION;
+
 
         block_coords.x = vertex & BLOCK_X_MASK;
         block_coords.y = (vertex >> 4) & BLOCK_Y_MASK;
@@ -330,7 +324,7 @@ namespace minecraft {
 
     u32 Opengl_Renderer::compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level, u32 ambient_occlusion_level)
     {
-        // PROFILE_FUNCTION;
+
 
         u32 result = 0;
         result |= sky_light_level;
@@ -342,7 +336,7 @@ namespace minecraft {
 
     void Opengl_Renderer::extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level, u32 &out_ambient_occlusion_level)
     {
-        // PROFILE_FUNCTION;
+
 
         out_sky_light_level = vertex & SKY_LIGHT_LEVEL_MASK;
         out_light_source_level = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
@@ -352,7 +346,7 @@ namespace minecraft {
 
     void Opengl_Renderer::allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-        // PROFILE_FUNCTION;
+
 
         Assert(internal_data.free_buckets.size());
         internal_data.free_buckets_mutex.lock();
@@ -365,7 +359,7 @@ namespace minecraft {
 
     void Opengl_Renderer::reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-        // PROFILE_FUNCTION;
+
 
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
         bucket->current_vertex = internal_data.base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
@@ -374,7 +368,7 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-        // PROFILE_FUNCTION;
+
 
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
         internal_data.free_buckets_mutex.lock();
@@ -387,7 +381,7 @@ namespace minecraft {
 
     i32 Opengl_Renderer::allocate_sub_chunk_instance()
     {
-        // PROFILE_FUNCTION;
+
 
         Assert(internal_data.free_buckets.size());
         internal_data.free_instances_mutex.lock();
@@ -399,7 +393,7 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk_instance(i32 instance_memory_id)
     {
-        // PROFILE_FUNCTION;
+
 
         internal_data.free_instances_mutex.lock();
         internal_data.free_instances.push_back(instance_memory_id);
@@ -408,7 +402,7 @@ namespace minecraft {
 
     void Opengl_Renderer::free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
     {
-        // PROFILE_FUNCTION;
+
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
@@ -443,7 +437,7 @@ namespace minecraft {
 
     void Opengl_Renderer::update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index)
     {
-        // PROFILE_FUNCTION;
+
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
@@ -484,7 +478,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -560,7 +554,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_bottom(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -636,7 +630,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_right(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -712,7 +706,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_left(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -788,7 +782,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_back(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -864,7 +858,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_front(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         std::array< Block_Query_Result, 4 > neighbours = {};
         Block_Query_Result null_query = {};
@@ -940,7 +934,7 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
     {
-        // PROFILE_FUNCTION;
+
 
         /*
           1----------2
@@ -1000,7 +994,7 @@ namespace minecraft {
                                                            u16 face,
                                                            u32 p0, u32 p1, u32 p2, u32 p3)
     {
-        // PROFILE_FUNCTION;
+
 
         const Block_Info* block_info               = get_block_info(world, block);
         const Block_Info* block_facing_normal_info = get_block_info(world, block_facing_normal);
@@ -1111,7 +1105,7 @@ namespace minecraft {
 
     void submit_block_to_sub_chunk_render_data(World *world, Chunk *chunk, u32 sub_chunk_index, Block *block, const glm::ivec3& block_coords)
     {
-        // PROFILE_FUNCTION;
+
 
         const Block_Info* block_info = get_block_info(world, block);
 
@@ -1268,7 +1262,7 @@ namespace minecraft {
 
     void Opengl_Renderer::upload_sub_chunk_to_gpu(World *world, Chunk *chunk, u32 sub_chunk_index)
     {
-        // PROFILE_FUNCTION;
+
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
@@ -1321,7 +1315,7 @@ namespace minecraft {
 
     void Opengl_Renderer::render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index)
     {
-        // PROFILE_FUNCTION;
+
 
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
@@ -1358,33 +1352,40 @@ namespace minecraft {
                                                   World_Region_Bounds *player_region_bounds,
                                                   Camera *camera)
     {
-        auto& loaded_chunks = world->loaded_chunks;
-
-        for (i32 z = player_region_bounds->min.y; z <= player_region_bounds->max.y; ++z)
+        // auto& loaded_chunks = world->loaded_chunks;
+        for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            for (i32 x = player_region_bounds->min.x; x <= player_region_bounds->max.x; ++x)
+            if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
             {
-                glm::ivec2 chunk_coords = { x, z };
-                auto it = loaded_chunks.find(chunk_coords);
-                assert(it != loaded_chunks.end());
-                Chunk* chunk = it->second;
-                if (!chunk->pending_for_load && chunk->loaded)
+                continue;
+            }
+            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].coords;
+            if (!is_chunk_in_region_bounds(chunk_coords, *player_region_bounds))
+            {
+                continue;
+            }
+            // auto it = loaded_chunks.find(chunk_coords);
+            // assert(it != loaded_chunks.end());
+            // Chunk* chunk = it->second;
+            Chunk* chunk = &world->chunk_nodes[world->chunk_hash_table[i].index].chunk;
+            Assert(chunk);
+
+            if (!chunk->pending_for_load && chunk->loaded)
+            {
+                for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                 {
-                    for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+                    Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
+
+                    Sub_Chunk_Bucket& opaque_bucket = render_data.opaque_buckets[render_data.bucket_index];
+                    Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[render_data.bucket_index];
+                    u64 face_count = (u64)opaque_bucket.face_count + (u64)transparent_bucket.face_count;
+
+                    bool is_sub_chunk_visible = face_count > 0 &&
+                                                camera->frustum.is_aabb_visible(render_data.aabb[render_data.bucket_index]);
+
+                    if (is_sub_chunk_visible)
                     {
-                        Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-
-                        Sub_Chunk_Bucket& opaque_bucket = render_data.opaque_buckets[render_data.bucket_index];
-                        Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[render_data.bucket_index];
-                        u64 face_count = (u64)opaque_bucket.face_count + (u64)transparent_bucket.face_count;
-
-                        bool is_sub_chunk_visible = face_count > 0 &&
-                                                    camera->frustum.is_aabb_visible(render_data.aabb[render_data.bucket_index]);
-
-                        if (is_sub_chunk_visible)
-                        {
-                            Opengl_Renderer::render_sub_chunk(world, chunk, sub_chunk_index);
-                        }
+                        Opengl_Renderer::render_sub_chunk(world, chunk, sub_chunk_index);
                     }
                 }
             }
@@ -1395,7 +1396,7 @@ namespace minecraft {
                                 const glm::vec4& tint_color,
                                 Camera *camera)
     {
-        PROFILE_FUNCTION;
+        wait_for_gpu_to_finish_work();
 
         internal_data.sky_color = clear_color;
         internal_data.tint_color = tint_color;
@@ -1408,10 +1409,8 @@ namespace minecraft {
 
     void Opengl_Renderer::end(i32 chunk_radius, i32 sky_light_level, Block_Query_Result *select_query)
     {
-        PROFILE_FUNCTION;
-
-        GLCall(glBindVertexArray(internal_data.chunk_vertex_array_id));
-        GLCall(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id));
+        glBindVertexArray(internal_data.chunk_vertex_array_id);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.chunk_index_buffer_id);
 
         Opengl_Shader *opaque_shader      = &internal_data.opaque_chunk_shader;
         Opengl_Shader *transparent_shader = &internal_data.transparent_chunk_shader;
@@ -1438,17 +1437,17 @@ namespace minecraft {
         }
 
         // opaque pass
-        GLCall(glEnable(GL_CULL_FACE));
-        GLCall(glEnable(GL_DEPTH_TEST));
-        GLCall(glDepthFunc(GL_LESS));
-        GLCall(glDepthMask(GL_TRUE));
-        GLCall(glDisable(GL_BLEND));
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
 
-        GLCall(glBindFramebuffer(GL_FRAMEBUFFER, internal_data.opaque_frame_buffer_id));
-        GLCall(glViewport(0, 0, width, height));
+        glBindFramebuffer(GL_FRAMEBUFFER, internal_data.opaque_frame_buffer_id);
+        glViewport(0, 0, width, height);
 
-        GLCall(glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a));
-        GLCall(glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT));
+        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
         opaque_shader->use();
         opaque_shader->set_uniform_f32("u_one_over_chunk_radius", 1.0f / (chunk_radius * 16.0f));
@@ -1474,14 +1473,11 @@ namespace minecraft {
         opaque_shader->set_uniform_i32("u_uvs", 1);
         opaque_shader->set_uniform_f32("u_sky_light_level", sky_light_level);
 
-        // GLCall(glActiveTexture(GL_TEXTURE1));
-        // todo(harlequin): bug glBindTexture generates gl_invalid_operation when resizing the window
-        // GLCall(glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id));
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id);
 
-        // GLCall(glBindTexture(GL_TEXTURE_BUFFER, internal_data.uv_texture_id));
-
-        GLCall(glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.opaque_command_buffer_id));
-        GLCall(glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.opaque_command_count, internal_data.opaque_command_buffer));
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, internal_data.opaque_command_buffer_id);
+        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * internal_data.opaque_command_count, internal_data.opaque_command_buffer);
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, internal_data.opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
 
@@ -1570,11 +1566,12 @@ namespace minecraft {
 
         glBindVertexArray(internal_data.quad_vertex_array_id); // todo(harlequin): temprary
         glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        signal_gpu_for_work();
     }
 
     void Opengl_Renderer::swap_buffers(struct GLFWwindow *window)
     {
-        PROFILE_FUNCTION;
         Platform::opengl_swap_buffers(window);
     }
 

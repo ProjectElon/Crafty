@@ -1,29 +1,24 @@
 #include "jobs.h"
 #include "renderer/opengl_renderer.h"
 #include "renderer/camera.h"
+#include "core/file_system.h"
+#include "memory/memory_arena.h"
 #include "game/world.h"
 #include "game/job_system.h"
 #include "game/game.h"
 
-#include <filesystem>
-
 namespace minecraft {
 
-    void Load_Chunk_Job::execute(void* job_data)
+    void Load_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
     {
-        namespace fs = std::filesystem;
-
         Load_Chunk_Job* data = (Load_Chunk_Job*)job_data;
 
         World* world = data->world;
         Chunk* chunk = data->chunk;
 
-        auto& loaded_chunks = world->loaded_chunks;
-
         generate_chunk(chunk, world->seed);
 
-        // todo(harlequin): use File_System
-        if (fs::exists(fs::path(chunk->file_path)))
+        if (File_System::exists(chunk->file_path))
         {
             deserialize_chunk(chunk);
         }
@@ -32,7 +27,7 @@ namespace minecraft {
         chunk->pending_for_load = false;
     }
 
-    void Update_Chunk_Job::execute(void* job_data)
+    void Update_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
     {
         Update_Chunk_Job* data = (Update_Chunk_Job*)job_data;
         World *world = data->world;
@@ -50,16 +45,16 @@ namespace minecraft {
         chunk->pending_for_update = false;
     }
 
-    void Serialize_Chunk_Job::execute(void* job_data)
+    void Serialize_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
     {
         Serialize_Chunk_Job* data = (Serialize_Chunk_Job*)job_data;
         World *world = data->world;
         Chunk *chunk = data->chunk;
-        serialize_chunk(chunk, world->seed, world->path);
+        serialize_chunk(chunk, world->seed, world->path, temp_arena);
         chunk->pending_for_save = false;
     }
 
-    void Serialize_And_Free_Chunk_Job::execute(void* job_data)
+    void Serialize_And_Free_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
     {
         Serialize_And_Free_Chunk_Job* data = (Serialize_And_Free_Chunk_Job*)job_data;
         World *world = data->world;
@@ -73,7 +68,7 @@ namespace minecraft {
                 Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
             }
         }
-        serialize_chunk(chunk, world->seed, world->path);
+        serialize_chunk(chunk, world->seed, world->path, temp_arena);
         chunk->pending_for_save = false;
         chunk->unload = true;
     }

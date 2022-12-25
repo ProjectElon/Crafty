@@ -3,7 +3,7 @@
 
 namespace minecraft {
 
-    static void execute_jobs()
+    static void execute_jobs(u32 thread_index)
     {
         auto& work_mutex = Job_System::internal_data.work_mutex;
         auto& work_cv = Job_System::internal_data.work_cv;
@@ -11,6 +11,8 @@ namespace minecraft {
         Job_Queue* high_priority_queue = &Job_System::internal_data.high_priority_queue;
         Job_Queue* low_priority_queue  = &Job_System::internal_data.low_priority_queue;
         bool& running = Job_System::internal_data.running;
+
+        Memory_Arena *arena = &Job_System::internal_data.arenas[thread_index];
 
         while (running || !high_priority_queue->is_empty() || !low_priority_queue->is_empty())
         {
@@ -29,9 +31,11 @@ namespace minecraft {
             {
                 if (high_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
                 {
+                    Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(arena);
                     Job *job = high_priority_queue->jobs + job_index;
-                    job->execute(job->data);
+                    job->execute(job->data, &temp_arena);
                     high_priority_job = job;
+                    end_temprary_memory_arena(&temp_arena);
                 }
             }
 
@@ -45,8 +49,10 @@ namespace minecraft {
                 {
                     if (low_priority_queue->job_index.compare_exchange_strong(job_index, next_job_index))
                     {
+                        Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(arena);
                         Job* job = low_priority_queue->jobs + job_index;
-                        job->execute(job->data);
+                        job->execute(job->data, &temp_arena);
+                        end_temprary_memory_arena(&temp_arena);
                     }
                 }
             }
@@ -127,7 +133,7 @@ namespace minecraft {
         }
     }
 
-    bool Job_System::initialize(World *world)
+    bool Job_System::initialize(World *world, Memory_Arena *permanent_arena)
     {
         u32 concurrent_thread_count = std::thread::hardware_concurrency();
 
@@ -152,7 +158,10 @@ namespace minecraft {
 
         for (u32 i = 0; i < internal_data.thread_count; i++)
         {
-            internal_data.threads[i] = std::thread(execute_jobs);
+            Memory_Arena *arena = &internal_data.arenas[i];
+            u8 *buffer = ArenaPushArrayZero(permanent_arena, u8, MegaBytes(1));
+            *arena = create_memory_arena(buffer, MegaBytes(1));
+            internal_data.threads[i] = std::thread(execute_jobs, i);
         }
 
         internal_data.light_thread = std::thread(do_light_thread_work, world);

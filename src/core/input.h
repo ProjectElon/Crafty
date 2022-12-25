@@ -29,10 +29,6 @@ namespace minecraft {
 
     void update_input(Input *input, GLFWwindow *window);
 
-    void set_cursor_mode(Input *input, GLFWwindow *window, bool enabled);
-    void set_raw_mouse_motion(Input *input, GLFWwindow *window, bool enabled);
-    void toggle_cursor(Input *input, GLFWwindow *window);
-
     bool get_key(Input *input, u16 key_code);
 
     bool is_key_pressed(Input *input, u16 key_code);

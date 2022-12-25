@@ -3,7 +3,6 @@
 #include "core/common.h"
 
 #include "meta/spritesheet_meta.h"
-#include "memory/free_list.h"
 #include "memory/memory_arena.h"
 #include "game/math.h"
 #include "game/jobs.h"
@@ -16,7 +15,6 @@
 
 #include <mutex>
 #include <algorithm>
-#include <unordered_map> // todo(harlequin): containers
 #include <array>
 #include <queue>
 #include <atomic>
@@ -76,7 +74,7 @@ namespace minecraft {
         BlockFlags_Should_Color_Top_By_Biome = 4,
         BlockFlags_Should_Color_Side_By_Biome = 8,
         BlockFlags_Should_Color_Bottom_By_Biome = 16,
-        BlockFlags_Is_Light_Source = 32,
+        BlockFlags_Is_Light_Source = 32
     };
 
     struct Block_Info
@@ -235,7 +233,7 @@ namespace minecraft {
     void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
     void calculate_lighting(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
 
-    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path);
+    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path, Temprary_Memory_Arena *temp_arena);
     void deserialize_chunk(Chunk *chunk);
 
     i32 get_block_index(const glm::ivec3& block_coords);
@@ -275,35 +273,56 @@ namespace minecraft {
 
     struct Ray_Cast_Result;
 
+    struct Chunk_Node
+    {
+        Chunk       chunk;
+        Chunk_Node *next;
+    };
+
+    #define INVALID_CHUNK_ENTRY -1
+
+    struct chunk_entry
+    {
+        glm::ivec2 coords;
+        i16        index;
+    };
+
     struct World
     {
         static constexpr i64 sub_chunk_height          = MC_SUB_CHUNK_HEIGHT;
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius = 30;
-        static constexpr i64 chunk_capacity   = 4 * (max_chunk_radius + 3) * (max_chunk_radius + 3);
+        static constexpr i64 max_chunk_radius              = 30;
+        static constexpr i64 pending_free_chunk_radius     = 2;
+        static constexpr i64 chunk_capacity                = 4 * (max_chunk_radius + pending_free_chunk_radius) * (max_chunk_radius + pending_free_chunk_radius);
 
         static constexpr i64 sub_chunk_bucket_capacity     = 4 * chunk_capacity;
         static constexpr i64 sub_chunk_bucket_face_count   = 1024;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size         = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
+        // todo(harlequin): to be added to game_config
         i32                 chunk_radius;
         f32                 sky_light_level;
+
+        String8             path;
+        i32                 seed;
         World_Region_Bounds player_region_bounds;
 
         static Block            null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
-        // @todo(harlequin): to be removed
-        robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks;
-        String8                                                          path;
-        i32                                                              seed;
+        // robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash > loaded_chunks; // @todo(harlequin): to be removed
 
-        // @todo(harlequin): to be removed
-        minecraft::Free_List< minecraft::Chunk, chunk_capacity >   chunk_pool;
-        std::vector<Chunk*>                                        pending_free_chunks;
+        u32         free_chunk_count;
+        Chunk_Node  chunk_nodes[chunk_capacity];
+        Chunk_Node *free_chunk_list_head;
+
+        static constexpr i64 chunk_hash_table_capacity = chunk_capacity;
+        chunk_entry chunk_hash_table[chunk_hash_table_capacity];
+
+        std::vector< Chunk* >                                      pending_free_chunks; // @todo(harlequin): to be removed
 
         Circular_FIFO_Queue<Update_Chunk_Job>                      update_chunk_jobs_queue;
         Circular_FIFO_Queue<Calculate_Chunk_Light_Propagation_Job> light_propagation_queue;
@@ -313,13 +332,28 @@ namespace minecraft {
     bool initialize_world(World *world, String8 path);
     void shutdown_world(World *world);
 
+    Chunk *allocate_chunk(World *world);
+    void free_chunk(World *world, Chunk *chunk);
+
+    inline u64 get_chunk_hash(glm::ivec2 coords)
+    {
+        return ((u64)coords.x | ((u64)coords.y << (u64)32)) % World::chunk_hash_table_capacity;
+    }
+
+    bool insert_chunk(World *world, Chunk *chunk);
+    bool remove_chunk(World *world, glm::ivec2 coords);
+    Chunk *get_chunk(World *world, glm::ivec2 coords);
+
     void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds);
     void free_chunks_out_of_region(World *world);
+
+    bool is_chunk_in_region_bounds(const glm::ivec2& chunk_coords, const World_Region_Bounds& region_bounds);
 
     glm::ivec3 world_position_to_block_coords(World *world, const glm::vec3& position);
     World_Region_Bounds get_world_bounds_from_chunk_coords(i32 chunk_radius, const glm::ivec2& chunk_coords);
 
-    Chunk* get_chunk(World *world, const glm::ivec2& chunk_coords);
+    // Chunk* get_chunk(World *world, const glm::ivec2& chunk_coords);
+
     Block* get_block(World *world, const glm::vec3& position);
     Block_Query_Result query_block(World *world, const glm::vec3& position);
 
@@ -340,11 +374,11 @@ namespace minecraft {
 
     std::array<Block_Query_Result, 6> world_get_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
 
-    Block_Query_Result select_block(World            *world,
-                                    const glm::vec3&  view_position,
-                                    const glm::vec3&  view_direction,
-                                    u32               max_block_select_dist_in_cube_units,
-                                    Ray_Cast_Result  *out_ray_cast_result = nullptr);
+    Block_Query_Result select_block(World           *world,
+                                    const glm::vec3 &view_position,
+                                    const glm::vec3 &view_direction,
+                                    u32              max_block_select_dist_in_cube_units,
+                                    Ray_Cast_Result *out_ray_cast_result = nullptr);
 
     void schedule_chunk_lighting_jobs(World *world, World_Region_Bounds *player_region_bounds);
     void schedule_save_chunks_jobs(World *world);

@@ -1,6 +1,6 @@
 #vertex
 
-#version 450 core
+#version 440 core
 
 layout (location = 0) in uint  in_data0;
 layout (location = 1) in uint  in_data1;
@@ -77,6 +77,10 @@ void main()
     uint flags = in_data0 >> 24;
 
     vec3 position = vec3(instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
+    if ((flags & BlockFlags_Is_Solid) == 0)
+    {
+        position.y -= 0.05f;
+    }
     gl_Position = u_projection * u_view * vec4(position, 1.0f);
 
     float distance_relative_to_camera = length(u_camera_position - position);
@@ -150,9 +154,9 @@ void main()
 
 #fragment
 
-#version 430 core
+#version 440 core
 
-layout (location = 0) out vec4 accum;
+layout (location = 0) out vec4  accum;
 layout (location = 1) out float reveal;
 
 in vec2 a_uv;
@@ -167,7 +171,7 @@ uniform vec4 u_sky_color;
 uniform vec4 u_tint_color;
 uniform sampler2D u_block_sprite_sheet;
 
-vec3 light_dir = normalize(vec3(0.0f, 1.0f, 0.0f));
+vec3 light_dir   = normalize(vec3(0.0f, 1.0f, 0.0f));
 vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
 
 #define BLOCK_X_MASK 15
@@ -177,12 +181,12 @@ vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
 #define FACE_ID_MASK 7
 #define FACE_CORNER_ID_MASK 3
 
-#define Top_Face_ID    0
+#define Top_Face_ID 0
 #define Bottom_Face_ID 1
-#define Left_Face_ID   2
-#define Right_Face_ID  3
-#define Front_Face_ID  4
-#define Back_Face_ID   5
+#define Left_Face_ID 2
+#define Right_Face_ID 3
+#define Front_Face_ID 4
+#define Back_Face_ID 5
 
 #define BlockFlags_Is_Solid 1
 #define BlockFlags_Is_Transparent 2

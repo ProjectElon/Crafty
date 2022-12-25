@@ -1,17 +1,3 @@
-﻿  game.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\game.cpp(841,44): warning C4244: 'argument': conversion from 'f32' to 'i32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(463): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(611): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
+﻿  world.cpp
+C:\dev\cpp\Crafty\src\game\world.cpp(821,29): warning C4244: 'initializing': conversion from '__int64' to 'i16', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

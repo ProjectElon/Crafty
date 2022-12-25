@@ -30,9 +30,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/compatibility.hpp>
 
-#include <sstream>
-#include <stdarg.h>
-
 namespace minecraft {
 
     static bool on_quit(const Event *event, void *sender)
@@ -50,16 +47,6 @@ namespace minecraft {
 
         u16 key;
         parse_key_code(event, &key);
-
-        if (key == MC_KEY_F1)
-        {
-            Dropdown_Console::toggle();
-        }
-
-        if (key == MC_KEY_F2)
-        {
-            toggle_cursor(game_input, game_state->window);
-        }
 
         if (key == MC_KEY_F11)
         {
@@ -93,39 +80,22 @@ namespace minecraft {
             Platform::switch_to_window_mode(game_state->window, game_config, mode);
         }
 
-        if (Dropdown_Console::is_closed())
+
+        if (key == MC_KEY_ESCAPE)
         {
-            if (key == MC_KEY_ESCAPE)
-            {
-                game_state->is_running = false;
-            }
-
-            if (key == MC_KEY_U)
-            {
-                toggle_visual_debugging(game_state);
-            }
-
-            if (key == MC_KEY_I)
-            {
-                if (game_state->cursor_mode == CursorMode_Locked)
-                {
-                    game_state->cursor_mode = CursorMode_Free;
-                }
-                else
-                {
-                    game_state->cursor_mode = CursorMode_Locked;
-                }
-
-                toggle_cursor(game_input, game_state->window);
-                toggle_inventory(game_state);
-            }
+            game_state->is_running = false;
         }
-        else
+
+        if (key == MC_KEY_V)
         {
-            if (key == MC_KEY_ESCAPE)
-            {
-                Dropdown_Console::close();
-            }
+            toggle_visual_debugging(game_state);
+        }
+
+        if (key == MC_KEY_I)
+        {
+            Platform::toggle_cursor_visiblity(game_state->window, game_config);
+            game_state->is_cursor_locked = !game_state->is_cursor_locked;
+            toggle_inventory(game_state);
         }
 
         return false;
@@ -182,9 +152,8 @@ namespace minecraft {
         Game_Config *game_config   = &game_state->game_config;
         game_config->window_width  = width;
         game_config->window_height = height;
-
-        Camera* camera       = &game_state->camera;
-        camera->aspect_ratio = (f32)width / (f32)height;
+        Camera* camera             = &game_state->camera;
+        camera->aspect_ratio       = (f32)width / (f32)height;
         return false;
     }
 
@@ -208,22 +177,26 @@ namespace minecraft {
         Game_Config  *game_config  = &game_state->game_config;
         Event_System *event_system = &game_state->event_system;
         Input        *game_input   = &game_state->game_input;
-        World        *game_world   = &game_state->world;
         Inventory    *inventory    = &game_state->inventory;
         Camera       *camera       = &game_state->camera;
 
+        game_state->world = ArenaPushAlignedZero(&game_memory->transient_arena, World);
+        World *game_world = game_state->world;
+
         // @todo(harlequin): load/save the game config from/to a file
-        game_config->window_title               = "Minecraft";
-        game_config->window_x                   = -1;
-        game_config->window_y                   = -1;
-        game_config->window_x_before_fullscreen = -1;
-        game_config->window_y_before_fullscreen = -1;
-        game_config->window_width               = 1280;
-        game_config->window_height              = 720;
-        game_config->window_mode                = WindowMode_None;
+        game_config->window_title                = "Minecraft";
+        game_config->window_x                    = -1;
+        game_config->window_y                    = -1;
+        game_config->window_x_before_fullscreen  = -1;
+        game_config->window_y_before_fullscreen  = -1;
+        game_config->window_width                = 1280;
+        game_config->window_height               = 720;
+        game_config->window_mode                 = WindowMode_None;
+        game_config->is_cursor_visible           = false;
+        game_config->is_raw_mouse_motion_enabled = true;
 
         u32 opengl_major_version = 4;
-        u32 opengl_minor_version = 5;
+        u32 opengl_minor_version = 4;
         u32 opengl_back_buffer_samples = 16;
 
         if (!Platform::initialize(game_config,
@@ -266,10 +239,17 @@ namespace minecraft {
             return false;
         }
 
-        set_raw_mouse_motion(game_input, game_state->window, true);
-        set_cursor_mode(game_input, game_state->window, false);
+        Platform::set_raw_mouse_motion(game_state->window,
+                                       game_config,
+                                       game_config->is_raw_mouse_motion_enabled);
 
-        if (!Opengl_Renderer::initialize(game_state->window, game_config->window_width, game_config->window_height))
+        Platform::set_cursor_visiblity(game_state->window,
+                                       game_config,
+                                       game_config->is_cursor_visible);
+
+        if (!Opengl_Renderer::initialize(game_state->window,
+                                         game_config->window_width,
+                                         game_config->window_height))
         {
             fprintf(stderr, "[ERROR]: failed to initialize render system\n");
             return false;
@@ -317,19 +297,19 @@ namespace minecraft {
         register_event(event_system, EventType_Minimize,         on_minimize, game_state);
         register_event(event_system, EventType_Restore,          on_restore, game_state);
 
-        Bitmap_Font *fira_code = new Bitmap_Font; // @todo(harlequin): memory system
+        Bitmap_Font *fira_code = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
         fira_code->load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
 
-        Bitmap_Font *noto_mono = new Bitmap_Font; // @todo(harlequin): memory system
+        Bitmap_Font *noto_mono = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
         noto_mono->load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
 
-        Bitmap_Font *consolas = new Bitmap_Font; // @todo(harlequin): memory system
+        Bitmap_Font *consolas = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
         consolas->load_from_file("../assets/fonts/Consolas.ttf", 20);
 
-        Bitmap_Font *liberation_mono = new Bitmap_Font; // @todo(harlequin): memory system
+        Bitmap_Font *liberation_mono = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
         liberation_mono->load_from_file("../assets/fonts/liberation-mono.ttf", 20);
 
-        Opengl_Texture *hud_sprites = new Opengl_Texture; // @todo(harlequin): memory system
+        Opengl_Texture *hud_sprites = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         hud_sprites->load_from_file("../assets/textures/hudSprites.png", TextureUsage_UI);
 
         UI_State default_ui_state;
@@ -383,7 +363,8 @@ namespace minecraft {
         const char *world_name = "harlequin";
         String8 world_path = push_formatted_string8(&game_memory->transient_arena, "../assets/worlds/%s", world_name);
         initialize_world(game_world, world_path);
-        game_world->sky_light_level = 1.0f;
+
+        game_world->sky_light_level = 15.0f;
         game_world->chunk_radius    = 8;
 
         if (!initialize_inventory(inventory, liberation_mono, hud_sprites))
@@ -393,7 +374,7 @@ namespace minecraft {
         }
         deserialize_inventory(inventory, world_path);
 
-        if (!Job_System::initialize(game_world))
+        if (!Job_System::initialize(game_world, &game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize job system\n");
             return false;
@@ -402,15 +383,15 @@ namespace minecraft {
         game_state->is_visual_debugging_enabled  = false;
         game_state->is_inventory_active          = false;
         game_state->is_minimized                 = false;
-        game_state->cursor_mode                  = CursorMode_Locked;
+        game_state->is_cursor_locked             = true;
         game_state->is_running                   = true;
 
         // @todo(harlequin): Game Assets
-        game_state->ingame_crosshair_texture     = new Opengl_Texture;
+        game_state->ingame_crosshair_texture     = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         Opengl_Texture *ingame_crosshair_texture = (Opengl_Texture*)game_state->ingame_crosshair_texture;
         ingame_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair001.png", TextureUsage_UI);
 
-        game_state->inventory_crosshair_texture     = new Opengl_Texture;
+        game_state->inventory_crosshair_texture     = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         Opengl_Texture *inventory_crosshair_texture = (Opengl_Texture *)game_state->inventory_crosshair_texture;
         inventory_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
 
@@ -419,7 +400,7 @@ namespace minecraft {
 
     void shutdown_game(Game_State *game_state)
     {
-        schedule_save_chunks_jobs(&game_state->world);
+        schedule_save_chunks_jobs(game_state->world);
         Job_System::wait_for_jobs_to_finish();
 
         Job_System::shutdown();
@@ -431,7 +412,7 @@ namespace minecraft {
         Dropdown_Console::shutdown();
         UI::shutdown();
 
-        shutdown_inventory(&game_state->inventory, game_state->world.path);
+        shutdown_inventory(&game_state->inventory, game_state->world->path);
 
         Opengl_2D_Renderer::shutdown();
         Opengl_Debug_Renderer::shutdown();
@@ -447,7 +428,7 @@ namespace minecraft {
     {
         Game_Memory      *game_memory = game_state->game_memory;
         Input            *game_input  = &game_state->game_input;
-        World            *game_world  = &game_state->world;
+        World            *game_world  = game_state->world;
         Inventory        *inventory   = &game_state->inventory;
         Game_Debug_State *debug_state = &game_state->debug_state;
 
@@ -456,7 +437,7 @@ namespace minecraft {
         u32 frames_per_second      = 0;
 
         Camera& camera      = game_state->camera;
-        auto& loaded_chunks = game_world->loaded_chunks;
+        // auto& loaded_chunks = game_world->loaded_chunks;
         Registry& registry  = ECS::internal_data.registry;
 
         {
@@ -531,15 +512,12 @@ namespace minecraft {
             Platform::pump_messages();
             update_input(game_input, game_state->window);
 
-            // @todo(harlequin): this is should be done by the camera point of view not the player position
             glm::vec2 player_chunk_coords    = world_position_to_chunk_coords(camera.position);
             game_world->player_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
                                                                                   player_chunk_coords);
 
             load_chunks_at_region(game_world, game_world->player_region_bounds);
             schedule_chunk_lighting_jobs(game_world, &game_world->player_region_bounds);
-
-            glm::vec2 mouse_delta = get_mouse_delta(game_input);
 
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
@@ -552,7 +530,6 @@ namespace minecraft {
 
             if (ray_cast_result.hit &&
                 is_block_query_valid(select_query) &&
-                Dropdown_Console::is_closed() &&
                 !game_state->is_inventory_active)
             {
                 glm::vec3 block_position = get_block_position(select_query.chunk, select_query.block_coords);
@@ -707,8 +684,15 @@ namespace minecraft {
                     }
 
                     i32 block_id = select_query.block->id;
-                    add_block_to_inventory(inventory, block_id);
-                    set_block_id(select_query.chunk, select_query.block_coords, any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
+                    bool is_added = add_block_to_inventory(inventory, block_id);
+
+                    set_block_id(select_query.chunk,
+                                 select_query.block_coords,
+                                 any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
+                    if (is_added)
+                    {
+                        // todo(harlequin): dropped items
+                    }
                 }
             }
 
@@ -723,8 +707,10 @@ namespace minecraft {
                 }
             }
 
-            if (Dropdown_Console::is_closed() && !game_state->is_inventory_active)
+            if (!game_state->is_inventory_active)
             {
+                glm::vec2 mouse_delta = get_mouse_delta(game_input);
+
                 auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
                 for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
                 {
@@ -803,18 +789,17 @@ namespace minecraft {
                 if (transform)
                 {
                     camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                    camera.yaw = transform->orientation.y;
+                    camera.yaw      = transform->orientation.y;
                 }
             }
 
-            if (Dropdown_Console::is_closed() && !game_state->is_inventory_active)
+            if (!game_state->is_inventory_active)
             {
                 // todo(harlequin): follow entity and make the camera an entity
                 camera.update_transform(game_input, delta_time);
             }
 
             camera.update();
-
 
             f32 normalize_color_factor = 1.0f / 255.0f;
             glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
@@ -827,8 +812,6 @@ namespace minecraft {
                 tint_color = { 0.35f, 0.35f, 0.9f, 1.0f };
                 clear_color *= tint_color;
             }
-
-            Opengl_Renderer::wait_for_gpu_to_finish_work();
 
             Opengl_Renderer::begin(clear_color,
                                    tint_color,
@@ -973,7 +956,6 @@ namespace minecraft {
             {
                 calculate_slot_positions_and_sizes(inventory, frame_buffer_size);
                 handle_inventory_input(inventory, game_input);
-
                 draw_inventory(inventory, game_world, game_input, &frame_arena);
             }
 
@@ -984,7 +966,7 @@ namespace minecraft {
             // todo(harlequin): game_assets
             Opengl_Texture *cursor_texture = (Opengl_Texture *)game_state->ingame_crosshair_texture;
 
-            if (game_state->cursor_mode == CursorMode_Free)
+            if (!game_state->is_cursor_locked)
             {
                 cursor = game_input->mouse_position;
                 cursor_texture = (Opengl_Texture *)game_state->inventory_crosshair_texture;
@@ -999,13 +981,10 @@ namespace minecraft {
                                           { 1.0f, 1.0f, 1.0f, 1.0f },
                                           cursor_texture);
 
-            Dropdown_Console::draw(delta_time);
+            // Dropdown_Console::draw(delta_time);
 
             Opengl_2D_Renderer::begin();
             Opengl_2D_Renderer::end();
-
-
-            Opengl_Renderer::signal_gpu_for_work();
 
             free_chunks_out_of_region(game_world);
 
@@ -1023,10 +1002,5 @@ namespace minecraft {
     void toggle_inventory(Game_State *game_state)
     {
         game_state->is_inventory_active = !game_state->is_inventory_active;
-    }
-
-    void set_cursor_mode(Game_State *game_state, CursorMode mode)
-    {
-        game_state->cursor_mode = mode;
     }
 }

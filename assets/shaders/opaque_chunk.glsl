@@ -1,6 +1,6 @@
 #vertex
 
-#version 450 core
+#version 440 core
 
 layout (location = 0) in uint  in_data0;
 layout (location = 1) in uint  in_data1;
@@ -148,7 +148,7 @@ void main()
 
 #fragment
 
-#version 430 core
+#version 440 core
 
 layout (location = 0) out vec4 out_color;
 

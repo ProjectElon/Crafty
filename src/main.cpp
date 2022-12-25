@@ -1,17 +1,19 @@
 #include "game/game.h"
 
+using namespace minecraft;
+
+static Game_Memory game_memory;
+
 int main()
 {
-    using namespace minecraft;
-
-    Game_Memory game_memory = {};
-
     game_memory.permanent_memory_size = MegaBytes(64);
     game_memory.permanent_memory      = malloc(game_memory.permanent_memory_size);
 
     if (!game_memory.permanent_memory)
     {
-        fprintf(stderr, "failed to allocated %llu bytes of permanent memory\n", game_memory.permanent_memory_size);
+        fprintf(stderr,
+                "failed to allocated %llu bytes of permanent memory\n",
+                game_memory.permanent_memory_size);
         return -1;
     }
 
@@ -20,7 +22,9 @@ int main()
 
     if (!game_memory.transient_memory)
     {
-        fprintf(stderr, "failed to allocated %llu bytes of transient memory\n", game_memory.transient_memory_size);
+        fprintf(stderr,
+                "failed to allocated %llu bytes of transient memory\n",
+                game_memory.transient_memory_size);
         return -1;
     }
 
@@ -30,8 +34,8 @@ int main()
     game_memory.transient_arena = create_memory_arena(game_memory.transient_memory,
                                                       game_memory.transient_memory_size);
 
-    Game_State *game_state  = ArenaPushZero(&game_memory.permanent_arena,
-                                            Game_State);
+    Game_State *game_state  = ArenaPushAlignedZero(&game_memory.permanent_arena,
+                                                   Game_State);
     game_state->game_memory = &game_memory;
 
     bool success = initialize_game(game_state);
