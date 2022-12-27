@@ -220,24 +220,24 @@ namespace minecraft {
 
                 if (closest_slot.block_id != inventory->dragging_slot.block_id)
                 {
-                    Inventory_Slot temp_slot = inventory->slots[closest_slot_index];
-                    inventory->slots[closest_slot_index] = inventory->dragging_slot;
+                    Inventory_Slot temp_slot                         = inventory->slots[closest_slot_index];
+                    inventory->slots[closest_slot_index]             = inventory->dragging_slot;
                     inventory->slots[inventory->dragging_slot_index] = temp_slot;
                 }
                 else
                 {
                     Inventory_Slot& dragging_slot = inventory->slots[inventory->dragging_slot_index];
-                    i32 closest_slot_capacity = 64 - closest_slot.count;
+                    i32 closest_slot_capacity     = 64 - closest_slot.count;
 
                     if (closest_slot_capacity >= dragging_slot.count)
                     {
-                        closest_slot.count += dragging_slot.count;
+                        closest_slot.count    += dragging_slot.count;
                         dragging_slot.block_id = BlockId_Air;
-                        dragging_slot.count = 0;
+                        dragging_slot.count    = 0;
                     }
                     else
                     {
-                        closest_slot.count = 64;
+                        closest_slot.count   = 64;
                         dragging_slot.count -= closest_slot_capacity;
                     }
                 }
@@ -277,7 +277,7 @@ namespace minecraft {
             glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
             // todo(harlequin): temparary
-            if (info.flags & BlockFlags_Should_Color_Side_By_Biome)
+            if (info.flags & BlockFlags_ColorSideByBiome)
             {
                 f32 rgba_color_factor = 1.0f / 255.0f;
                 glm::vec4 grass_color = { 109.0f, 184.0f, 79.0f, 255.0f };
@@ -293,9 +293,9 @@ namespace minecraft {
                                           side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                           side_texture_uv_rect.bottom_left);
 
-            Bitmap_Font* font = inventory->font;
-            String8 slot_text = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
-            auto text_size = font->get_string_size(slot_text);
+            Bitmap_Font* font   = inventory->font;
+            String8 slot_text   = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
+            glm::vec2 text_size = font->get_string_size(slot_text);
 
             Opengl_2D_Renderer::draw_string(font,
                                             slot_text,

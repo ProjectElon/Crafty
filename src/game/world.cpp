@@ -586,9 +586,9 @@ namespace minecraft {
         return get_block(chunk, { block_coords.x, block_coords.y, block_coords.z + 1 });
     }
 
-    std::array<Block*, 6> get_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
+    std::array< Block*, 6 > get_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
     {
-        std::array<Block*, 6> neighbours;
+        std::array< Block*, 6 > neighbours;
 
         neighbours[BlockNeighbour_Up]    = get_neighbour_block_from_top(chunk,    block_coords);
         neighbours[BlockNeighbour_Down]  = get_neighbour_block_from_bottom(chunk, block_coords);
@@ -641,11 +641,13 @@ namespace minecraft {
         }
     }
 
-    void calculate_lighting(World *world, Chunk *chunk, Circular_FIFO_Queue<Block_Query_Result> *queue)
+    void calculate_lighting(World *world,
+                            Chunk *chunk,
+                            Circular_FIFO_Queue< Block_Query_Result > *queue)
     {
         for (i32 y = MC_CHUNK_HEIGHT - 1; y >= 0; y--)
         {
-            // bool found_any_sky_lights = false;
+            bool found_any_sky_lights = false;
             for (i32 z = 0; z < MC_CHUNK_WIDTH; z++)
             {
                 for (i32 x = 0; x < MC_CHUNK_WIDTH; x++)
@@ -657,8 +659,8 @@ namespace minecraft {
                     Block_Light_Info *block_light_info = get_block_light_info(chunk, block_coords);
                     if (block_light_info->sky_light_level == 15)
                     {
-                        // found_any_sky_lights = true;
-                        auto neighbours_query = world_get_neighbours(chunk, block_coords);
+                        found_any_sky_lights = true;
+                        auto neighbours_query = query_neighbours(chunk, block_coords);
                         for (i32 direction = 2; direction < 6; direction++)
                         {
                             auto& neighbour_query = neighbours_query[direction];
@@ -678,7 +680,7 @@ namespace minecraft {
                     }
                 }
             }
-            // if (!found_any_sky_lights) break;
+            if (!found_any_sky_lights) break;
         }
     }
 
@@ -750,16 +752,13 @@ namespace minecraft {
 
         fclose(meta_file);
 
-        // world->loaded_chunks = robin_hood::unordered_node_map< glm::ivec2, Chunk*, Chunk_Hash >();
-        // world->loaded_chunks.reserve(2 * world->chunk_capacity);
-
         for (u32 i = 0; i < World::chunk_capacity; i++)
         {
-            world->chunk_hash_table[i].index = INVALID_CHUNK_ENTRY;
+            world->chunk_hash_table[i].chunk_node_index = INVALID_CHUNK_ENTRY;
         }
 
         Chunk_Node *last_chunk_node = &world->chunk_nodes[World::chunk_capacity - 1];
-        last_chunk_node->next = nullptr;
+        last_chunk_node->next       = nullptr;
 
         for (u32 i = 0; i < World::chunk_capacity - 1; i++)
         {
@@ -767,15 +766,12 @@ namespace minecraft {
             chunk_node->next = world->chunk_nodes + i + 1;
         }
 
-        world->free_chunk_count     = World::chunk_capacity;
-        world->free_chunk_list_head = &world->chunk_nodes[0];
+        world->free_chunk_count      = World::chunk_capacity;
+        world->first_free_chunk_node = &world->chunk_nodes[0];
 
-        // world->pending_free_chunks  = std::vector<Chunk*>();
-        // world->pending_free_chunks.reserve(world->chunk_capacity);
-
-        world->update_chunk_jobs_queue.initialize();
-        world->calculate_chunk_lighting_queue.initialize();
-        world->light_propagation_queue.initialize();
+        world->update_chunk_jobs_queue.initialize(world->update_chunk_jobs_queue_data, DEFAULT_QUEUE_SIZE);
+        world->calculate_chunk_lighting_queue.initialize(world->calculate_chunk_lighting_queue_data, DEFAULT_QUEUE_SIZE);
+        world->light_propagation_queue.initialize(world->light_propagation_queue_data, DEFAULT_QUEUE_SIZE);
 
         return true;
     }
@@ -788,8 +784,8 @@ namespace minecraft {
     {
         Assert(world->free_chunk_count);
         world->free_chunk_count--;
-        Chunk_Node *chunk_node      = world->free_chunk_list_head;
-        world->free_chunk_list_head = world->free_chunk_list_head->next;
+        Chunk_Node *chunk_node       = world->first_free_chunk_node;
+        world->first_free_chunk_node = world->first_free_chunk_node->next;
         return &chunk_node->chunk;
     }
 
@@ -798,18 +794,18 @@ namespace minecraft {
         Assert(chunk);
         Chunk_Node *chunk_node = (Chunk_Node*)chunk;
         Assert(chunk_node >= world->chunk_nodes && chunk_node <= world->chunk_nodes + World::chunk_capacity);
-        chunk_node->next = world->free_chunk_list_head;
-        world->free_chunk_list_head = chunk_node;
         world->free_chunk_count++;
+        chunk_node->next             = world->first_free_chunk_node;
+        world->first_free_chunk_node = chunk_node;
     }
 
     bool insert_chunk(World *world, Chunk *chunk)
     {
         u16 chunk_hash = (u16)get_chunk_hash(chunk->world_coords);
         i16 count      = World::chunk_hash_table_capacity;
-        while (world->chunk_hash_table[chunk_hash].index != INVALID_CHUNK_ENTRY && count--)
+        while (world->chunk_hash_table[chunk_hash].chunk_node_index != INVALID_CHUNK_ENTRY && count--)
         {
-            if (world->chunk_hash_table[chunk_hash].coords == chunk->world_coords)
+            if (world->chunk_hash_table[chunk_hash].chunk_coords == chunk->world_coords)
             {
                 return false;
             }
@@ -819,9 +815,9 @@ namespace minecraft {
 
         if (count > 0)
         {
-            i16 chunk_index = (Chunk_Node*)chunk - world->chunk_nodes;
-            world->chunk_hash_table[chunk_hash].coords = chunk->world_coords;
-            world->chunk_hash_table[chunk_hash].index  = chunk_index;
+            i16 chunk_index = (i16)((Chunk_Node*)chunk - world->chunk_nodes);
+            world->chunk_hash_table[chunk_hash].chunk_coords     = chunk->world_coords;
+            world->chunk_hash_table[chunk_hash].chunk_node_index = chunk_index;
             return true;
         }
 
@@ -834,10 +830,10 @@ namespace minecraft {
         u16 chunk_hast_start = chunk_hash;
         do
         {
-            if (world->chunk_hash_table[chunk_hash].index != INVALID_CHUNK_ENTRY &&
-                world->chunk_hash_table[chunk_hash].coords == coords)
+            if (world->chunk_hash_table[chunk_hash].chunk_node_index != INVALID_CHUNK_ENTRY &&
+                world->chunk_hash_table[chunk_hash].chunk_coords == coords)
             {
-                world->chunk_hash_table[chunk_hash].index = INVALID_CHUNK_ENTRY;
+                world->chunk_hash_table[chunk_hash].chunk_node_index = INVALID_CHUNK_ENTRY;
                 return true;
             }
             chunk_hash++;
@@ -854,10 +850,11 @@ namespace minecraft {
         u16 chunk_hast_start = chunk_hash;
         do
         {
-            if (world->chunk_hash_table[chunk_hash].index != INVALID_CHUNK_ENTRY &&
-                world->chunk_hash_table[chunk_hash].coords == coords)
+            Chunk_Hash_Table_Entry *entry = &world->chunk_hash_table[chunk_hash];
+            if (entry->chunk_node_index != INVALID_CHUNK_ENTRY &&
+                entry->chunk_coords == coords)
             {
-                return &world->chunk_nodes[world->chunk_hash_table[chunk_hash].index].chunk;
+                return &world->chunk_nodes[entry->chunk_node_index].chunk;
             }
             chunk_hash++;
             if (chunk_hash == World::chunk_hash_table_capacity) chunk_hash = 0;
@@ -871,7 +868,7 @@ namespace minecraft {
                                     const glm::vec3& view_position,
                                     const glm::vec3& view_direction,
                                     u32              max_block_select_dist_in_cube_units,
-                                    Ray_Cast_Result *out_ray_cast_result)
+                                    Ray_Cast_Result *out_ray_cast_result /* = nullptr*/)
     {
         Block_Query_Result result;
         result.chunk = nullptr;
@@ -970,18 +967,19 @@ namespace minecraft {
 
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
+            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
             {
                 continue;
             }
 
-            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].coords;
+            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].chunk_coords;
+
             if (!is_chunk_in_region_bounds(chunk_coords, region_bounds))
             {
                 continue;
             }
 
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].index].chunk;
+            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
             // auto it = world->loaded_chunks.find(chunk_coords);
@@ -1023,13 +1021,13 @@ namespace minecraft {
     {
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
+            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
             {
                 continue;
             }
 
-            const glm::ivec2 &chunk_coords = world->chunk_hash_table[i].coords;
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].index].chunk;
+            const glm::ivec2 &chunk_coords = world->chunk_hash_table[i].chunk_coords;
+            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             bool out_of_bounds = chunk_coords.x < region_bounds.min.x - World::pending_free_chunk_radius ||
                                  chunk_coords.x > region_bounds.max.x + World::pending_free_chunk_radius ||
                                  chunk_coords.y < region_bounds.min.y - World::pending_free_chunk_radius ||
@@ -1276,7 +1274,7 @@ namespace minecraft {
         return { { -1, -1, -1 }, &World::null_block, nullptr };
     }
 
-    Block_Query_Result world_get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
         result.block_coords = { block_coords.x, block_coords.y + 1, block_coords.z };
@@ -1285,7 +1283,7 @@ namespace minecraft {
         return result;
     }
 
-    Block_Query_Result world_get_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
         result.block_coords = { block_coords.x, block_coords.y - 1, block_coords.z };
@@ -1294,7 +1292,7 @@ namespace minecraft {
         return result;
     }
 
-    Block_Query_Result world_get_neighbour_block_from_left(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_left(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
 
@@ -1313,7 +1311,7 @@ namespace minecraft {
         return result;
     }
 
-    Block_Query_Result world_get_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
 
@@ -1332,7 +1330,7 @@ namespace minecraft {
         return result;
     }
 
-    Block_Query_Result world_get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
 
@@ -1351,7 +1349,7 @@ namespace minecraft {
         return result;
     }
 
-    Block_Query_Result world_get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords)
+    Block_Query_Result query_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords)
     {
         Block_Query_Result result;
         if (block_coords.z == MC_CHUNK_DEPTH - 1)
@@ -1368,7 +1366,7 @@ namespace minecraft {
         return result;
     }
 
-    void schedule_chunk_lighting_jobs(World *world, World_Region_Bounds *player_region_bounds)
+    void schedule_chunk_lighting_jobs(World *world, const World_Region_Bounds &player_region_bounds)
     {
         auto& light_propagation_queue        = world->light_propagation_queue;
         auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
@@ -1377,21 +1375,18 @@ namespace minecraft {
 
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
+            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
             {
                 continue;
             }
 
-            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].coords;
-            // auto it = world->loaded_chunks.find(chunk_coords);
-            // assert(it != world->loaded_chunks.end());
-            // Chunk* chunk = it->second;
-            if (!is_chunk_in_region_bounds(chunk_coords, *player_region_bounds))
+            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].chunk_coords;
+            if (!is_chunk_in_region_bounds(chunk_coords, player_region_bounds))
             {
                 continue;
             }
 
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].index].chunk;
+            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
             if (chunk->loaded &&
@@ -1442,12 +1437,12 @@ namespace minecraft {
     {
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].index == INVALID_CHUNK_ENTRY)
+            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
             {
                 continue;
             }
 
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].index].chunk;
+            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             chunk->pending_for_save = true;
 
             Serialize_Chunk_Job job;
@@ -1457,15 +1452,15 @@ namespace minecraft {
         }
     }
 
-    std::array<Block_Query_Result, 6> world_get_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
+    std::array< Block_Query_Result, 6 > query_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
     {
-        std::array<Block_Query_Result, 6> neighbours;
-        neighbours[BlockNeighbour_Up]    = world_get_neighbour_block_from_top(chunk,    block_coords);
-        neighbours[BlockNeighbour_Down]  = world_get_neighbour_block_from_bottom(chunk, block_coords);
-        neighbours[BlockNeighbour_Left]  = world_get_neighbour_block_from_left(chunk,   block_coords);
-        neighbours[BlockNeighbour_Right] = world_get_neighbour_block_from_right(chunk,  block_coords);
-        neighbours[BlockNeighbour_Front] = world_get_neighbour_block_from_front(chunk,  block_coords);
-        neighbours[BlockNeighbour_Back]  = world_get_neighbour_block_from_back(chunk,   block_coords);
+        std::array< Block_Query_Result, 6 > neighbours;
+        neighbours[BlockNeighbour_Up]    = query_neighbour_block_from_top(chunk,    block_coords);
+        neighbours[BlockNeighbour_Down]  = query_neighbour_block_from_bottom(chunk, block_coords);
+        neighbours[BlockNeighbour_Left]  = query_neighbour_block_from_left(chunk,   block_coords);
+        neighbours[BlockNeighbour_Right] = query_neighbour_block_from_right(chunk,  block_coords);
+        neighbours[BlockNeighbour_Front] = query_neighbour_block_from_front(chunk,  block_coords);
+        neighbours[BlockNeighbour_Back]  = query_neighbour_block_from_back(chunk,   block_coords);
         return neighbours;
     }
 
@@ -1477,7 +1472,7 @@ namespace minecraft {
             0,
             0,
             0,
-            BlockFlags_Is_Transparent
+            BlockFlags_IsTransparent
         },
         // Grass
         {
@@ -1485,7 +1480,7 @@ namespace minecraft {
             Texture_Id_grass_block_top,
             Texture_Id_dirt,
             Texture_Id_grass_block_side,
-            BlockFlags_Is_Solid | BlockFlags_Should_Color_Top_By_Biome
+            BlockFlags_IsSolid | BlockFlags_ColorTopByBiome
         },
         // Sand
         {
@@ -1493,7 +1488,7 @@ namespace minecraft {
             Texture_Id_sand,
             Texture_Id_sand,
             Texture_Id_sand,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Dirt
         {
@@ -1501,7 +1496,7 @@ namespace minecraft {
             Texture_Id_dirt,
             Texture_Id_dirt,
             Texture_Id_dirt,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Stone
         {
@@ -1509,7 +1504,7 @@ namespace minecraft {
             Texture_Id_stone,
             Texture_Id_stone,
             Texture_Id_stone,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Green Concrete
         {
@@ -1517,7 +1512,7 @@ namespace minecraft {
             Texture_Id_green_concrete_powder,
             Texture_Id_green_concrete_powder,
             Texture_Id_green_concrete_powder,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // BedRock
         {
@@ -1525,7 +1520,7 @@ namespace minecraft {
             Texture_Id_bedrock,
             Texture_Id_bedrock,
             Texture_Id_bedrock,
-            BlockFlags_Is_Solid,
+            BlockFlags_IsSolid,
         },
         // Oak Log
         {
@@ -1533,7 +1528,7 @@ namespace minecraft {
             Texture_Id_oak_log_top,
             Texture_Id_oak_log_top,
             Texture_Id_oak_log,
-            BlockFlags_Is_Solid,
+            BlockFlags_IsSolid,
         },
         // Oak Leaves
         {
@@ -1541,11 +1536,11 @@ namespace minecraft {
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
             Texture_Id_oak_leaves,
-            BlockFlags_Is_Solid |
-            BlockFlags_Is_Transparent |
-            BlockFlags_Should_Color_Top_By_Biome |
-            BlockFlags_Should_Color_Side_By_Biome |
-            BlockFlags_Should_Color_Bottom_By_Biome
+            BlockFlags_IsSolid |
+            BlockFlags_IsTransparent |
+            BlockFlags_ColorTopByBiome |
+            BlockFlags_ColorSideByBiome |
+            BlockFlags_ColorBottomByBiome
         },
         // Oak Planks
         {
@@ -1553,7 +1548,7 @@ namespace minecraft {
             Texture_Id_oak_planks,
             Texture_Id_oak_planks,
             Texture_Id_oak_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Glow Stone
         {
@@ -1561,7 +1556,7 @@ namespace minecraft {
             Texture_Id_glowstone,
             Texture_Id_glowstone,
             Texture_Id_glowstone,
-            BlockFlags_Is_Solid | BlockFlags_Is_Light_Source
+            BlockFlags_IsSolid | BlockFlags_IsLightSource
         },
         // Cobble Stone
         {
@@ -1569,7 +1564,7 @@ namespace minecraft {
             Texture_Id_cobblestone,
             Texture_Id_cobblestone,
             Texture_Id_cobblestone,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Spruce Log
         {
@@ -1577,7 +1572,7 @@ namespace minecraft {
             Texture_Id_spruce_log_top,
             Texture_Id_spruce_log_top,
             Texture_Id_spruce_log,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Spruce Planks
         {
@@ -1585,7 +1580,7 @@ namespace minecraft {
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
             Texture_Id_spruce_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Glass
         {
@@ -1593,7 +1588,7 @@ namespace minecraft {
             Texture_Id_glass,
             Texture_Id_glass,
             Texture_Id_glass,
-            BlockFlags_Is_Solid | BlockFlags_Is_Transparent
+            BlockFlags_IsSolid | BlockFlags_IsTransparent
         },
         // Sea Lantern
         {
@@ -1601,7 +1596,7 @@ namespace minecraft {
             Texture_Id_sea_lantern,
             Texture_Id_sea_lantern,
             Texture_Id_sea_lantern,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Birch Log
         {
@@ -1609,7 +1604,7 @@ namespace minecraft {
             Texture_Id_birch_log_top,
             Texture_Id_birch_log_top,
             Texture_Id_birch_log,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Blue Stained Glass
         {
@@ -1617,7 +1612,7 @@ namespace minecraft {
             Texture_Id_blue_stained_glass,
             Texture_Id_blue_stained_glass,
             Texture_Id_blue_stained_glass,
-            BlockFlags_Is_Solid | BlockFlags_Is_Transparent,
+            BlockFlags_IsSolid | BlockFlags_IsTransparent,
         },
         // Water
         {
@@ -1625,7 +1620,7 @@ namespace minecraft {
             Texture_Id_water,
             Texture_Id_water,
             Texture_Id_water,
-            BlockFlags_Is_Transparent,
+            BlockFlags_IsTransparent,
         },
         // Birch Planks
         {
@@ -1633,7 +1628,7 @@ namespace minecraft {
             Texture_Id_birch_planks,
             Texture_Id_birch_planks,
             Texture_Id_birch_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Diamond
         {
@@ -1641,7 +1636,7 @@ namespace minecraft {
             Texture_Id_diamond_block,
             Texture_Id_diamond_block,
             Texture_Id_diamond_block,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Obsidian
         {
@@ -1649,7 +1644,7 @@ namespace minecraft {
             Texture_Id_obsidian,
             Texture_Id_obsidian,
             Texture_Id_obsidian,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Crying Obsidian
         {
@@ -1657,7 +1652,7 @@ namespace minecraft {
             Texture_Id_crying_obsidian,
             Texture_Id_crying_obsidian,
             Texture_Id_crying_obsidian,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Dark Oak Log
         {
@@ -1665,7 +1660,7 @@ namespace minecraft {
             Texture_Id_dark_oak_log_top,
             Texture_Id_dark_oak_log_top,
             Texture_Id_dark_oak_log,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Dark Oak Planks
         {
@@ -1673,7 +1668,7 @@ namespace minecraft {
             Texture_Id_dark_oak_planks,
             Texture_Id_dark_oak_planks,
             Texture_Id_dark_oak_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Jungle Log
         {
@@ -1681,7 +1676,7 @@ namespace minecraft {
             Texture_Id_jungle_log_top,
             Texture_Id_jungle_log_top,
             Texture_Id_jungle_log,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Jungle Planks
         {
@@ -1689,7 +1684,7 @@ namespace minecraft {
             Texture_Id_jungle_planks,
             Texture_Id_jungle_planks,
             Texture_Id_jungle_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Acacia Log
         {
@@ -1697,7 +1692,7 @@ namespace minecraft {
             Texture_Id_acacia_log_top,
             Texture_Id_acacia_log_top,
             Texture_Id_acacia_log,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         },
         // Acacia Planks
         {
@@ -1705,7 +1700,7 @@ namespace minecraft {
             Texture_Id_acacia_planks,
             Texture_Id_acacia_planks,
             Texture_Id_acacia_planks,
-            BlockFlags_Is_Solid
+            BlockFlags_IsSolid
         }
     };
 

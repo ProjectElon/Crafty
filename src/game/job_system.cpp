@@ -59,14 +59,14 @@ namespace minecraft {
         }
     }
 
-    static void do_light_thread_work(World *world)
+    static void do_light_thread_work(World *world, Memory_Arena *permanent_arena)
     {
         auto& light_propagation_queue        = world->light_propagation_queue;
         auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
         auto& update_chunk_jobs_queue        = world->update_chunk_jobs_queue;
 
         Circular_FIFO_Queue<Block_Query_Result> light_queue;
-        light_queue.initialize();
+        light_queue.initialize(ArenaPushArrayAlignedZero(permanent_arena, Block_Query_Result, DEFAULT_QUEUE_SIZE));
 
         while (Job_System::internal_data.running)
         {
@@ -94,14 +94,14 @@ namespace minecraft {
                 Block* block = block_query.block;
                 Block_Light_Info *block_light_info = get_block_light_info(block_query.chunk, block_query.block_coords);
                 const Block_Info* info = get_block_info(world, block);
-                auto neighbours_query = world_get_neighbours(block_query.chunk, block_query.block_coords);
+                auto neighbours_query = query_neighbours(block_query.chunk, block_query.block_coords);
 
                 for (i32 d = 0; d < 6; d++)
                 {
                     auto& neighbour_query = neighbours_query[d];
 
                     if (is_block_query_valid(neighbour_query) &&
-                        is_block_query_in_world_region(neighbour_query, world->player_region_bounds))
+                        is_block_query_in_world_region(neighbour_query, world->active_region_bounds))
                     {
                         Block* neighbour = neighbour_query.block;
                         const auto* neighbour_info = get_block_info(world, neighbour);
@@ -164,7 +164,7 @@ namespace minecraft {
             internal_data.threads[i] = std::thread(execute_jobs, i);
         }
 
-        internal_data.light_thread = std::thread(do_light_thread_work, world);
+        internal_data.light_thread = std::thread(do_light_thread_work, world, permanent_arena);
         return true;
     }
 

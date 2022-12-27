@@ -43,7 +43,6 @@ namespace minecraft {
     {
         Game_State  *game_state   = (Game_State*)sender;
         Game_Config *game_config  = &game_state->game_config;
-        Input       *game_input   = &game_state->game_input;
 
         u16 key;
         parse_key_code(event, &key);
@@ -176,7 +175,7 @@ namespace minecraft {
         Game_Memory  *game_memory  = game_state->game_memory;
         Game_Config  *game_config  = &game_state->game_config;
         Event_System *event_system = &game_state->event_system;
-        Input        *game_input   = &game_state->game_input;
+        Input        *input        = &game_state->input;
         Inventory    *inventory    = &game_state->inventory;
         Camera       *camera       = &game_state->camera;
 
@@ -233,7 +232,7 @@ namespace minecraft {
 
         Platform::set_window_user_pointer(game_state->window, event_system);
 
-        if (!initialize_input(game_input, game_state->window))
+        if (!initialize_input(input, game_state->window))
         {
             fprintf(stderr, "[ERROR]: failed to initialize input system\n");
             return false;
@@ -419,33 +418,34 @@ namespace minecraft {
         Opengl_Renderer::shutdown();
 
         shutdown_event_system(&game_state->event_system);
-        shutdown_input(&game_state->game_input);
+        shutdown_input(&game_state->input);
 
         Platform::shutdown();
     }
 
     void run_game(Game_State *game_state)
     {
-        Game_Memory      *game_memory = game_state->game_memory;
-        Input            *game_input  = &game_state->game_input;
-        World            *game_world  = game_state->world;
-        Inventory        *inventory   = &game_state->inventory;
-        Game_Debug_State *debug_state = &game_state->debug_state;
+        Game_Memory      *game_memory     = game_state->game_memory;
+        Input            *input           = &game_state->input;
+        Input            *gameplay_input  = &game_state->gameplay_input;
+        Input            *inventory_input = &game_state->inventory_input;
+        World            *game_world      = game_state->world;
+        Inventory        *inventory       = &game_state->inventory;
+        Game_Debug_State *debug_state     = &game_state->debug_state;
 
         f32 frame_timer            = 0;
         u32 last_frames_per_second = 0;
         u32 frames_per_second      = 0;
 
         Camera& camera      = game_state->camera;
-        // auto& loaded_chunks = game_world->loaded_chunks;
         Registry& registry  = ECS::internal_data.registry;
 
         {
             Entity player = registry.create_entity(EntityArchetype_Guy, EntityTag_Player);
-            Transform *transform = registry.add_component<Transform>(player);
-            Box_Collider *collider = registry.add_component<Box_Collider>(player);
-            Rigid_Body *rb = registry.add_component<Rigid_Body>(player);
-            Character_Controller *controller = registry.add_component<Character_Controller>(player);
+            Transform *transform = registry.add_component< Transform >(player);
+            Box_Collider *collider = registry.add_component< Box_Collider >(player);
+            Rigid_Body *rb = registry.add_component< Rigid_Body >(player);
+            Character_Controller *controller = registry.add_component< Character_Controller >(player);
 
             transform->position    = { 0.0f, 257.0f, 0.0f };
             transform->scale       = { 1.0f, 1.0f,  1.0f  };
@@ -465,7 +465,7 @@ namespace minecraft {
 
         f64 last_time = Platform::get_current_time_in_seconds();
 
-        f32 game_time_rate = 1.0f / 1000.0f; // 72.0f
+        f32 game_time_rate = 1.0f / 1000.0f; // 1 / 72.0f is the number used by minecraft
         f32 game_timer     = 0.0f;
         i32 game_time      = 43200; // todo(harlequin): game time to real time function
 
@@ -510,14 +510,26 @@ namespace minecraft {
             }
 
             Platform::pump_messages();
-            update_input(game_input, game_state->window);
 
-            glm::vec2 player_chunk_coords    = world_position_to_chunk_coords(camera.position);
-            game_world->player_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
-                                                                                  player_chunk_coords);
+            update_input(input, game_state->window);
 
-            load_chunks_at_region(game_world, game_world->player_region_bounds);
-            schedule_chunk_lighting_jobs(game_world, &game_world->player_region_bounds);
+            memset(gameplay_input, 0, sizeof(Input));
+            memset(inventory_input, 0, sizeof(Input));
+
+            if (game_state->is_inventory_active)
+            {
+                *inventory_input = *input;
+            }
+            else
+            {
+                *gameplay_input  = *input;
+            }
+
+            glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera.position);
+            game_world->active_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
+                                                                                  active_chunk_coords);
+            load_chunks_at_region(game_world, game_world->active_region_bounds);
+            schedule_chunk_lighting_jobs(game_world, game_world->active_region_bounds);
 
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
@@ -529,12 +541,9 @@ namespace minecraft {
             const char *back_facing_normal_label = "";
 
             if (ray_cast_result.hit &&
-                is_block_query_valid(select_query) &&
-                !game_state->is_inventory_active)
+                is_block_query_valid(select_query))
             {
                 glm::vec3 block_position = get_block_position(select_query.chunk, select_query.block_coords);
-                // Opengl_Debug_Renderer::draw_cube(block_position, { 0.5f, 0.5f, 0.5f }, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
                 Block_Query_Result block_facing_normal_query = {};
 
                 constexpr f32 eps = glm::epsilon<f32>();
@@ -544,37 +553,43 @@ namespace minecraft {
 
                 if (glm::epsilonEqual(hit_point.y, block_position.y + 0.5f, eps))  // top face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_top(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_top(select_query.chunk,
+                                                                               select_query.block_coords);
                     normal = { 0.0f, 1.0f, 0.0f };
                     back_facing_normal_label = "face: top";
                 }
                 else if (glm::epsilonEqual(hit_point.y, block_position.y - 0.5f, eps)) // bottom face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_bottom(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_bottom(select_query.chunk,
+                                                                                  select_query.block_coords);
                     normal = { 0.0f, -1.0f, 0.0f };
                     back_facing_normal_label = "face: bottom";
                 }
                 else if (glm::epsilonEqual(hit_point.x, block_position.x + 0.5f, eps)) // right face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_right(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_right(select_query.chunk,
+                                                                                 select_query.block_coords);
                     normal = { 1.0f, 0.0f, 0.0f };
                     back_facing_normal_label = "face: right";
                 }
                 else if (glm::epsilonEqual(hit_point.x, block_position.x - 0.5f, eps)) // left face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_left(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_left(select_query.chunk,
+                                                                                select_query.block_coords);
                     normal = { -1.0f, 0.0f, 0.0f };
                     back_facing_normal_label = "face: left";
                 }
                 else if (glm::epsilonEqual(hit_point.z, block_position.z - 0.5f, eps)) // front face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_front(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_front(select_query.chunk,
+                                                                                 select_query.block_coords);
                     normal = { 0.0f, 0.0f, -1.0f };
                     back_facing_normal_label = "face: front";
                 }
                 else if (glm::epsilonEqual(hit_point.z, block_position.z + 0.5f, eps)) // back face
                 {
-                    block_facing_normal_query = world_get_neighbour_block_from_back(select_query.chunk, select_query.block_coords);
+                    block_facing_normal_query = query_neighbour_block_from_back(select_query.chunk,
+                                                                                select_query.block_coords);
                     normal = { 0.0f, 0.0f, 1.0f };
                     back_facing_normal_label = "face: back";
                 }
@@ -589,8 +604,9 @@ namespace minecraft {
                     auto player_transform    = registry.get_component< Transform >(player);
                     auto player_box_collider = registry.get_component< Box_Collider >(player);
 
-                    Transform block_transform =  {};
-                    block_transform.position    = get_block_position(block_facing_normal_query.chunk, block_facing_normal_query.block_coords);
+                    Transform block_transform   = {};
+                    block_transform.position    = get_block_position(block_facing_normal_query.chunk,
+                                                                     block_facing_normal_query.block_coords);
                     block_transform.scale       = { 1.0f, 1.0f, 1.0f };
                     block_transform.orientation = { 0.0f, 0.0f, 0.0f };
 
@@ -603,10 +619,9 @@ namespace minecraft {
                                                                                        *player_box_collider);
                 }
 
-                bool can_place_block =
-                    block_facing_normal_is_valid &&
-                    block_facing_normal_query.block->id == BlockId_Air &&
-                    !is_block_facing_normal_colliding_with_player;
+                bool can_place_block = block_facing_normal_is_valid &&
+                                       block_facing_normal_query.block->id == BlockId_Air &&
+                                      !is_block_facing_normal_colliding_with_player;
 
                 if (can_place_block)
                 {
@@ -620,37 +635,37 @@ namespace minecraft {
                         glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
                         Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, debug_color);
                         Opengl_Debug_Renderer::draw_line(block_position, block_position + normal * 1.5f, debug_color);
+
+                        debug_state->block_facing_normal_chunk_coords_text = push_formatted_string8(&frame_arena,
+                                                                                                    "chunk: (%d, %d)",
+                                                                                                    chunk_coords.x,
+                                                                                                    chunk_coords.y);
+
+                        debug_state->block_facing_normal_block_coords_text = push_formatted_string8(&frame_arena,
+                                                                                                    "block: (%d, %d, %d)",
+                                                                                                    block_coords.x,
+                                                                                                    block_coords.y,
+                                                                                                    block_coords.z);
+
+                        Block_Light_Info* light_info = get_block_light_info(block_facing_normal_query.chunk,
+                                                                            block_facing_normal_query.block_coords);
+                        i32 sky_light_level          = get_sky_light_level(game_world, light_info);
+
+                        debug_state->block_facing_normal_sky_light_level_text = push_formatted_string8(&frame_arena,
+                                                                                                       "sky light level: %d",
+                                                                                                       sky_light_level);
+
+                        debug_state->block_facing_normal_light_source_level_text = push_formatted_string8(&frame_arena,
+                                                                                                          "light source level: %d",
+                                                                                                          (i32)light_info->light_source_level);
+
+                        debug_state->block_facing_normal_light_level_text = push_formatted_string8(&frame_arena,
+                                                                                                   "light level: %d",
+                                                                                                   glm::max(sky_light_level, (i32)light_info->light_source_level));
                     }
-
-                    debug_state->block_facing_normal_chunk_coords_text = push_formatted_string8(&frame_arena,
-                                                                                   "chunk: (%d, %d)",
-                                                                                   chunk_coords.x,
-                                                                                   chunk_coords.y);
-
-                    debug_state->block_facing_normal_block_coords_text = push_formatted_string8(&frame_arena,
-                                                                                   "block: (%d, %d, %d)",
-                                                                                   block_coords.x,
-                                                                                   block_coords.y,
-                                                                                   block_coords.z);
-
-                    Block_Light_Info* light_info = get_block_light_info(block_facing_normal_query.chunk,
-                                                                        block_facing_normal_query.block_coords);
-                    i32 sky_light_level          = get_sky_light_level(game_world, light_info);
-
-                    debug_state->block_facing_normal_sky_light_level_text = push_formatted_string8(&frame_arena,
-                                                                                                   "sky light level: %d",
-                                                                                                   sky_light_level);
-
-                    debug_state->block_facing_normal_light_source_level_text = push_formatted_string8(&frame_arena,
-                                                                                                      "light source level: %d",
-                                                                                                      (i32)light_info->light_source_level);
-
-                    debug_state->block_facing_normal_light_level_text = push_formatted_string8(&frame_arena,
-                                                                                               "light level: %d",
-                                                                                               glm::max(sky_light_level, (i32)light_info->light_source_level));
                 }
 
-                if (is_button_pressed(game_input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
+                if (is_button_pressed(gameplay_input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
                 {
                     i32 active_slot_index = inventory->active_hot_bar_slot_index;
                     if (active_slot_index != -1)
@@ -669,7 +684,7 @@ namespace minecraft {
                     }
                 }
 
-                if (is_button_pressed(game_input, MC_MOUSE_BUTTON_LEFT))
+                if (is_button_pressed(gameplay_input, MC_MOUSE_BUTTON_LEFT))
                 {
                     // @todo(harlequin): this solves the problem but do we really want this ?
                     bool any_neighbouring_water_block = false;
@@ -689,7 +704,7 @@ namespace minecraft {
                     set_block_id(select_query.chunk,
                                  select_query.block_coords,
                                  any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
-                    if (is_added)
+                    if (!is_added)
                     {
                         // todo(harlequin): dropped items
                     }
@@ -707,74 +722,71 @@ namespace minecraft {
                 }
             }
 
-            if (!game_state->is_inventory_active)
+            glm::vec2 mouse_delta = get_mouse_delta(gameplay_input);
+
+            auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
+            for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
             {
-                glm::vec2 mouse_delta = get_mouse_delta(game_input);
+                auto [transform, rb, controller] = registry.get_components< Transform, Rigid_Body, Character_Controller >(entity);
 
-                auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
-                for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
+                transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
+                if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
+                if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
+
+                glm::vec3 angles      = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
+                glm::quat orientation = glm::quat(angles);
+                glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
+                glm::vec3 right       = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
+
+                controller->movement = { 0.0f, 0.0f, 0.0f };
+
+                if (get_key(gameplay_input, MC_KEY_W))
                 {
-                    auto [transform, rb, controller] = registry.get_components< Transform, Rigid_Body, Character_Controller >(entity);
+                    controller->movement += forward;
+                }
 
-                    transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
-                    if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
-                    if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
+                if (get_key(gameplay_input, MC_KEY_S))
+                {
+                    controller->movement -= forward;
+                }
 
-                    glm::vec3 angles      = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
-                    glm::quat orientation = glm::quat(angles);
-                    glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
-                    glm::vec3 right       = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
+                if (get_key(gameplay_input, MC_KEY_D))
+                {
+                    controller->movement += right;
+                }
 
-                    controller->movement = { 0.0f, 0.0f, 0.0f };
+                if (get_key(gameplay_input, MC_KEY_A))
+                {
+                    controller->movement -= right;
+                }
 
-                    if (get_key(game_input, MC_KEY_W))
-                    {
-                        controller->movement += forward;
-                    }
+                controller->is_running = false;
+                controller->movement_speed = controller->walk_speed;
 
-                    if (get_key(game_input, MC_KEY_S))
-                    {
-                        controller->movement -= forward;
-                    }
+                if (get_key(gameplay_input, MC_KEY_LEFT_SHIFT))
+                {
+                    controller->is_running = true;
+                    controller->movement_speed = controller->run_speed;
+                }
 
-                    if (get_key(game_input, MC_KEY_D))
-                    {
-                        controller->movement += right;
-                    }
+                if (is_key_pressed(gameplay_input, MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
+                {
+                    rb->velocity.y = controller->jump_force;
+                    controller->is_jumping  = true;
+                    controller->is_grounded = false;
+                }
 
-                    if (get_key(game_input, MC_KEY_A))
-                    {
-                        controller->movement -= right;
-                    }
+                if (controller->is_jumping && rb->velocity.y <= 0.0f)
+                {
+                    rb->acceleration.y = controller->fall_force;
+                    controller->is_jumping = false;
+                }
 
-                    controller->is_running = false;
-                    controller->movement_speed = controller->walk_speed;
-
-                    if (get_key(game_input, MC_KEY_LEFT_SHIFT))
-                    {
-                        controller->is_running = true;
-                        controller->movement_speed = controller->run_speed;
-                    }
-
-                    if (is_key_pressed(game_input, MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
-                    {
-                        rb->velocity.y = controller->jump_force;
-                        controller->is_jumping  = true;
-                        controller->is_grounded = false;
-                    }
-
-                    if (controller->is_jumping && rb->velocity.y <= 0.0f)
-                    {
-                        rb->acceleration.y = controller->fall_force;
-                        controller->is_jumping = false;
-                    }
-
-                    if (controller->movement.x != 0.0f &&
-                        controller->movement.z != 0.0f &&
-                        controller->movement.y != 0.0f)
-                    {
-                        controller->movement = glm::normalize(controller->movement);
-                    }
+                if (controller->movement.x != 0.0f &&
+                    controller->movement.z != 0.0f &&
+                    controller->movement.y != 0.0f)
+                {
+                    controller->movement = glm::normalize(controller->movement);
                 }
             }
 
@@ -793,12 +805,8 @@ namespace minecraft {
                 }
             }
 
-            if (!game_state->is_inventory_active)
-            {
-                // todo(harlequin): follow entity and make the camera an entity
-                camera.update_transform(game_input, delta_time);
-            }
-
+            // todo(harlequin): follow entity and make the camera an entity
+            camera.update_transform(gameplay_input, delta_time);
             camera.update();
 
             f32 normalize_color_factor = 1.0f / 255.0f;
@@ -818,7 +826,7 @@ namespace minecraft {
                                    &camera);
 
             Opengl_Renderer::render_chunks_at_region(game_world,
-                                                     &game_world->player_region_bounds,
+                                                     game_world->active_region_bounds,
                                                      &camera);
 
             Opengl_Renderer::end(game_world->chunk_radius,
@@ -887,8 +895,8 @@ namespace minecraft {
 
                 debug_state->player_chunk_coords_text = push_formatted_string8(&frame_arena,
                                                                                "chunk coords: (%d, %d)",
-                                                                               (i32)player_chunk_coords.x,
-                                                                               (i32)player_chunk_coords.y);
+                                                                               (i32)active_chunk_coords.x,
+                                                                               (i32)active_chunk_coords.y);
 
                 debug_state->chunk_radius_text = push_formatted_string8(&frame_arena,
                                                                         "chunk radius: %d",
@@ -905,7 +913,7 @@ namespace minecraft {
                                                                      hours,
                                                                      minutes);
 
-                UI::begin(game_input);
+                UI::begin(input);
 
                 UI::set_offset({ 10.0f, 10.0f });
                 UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
@@ -955,11 +963,11 @@ namespace minecraft {
             if (game_state->is_inventory_active)
             {
                 calculate_slot_positions_and_sizes(inventory, frame_buffer_size);
-                handle_inventory_input(inventory, game_input);
-                draw_inventory(inventory, game_world, game_input, &frame_arena);
+                handle_inventory_input(inventory, inventory_input);
+                draw_inventory(inventory, game_world, inventory_input, &frame_arena);
             }
 
-            handle_hotbar_input(inventory, game_input);
+            handle_hotbar_input(inventory, inventory_input);
             draw_hotbar(inventory, game_world, frame_buffer_size, &frame_arena);
 
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
@@ -968,7 +976,7 @@ namespace minecraft {
 
             if (!game_state->is_cursor_locked)
             {
-                cursor = game_input->mouse_position;
+                cursor = input->mouse_position;
                 cursor_texture = (Opengl_Texture *)game_state->inventory_crosshair_texture;
             }
 
@@ -986,7 +994,7 @@ namespace minecraft {
             Opengl_2D_Renderer::begin();
             Opengl_2D_Renderer::end();
 
-            free_chunks_out_of_region(game_world, game_world->player_region_bounds);
+            free_chunks_out_of_region(game_world, game_world->active_region_bounds);
 
             Opengl_Renderer::swap_buffers(game_state->window);
 

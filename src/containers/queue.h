@@ -9,24 +9,18 @@ namespace minecraft {
     template<typename T>
     struct Circular_FIFO_Queue
     {
-        T *data;
+        T  *data;
         i32 count;
         i32 start_index;
         i32 end_index;
 
-        bool initialize(i32 count = DEFAULT_QUEUE_SIZE)
+        bool initialize(T *data, i32 count = DEFAULT_QUEUE_SIZE)
         {
-            this->count = count;
+            this->data        = data;
+            this->count       = count;
             this->start_index = 0;
-            this->end_index = 0;
-            this->data = new T[count];
-            memset(this->data, 0, sizeof(T) * count);
+            this->end_index   = 0;
             return true;
-        }
-
-        void destroy()
-        {
-            delete[] this->data;
         }
 
         inline void push(const T& element)

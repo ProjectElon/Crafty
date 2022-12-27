@@ -35,86 +35,65 @@ namespace minecraft {
 
     enum BlockId : u16
     {
-        BlockId_Air   = 0,
-        BlockId_Grass = 1,
-        BlockId_Sand  = 2,
-        BlockId_Dirt  = 3,
-        BlockId_Stone = 4,
-        BlockId_Green_Concrete = 5,
-        BlockId_Bedrock = 6,
-        BlockId_Oak_Log = 7,
-        BlockId_Oak_Leaves = 8,
-        BlockId_Oak_Planks = 9,
-        BlockId_Glow_Stone = 10,
-        BlockId_Cobbles_Stone = 11,
-        BlockId_Spruce_Log = 12,
-        BlockId_Spruce_Planks = 13,
-        BlockId_Glass = 14,
-        BlockId_Sea_Lantern = 15,
-        BlockId_Birch_Log = 16,
+        BlockId_Air                = 0,
+        BlockId_Grass              = 1,
+        BlockId_Sand               = 2,
+        BlockId_Dirt               = 3,
+        BlockId_Stone              = 4,
+        BlockId_Green_Concrete     = 5,
+        BlockId_Bedrock            = 6,
+        BlockId_Oak_Log            = 7,
+        BlockId_Oak_Leaves         = 8,
+        BlockId_Oak_Planks         = 9,
+        BlockId_Glow_Stone         = 10,
+        BlockId_Cobbles_Stone      = 11,
+        BlockId_Spruce_Log         = 12,
+        BlockId_Spruce_Planks      = 13,
+        BlockId_Glass              = 14,
+        BlockId_Sea_Lantern        = 15,
+        BlockId_Birch_Log          = 16,
         BlockId_Blue_Stained_Glass = 17,
-        BlockId_Water = 18,
-        BlockId_Birch_Planks = 19,
-        BlockId_Diamond_Block = 20,
-        BlockId_Obsidian = 21,
-        BlockId_Crying_Obsidian = 22,
-        BlockId_Dark_Oak_Log = 23,
-        BlockId_Dark_Oak_Planks = 24,
-        BlockId_Jungle_Log = 25,
-        BlockId_Jungle_Planks = 26,
-        BlockId_Acacia_Log = 27,
-        BlockId_Acacia_Planks = 28,
-        BlockId_Count = 29
+        BlockId_Water              = 18,
+        BlockId_Birch_Planks       = 19,
+        BlockId_Diamond_Block      = 20,
+        BlockId_Obsidian           = 21,
+        BlockId_Crying_Obsidian    = 22,
+        BlockId_Dark_Oak_Log       = 23,
+        BlockId_Dark_Oak_Planks    = 24,
+        BlockId_Jungle_Log         = 25,
+        BlockId_Jungle_Planks      = 26,
+        BlockId_Acacia_Log         = 27,
+        BlockId_Acacia_Planks      = 28,
+        BlockId_Count              = 29
     };
 
     enum BlockFlags : u32
     {
-        BlockFlags_Is_Solid = 1,
-        BlockFlags_Is_Transparent = 2,
-        BlockFlags_Should_Color_Top_By_Biome = 4,
-        BlockFlags_Should_Color_Side_By_Biome = 8,
-        BlockFlags_Should_Color_Bottom_By_Biome = 16,
-        BlockFlags_Is_Light_Source = 32
+        BlockFlags_IsSolid            = 1,
+        BlockFlags_IsTransparent      = 2,
+        BlockFlags_ColorTopByBiome    = 4,
+        BlockFlags_ColorSideByBiome   = 8,
+        BlockFlags_ColorBottomByBiome = 16,
+        BlockFlags_IsLightSource      = 32
     };
 
-    struct Block_Info
+    enum BlockFace : u32
     {
-        const char *name;
-        u16         top_texture_id;
-        u16         bottom_texture_id;
-        u16         side_texture_id;
-        u32         flags;
+        BlockFace_Top    = 0,
+        BlockFace_Bottom = 1,
+        BlockFace_Left   = 2,
+        BlockFace_Right  = 3,
+        BlockFace_Front  = 4,
+        BlockFace_Back   = 5
     };
 
-    inline bool is_block_solid(const Block_Info *block_info)
+    enum BlockFaceCorner : u32
     {
-        return block_info->flags & BlockFlags_Is_Solid;
-    }
-
-    inline bool is_block_transparent(const Block_Info *block_info)
-    {
-        return block_info->flags & BlockFlags_Is_Transparent;
-    }
-
-    inline bool is_light_source(const Block_Info *block_info)
-    {
-        return block_info->flags & BlockFlags_Is_Light_Source;
-    }
-
-    inline bool should_color_top_by_biome(const Block_Info *block_info)
-    {
-        return block_info->flags & BlockFlags_Should_Color_Top_By_Biome;
-    }
-
-    inline bool should_color_side_by_biome(const Block_Info *block_info)
-    {
-        return block_info->flags & BlockFlags_Should_Color_Side_By_Biome;
-    }
-
-    inline bool should_color_bottom_by_biome(const Block_Info *block_info)
-    {
-        return block_info->flags & BlockFlags_Should_Color_Bottom_By_Biome;
-    }
+        BlockFaceCorner_BottomRight  = 0,
+        BlockFaceCorner_BottomLeft   = 1,
+        BlockFaceCorner_TopLeft      = 2,
+        BlockFaceCorner_TopRight     = 3
+    };
 
     struct Block
     {
@@ -126,6 +105,50 @@ namespace minecraft {
         u8 sky_light_level;
         u8 light_source_level;
     };
+
+    struct Block_Info
+    {
+        const char *name;
+        u16         top_texture_id;
+        u16         bottom_texture_id;
+        u16         side_texture_id;
+        u32         flags;
+    };
+
+    struct Block_Face_Info
+    {
+        glm::vec3 normal;
+    };
+
+    inline bool is_block_solid(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_IsSolid;
+    }
+
+    inline bool is_block_transparent(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_IsTransparent;
+    }
+
+    inline bool is_light_source(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_IsLightSource;
+    }
+
+    inline bool should_color_top_by_biome(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_ColorTopByBiome;
+    }
+
+    inline bool should_color_side_by_biome(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_ColorSideByBiome;
+    }
+
+    inline bool should_color_bottom_by_biome(const Block_Info *block_info)
+    {
+        return block_info->flags & BlockFlags_ColorBottomByBiome;
+    }
 
     struct Sub_Chunk_Vertex
     {
@@ -199,6 +222,7 @@ namespace minecraft {
         char        file_path[256];
         Chunk*      neighbours[ChunkNeighbour_Count];
 
+        // todo(harlequin): make this an enum
         std::atomic<bool> pending_for_load;
         std::atomic<bool> loaded;
         std::atomic<bool> neighbours_loaded;
@@ -227,13 +251,24 @@ namespace minecraft {
         Sub_Chunk_Render_Data sub_chunks_render_data[MC_CHUNK_HEIGHT / MC_SUB_CHUNK_HEIGHT];
     };
 
-    bool initialize_chunk(Chunk *chunk, const glm::ivec2 &world_coords, String8 world_path);
+    bool initialize_chunk(Chunk *chunk,
+                          const glm::ivec2 &world_coords,
+                          String8 world_path);
+
     void generate_chunk(Chunk *chunk, i32 seed);
 
-    void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
-    void calculate_lighting(World *world, Chunk *chunk, Circular_FIFO_Queue<struct Block_Query_Result> *queue);
+    void propagate_sky_light(World *world,
+                             Chunk *chunk,
+                             Circular_FIFO_Queue< struct Block_Query_Result > *queue);
 
-    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path, Temprary_Memory_Arena *temp_arena);
+    void calculate_lighting(World *world,
+                            Chunk *chunk,
+                            Circular_FIFO_Queue< struct Block_Query_Result > *queue);
+
+    void serialize_chunk(Chunk *chunk,
+                         i32 seed,
+                         String8 world_path,
+                         Temprary_Memory_Arena *temp_arena);
     void deserialize_chunk(Chunk *chunk);
 
     i32 get_block_index(const glm::ivec3& block_coords);
@@ -248,7 +283,7 @@ namespace minecraft {
     Block* get_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords);
     Block* get_neighbour_block_from_front(Chunk  *chunk, const glm::ivec3& block_coords);
     Block* get_neighbour_block_from_back(Chunk   *chunk, const glm::ivec3& block_coords);
-    std::array<Block*, 6> get_neighbours(Chunk   *chunk, const glm::ivec3& block_coords);
+    std::array< Block*, 6 > get_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
 
     struct Block_Query_Result
     {
@@ -263,8 +298,6 @@ namespace minecraft {
         glm::ivec2 max;
     };
 
-    struct Ray_Cast_Result;
-
     struct Chunk_Node
     {
         Chunk       chunk;
@@ -273,10 +306,10 @@ namespace minecraft {
 
     #define INVALID_CHUNK_ENTRY -1
 
-    struct chunk_entry
+    struct Chunk_Hash_Table_Entry
     {
-        glm::ivec2 coords;
-        i16        index;
+        glm::ivec2 chunk_coords;
+        i16        chunk_node_index;
     };
 
     struct World
@@ -296,27 +329,32 @@ namespace minecraft {
 
         // todo(harlequin): to be added to game_config
         i32                 chunk_radius;
+
+        // todo(harlequin): we calculate sky light level from game time
         f32                 sky_light_level;
 
         String8             path;
         i32                 seed;
-        World_Region_Bounds player_region_bounds;
+        World_Region_Bounds active_region_bounds;
 
         static Block            null_block;
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
         u32         free_chunk_count;
         Chunk_Node  chunk_nodes[chunk_capacity];
-        Chunk_Node *free_chunk_list_head;
+        Chunk_Node *first_free_chunk_node;
 
-        static constexpr i64 chunk_hash_table_capacity = chunk_capacity;
-        chunk_entry chunk_hash_table[chunk_hash_table_capacity];
+        static constexpr i64   chunk_hash_table_capacity = chunk_capacity;
+        Chunk_Hash_Table_Entry chunk_hash_table[chunk_hash_table_capacity];
 
-        // std::vector< Chunk* >                                      pending_free_chunks; // @todo(harlequin): to be removed
+        Update_Chunk_Job                        update_chunk_jobs_queue_data[DEFAULT_QUEUE_SIZE];
+        Circular_FIFO_Queue< Update_Chunk_Job > update_chunk_jobs_queue;
 
-        Circular_FIFO_Queue<Update_Chunk_Job>                      update_chunk_jobs_queue;
-        Circular_FIFO_Queue<Calculate_Chunk_Light_Propagation_Job> light_propagation_queue;
-        Circular_FIFO_Queue<Calculate_Chunk_Lighting_Job>          calculate_chunk_lighting_queue;
+        Calculate_Chunk_Light_Propagation_Job                        light_propagation_queue_data[DEFAULT_QUEUE_SIZE];
+        Circular_FIFO_Queue< Calculate_Chunk_Light_Propagation_Job > light_propagation_queue;
+
+        Calculate_Chunk_Lighting_Job                        calculate_chunk_lighting_queue_data[DEFAULT_QUEUE_SIZE];
+        Circular_FIFO_Queue< Calculate_Chunk_Lighting_Job > calculate_chunk_lighting_queue;
     };
 
     bool initialize_world(World *world, String8 path);
@@ -353,28 +391,27 @@ namespace minecraft {
 
     i32 get_sub_chunk_index(const glm::ivec3& block_coords);
 
-    Block_Query_Result world_get_neighbour_block_from_top(Chunk *chunk, const glm::ivec3& block_coords);
-    Block_Query_Result world_get_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_top(Chunk *chunk,    const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_bottom(Chunk *chunk, const glm::ivec3& block_coords);
 
-    Block_Query_Result world_get_neighbour_block_from_left(Chunk *chunk, const glm::ivec3& block_coords);
-    Block_Query_Result world_get_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_left(Chunk *chunk,  const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_right(Chunk *chunk, const glm::ivec3& block_coords);
 
-    Block_Query_Result world_get_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords);
-    Block_Query_Result world_get_neighbour_block_from_back(Chunk *chunk, const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_front(Chunk *chunk, const glm::ivec3& block_coords);
+    Block_Query_Result query_neighbour_block_from_back(Chunk *chunk,  const glm::ivec3& block_coords);
 
-    std::array<Block_Query_Result, 6> world_get_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
+    std::array< Block_Query_Result, 6 > query_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
 
     Block_Query_Result select_block(World           *world,
                                     const glm::vec3 &view_position,
                                     const glm::vec3 &view_direction,
                                     u32              max_block_select_dist_in_cube_units,
-                                    Ray_Cast_Result *out_ray_cast_result = nullptr);
+                                    struct Ray_Cast_Result *out_ray_cast_result = nullptr);
 
-    void schedule_chunk_lighting_jobs(World *world, World_Region_Bounds *player_region_bounds);
+    void schedule_chunk_lighting_jobs(World *world, const World_Region_Bounds &player_region_bounds);
     void schedule_save_chunks_jobs(World *world);
 
     void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
-
     void set_block_sky_light_level(World *world, Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
     void set_block_light_source_level(World *world, Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);
 

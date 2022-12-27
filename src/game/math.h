@@ -65,9 +65,9 @@ namespace minecraft {
 
     struct Ray_Cast_Result
     {
-        bool hit;
+        bool      hit;
         glm::vec3 point;
-        f32 distance;
+        f32       distance;
     };
 
     Ray_Cast_Result cast_ray_on_aabb(const Ray& ray, const AABB& aabb, f32 max_distance = Infinity32);

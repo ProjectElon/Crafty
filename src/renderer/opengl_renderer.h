@@ -20,30 +20,6 @@ namespace minecraft {
     struct Platform;
     struct Camera;
 
-    enum BlockFaceId : u32
-    {
-        BlockFaceId_Top    = 0,
-        BlockFaceId_Bottom = 1,
-        BlockFaceId_Left   = 2,
-        BlockFaceId_Right  = 3,
-        BlockFaceId_Front  = 4,
-        BlockFaceId_Back   = 5,
-        BlockFaceId_Count  = 6
-    };
-
-    enum BlockFaceCornerId : u32
-    {
-        BlockFaceCornerId_BottomRight  = 0,
-        BlockFaceCornerId_BottomLeft   = 1,
-        BlockFaceCornerId_TopLeft      = 2,
-        BlockFaceCornerId_TopRight     = 3
-    };
-
-    struct Block_Face_Info
-    {
-        glm::vec3 normal;
-    };
-
     struct Draw_Elements_Indirect_Command
     {
         u32 count;
@@ -170,11 +146,17 @@ namespace minecraft {
                           const glm::vec4& tint_color,
                           Camera *camera);
 
-        static void render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index);
-        static void render_chunks_at_region(World *world, World_Region_Bounds *player_region_bounds,
+        static void render_sub_chunk(World *world,
+                                     Chunk *chunk,
+                                     u32 sub_chunk_index);
+
+        static void render_chunks_at_region(World *world,
+                                            const World_Region_Bounds &player_region_bounds,
                                             Camera *camera);
 
-        static void end(i32 chunk_radius, i32 sky_light_level, Block_Query_Result *select_query);
+        static void end(i32 chunk_radius,
+                        f32 sky_light_level,
+                        Block_Query_Result *select_query);
 
         static void wait_for_gpu_to_finish_work();
         static void signal_gpu_for_work();

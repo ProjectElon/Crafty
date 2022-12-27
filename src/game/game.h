@@ -82,7 +82,9 @@ namespace minecraft {
         GLFWwindow  *window;
 
         Event_System event_system;
-        Input        game_input;
+        Input        input;
+        Input        gameplay_input;
+        Input        inventory_input;
         Inventory    inventory;
         Camera       camera;
 
