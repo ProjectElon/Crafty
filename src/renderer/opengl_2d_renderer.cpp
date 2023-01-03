@@ -107,9 +107,15 @@ namespace minecraft {
         glBindVertexArray(0);
 
         u32 white_pxiel = 0xffffffff;
-        internal_data.white_pixel.initialize(reinterpret_cast<u8*>(&white_pxiel), 1, 1, TextureFormat_RGBA, TextureUsage_UI);
+        bool success = initialize_texture(&internal_data.white_pixel,
+                                          (u8*)(&white_pxiel),
+                                          1,
+                                          1,
+                                          TextureFormat_RGBA,
+                                          TextureUsage_UI);
+        Assert(success);
 
-        internal_data.ui_shader.load_from_file("../assets/shaders/quad.glsl");
+        load_shader(&internal_data.ui_shader, "../assets/shaders/quad.glsl");
         return true;
     }
 
@@ -119,13 +125,13 @@ namespace minecraft {
 
     void Opengl_2D_Renderer::begin()
     {
-        glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
+        glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
         glm::mat4 projection = glm::ortho(0.0f, frame_buffer_size.x, 0.0f, frame_buffer_size.y); // left right bottom top
 
         Opengl_Shader *shader = &internal_data.ui_shader;
-        shader->use();
-        shader->set_uniform_mat4("u_projection", glm::value_ptr(projection));
-        shader->set_uniform_i32_array("u_textures", internal_data.samplers, 32);
+        bind_shader(shader);
+        set_uniform_mat4(shader, "u_projection", glm::value_ptr(projection));
+        set_uniform_i32_array(shader, "u_textures", internal_data.samplers, 32);
     }
 
     void Opengl_2D_Renderer::draw_rect(const glm::vec2& position,
@@ -153,7 +159,7 @@ namespace minecraft {
             {
                 if (internal_data.texture_slots[i] == -1)
                 {
-                    texture->bind(i);
+                    bind_texture(texture, i);
                     internal_data.texture_slots[i] = texture->id;
                     texture_index = i;
                     break;
@@ -163,7 +169,7 @@ namespace minecraft {
 
         Assert(texture_index != -1);
 
-        glm::vec2 size = Opengl_Renderer::get_frame_buffer_size();
+        glm::vec2 size = opengl_renderer_get_frame_buffer_size();
         glm::vec2 top_left_position = position;
         top_left_position.y = size.y - position.y;
 

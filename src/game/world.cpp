@@ -1,7 +1,6 @@
 #include "world.h"
 #include "renderer/opengl_renderer.h"
 #include "game/job_system.h"
-#include "ui/dropdown_console.h"
 #include "game/jobs.h"
 #include "core/file_system.h"
 #include <glm/gtc/constants.hpp>
@@ -9,9 +8,6 @@
 #include <time.h>
 
 #include <errno.h>
-#include <new>
-
-#include "game/profiler.h"
 
 extern int errno;
 
@@ -81,13 +77,13 @@ namespace minecraft {
 
             for (i32 j = 0; j < 2; j++)
             {
-                render_data.opaque_buckets[j].memory_id = -1;
+                render_data.opaque_buckets[j].memory_id       = -1;
                 render_data.opaque_buckets[j].current_vertex = nullptr;
-                render_data.opaque_buckets[j].face_count = 0;
+                render_data.opaque_buckets[j].face_count     = 0;
 
-                render_data.transparent_buckets[j].memory_id = -1;
+                render_data.transparent_buckets[j].memory_id      = -1;
                 render_data.transparent_buckets[j].current_vertex = nullptr;
-                render_data.transparent_buckets[j].face_count = 0;
+                render_data.transparent_buckets[j].face_count     = 0;
 
                 constexpr f32 infinity = std::numeric_limits<f32>::max();
                 render_data.aabb[j] = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };

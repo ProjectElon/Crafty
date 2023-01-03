@@ -4,167 +4,92 @@
 #include "core/event.h"
 #include "core/platform.h"
 
-#include "opengl_texture.h"
-#include "opengl_shader.h"
-
 #include <glm/glm.hpp>
 #include <vector>
-#include <mutex>
 #include <atomic>
 
 #define OPENGL_DEBUGGING 0
+#define OPENGL_TRACE_DEBUG_MESSAGE 0
 
 namespace minecraft {
 
     struct World;
     struct Platform;
     struct Camera;
+    struct Memory_Arena;
+    struct Opengl_Texture;
+    struct Opengl_Shader;
 
-    struct Draw_Elements_Indirect_Command
-    {
-        u32 count;
-        u32 instanceCount;
-        u32 firstIndex;
-        u32 baseVertex;
-        u32 baseInstance;
-    };
-
-    struct Opengl_Renderer_Stats
+    struct PerFrame_Stats
     {
         i32 face_count;
         i32 sub_chunk_count;
     };
 
-    struct Opengl_Renderer_Data
+    struct Persistent_Stats
     {
-        glm::vec2 frame_buffer_size;
-
-        u32 opaque_frame_buffer_id;
-        u32 opaque_frame_buffer_color_texture_id;
-        u32 opaque_frame_buffer_depth_texture_id;
-
-        u32 transparent_frame_buffer_id;
-        u32 transparent_frame_buffer_accum_texture_id;
-        u32 transparent_frame_buffer_reveal_texture_id;
-
-        u32 quad_vertex_array_id;
-        u32 quad_vertex_buffer_id;
-
-        u32 chunk_vertex_array_id;
-        u32 chunk_vertex_buffer_id;
-        u32 chunk_instance_buffer_id;
-        u32 chunk_index_buffer_id;
-
-        Sub_Chunk_Vertex   *base_vertex;
-        Sub_Chunk_Instance *base_instance;
-
-        std::mutex free_buckets_mutex;
-        std::vector<i32> free_buckets;
-
-        std::mutex free_instances_mutex;
-        std::vector<i32> free_instances;
-
-        u32 opaque_command_buffer_id;
-        u32 opaque_command_count;
-        Draw_Elements_Indirect_Command opaque_command_buffer[World::sub_chunk_bucket_capacity];
-
-        u32 transparent_command_buffer_id;
-        u32 transparent_command_count;
-        Draw_Elements_Indirect_Command transparent_command_buffer[World::sub_chunk_bucket_capacity];
-
-        Opengl_Texture block_sprite_sheet;
-        u32 uv_buffer_id;
-        u32 uv_texture_id;
-
-        u32 uv_uniform_buffer_id;
-
-        Opengl_Renderer_Stats stats;
-        std::atomic<u64> sub_chunk_used_memory;
-
-        bool should_trace_debug_message = true;
-
-        glm::vec4 sky_color;
-        glm::vec4 tint_color;
-
-        Camera *camera;
-
-        Opengl_Shader opaque_chunk_shader;
-        Opengl_Shader transparent_chunk_shader;
-        Opengl_Shader composite_shader;
-        Opengl_Shader screen_shader;
-        Opengl_Shader line_shader;
+        std::atomic< u64 > sub_chunk_used_memory;
     };
 
-    void gl_check_error(const char *function_name, const char *file, i32 line);
-    #define GLCall(Function) {\
-        Function;\
-        gl_check_error(#Function, __FILE__, __LINE__);\
-    }
-
-    struct Opengl_Renderer
+    struct Opengl_Renderer_Stats
     {
-        static Opengl_Renderer_Data internal_data;
-
-        Opengl_Renderer() = delete;
-
-        static bool initialize(GLFWwindow *window,
-                               u32 initial_frame_buffer_width,
-                               u32 initial_frame_buffer_height);
-        static void shutdown();
-
-        static bool on_resize(const Event* event, void *sender);
-
-        static u32 compress_vertex0(const glm::ivec3& block_coords,
-                                   u32 local_position_id,
-                                   u32 face_id,
-                                   u32 face_corner_id,
-                                   u32 flags);
-
-        static void extract_vertex0(u32 vertex,
-                                   glm::ivec3& block_coords,
-                                   u32& out_local_position_id,
-                                   u32& out_face_id,
-                                   u32& out_face_corner_id,
-                                   u32& out_flags);
-
-        static u32 compress_vertex1(u32 texture_uv_id, u32 sky_light_level, u32 light_source_level, u32 ambient_occlusion_level);
-        static void extract_vertex1(u32 vertex, u32& out_texture_uv_id, u32 &out_sky_light_level, u32 &out_light_source_level, u32 &out_ambient_occlusion_level);
-
-        static void allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
-        static void reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
-        static void free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
-
-        static i32 allocate_sub_chunk_instance();
-        static void free_sub_chunk_instance(i32 instance_memory_id);
-
-        static void free_sub_chunk(Chunk* chunk, u32 sub_chunk_index);
-
-        static void upload_sub_chunk_to_gpu(World *world, Chunk *chunk, u32 sub_chunk_index);
-        static void update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index);
-
-        static void begin(const glm::vec4& clear_color,
-                          const glm::vec4& tint_color,
-                          Camera *camera);
-
-        static void render_sub_chunk(World *world,
-                                     Chunk *chunk,
-                                     u32 sub_chunk_index);
-
-        static void render_chunks_at_region(World *world,
-                                            const World_Region_Bounds &player_region_bounds,
-                                            Camera *camera);
-
-        static void end(i32 chunk_radius,
-                        f32 sky_light_level,
-                        Block_Query_Result *select_query);
-
-        static void wait_for_gpu_to_finish_work();
-        static void signal_gpu_for_work();
-
-        static void swap_buffers(struct GLFWwindow *window);
-
-        static bool recreate_frame_buffers();
-
-        static inline glm::vec2 get_frame_buffer_size() { return internal_data.frame_buffer_size; }
+        PerFrame_Stats   per_frame;
+        Persistent_Stats persistent;
     };
+
+    bool initialize_opengl_renderer(GLFWwindow   *window,
+                                    u32           initial_frame_buffer_width,
+                                    u32           initial_frame_buffer_height,
+                                    Memory_Arena *Arena);
+
+    void shutdown_opengl_renderer();
+
+    bool opengl_renderer_on_resize(const Event* event, void *sender);
+
+    void opengl_renderer_update_sub_chunk(World *world,
+                                          Chunk* chunk,
+                                          u32 sub_chunk_index);
+
+    void opengl_renderer_begin_frame(const glm::vec4& clear_color,
+                                     const glm::vec4& tint_color,
+                                     Camera *camera);
+
+    void opengl_renderer_render_sub_chunk(World *world,
+                                          Chunk *chunk,
+                                          u32 sub_chunk_index);
+
+    void opengl_renderer_render_chunks_at_region(World *world,
+                                                 const World_Region_Bounds &player_region_bounds,
+                                                 Camera *camera);
+
+    void opengl_renderer_end_frame(i32 chunk_radius,
+                                   f32 sky_light_level,
+                                   Block_Query_Result *selected_block_query);
+
+    void opengl_renderer_swap_buffers(struct GLFWwindow *window);
+
+    void opengl_renderer_allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+    void opengl_renderer_reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+    void opengl_renderer_free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket);
+
+    i32  opengl_renderer_allocate_sub_chunk_instance();
+    void opengl_renderer_free_sub_chunk_instance(i32 instance_memory_id);
+
+    void opengl_renderer_free_sub_chunk(Chunk *chunk, u32 sub_chunk_index);
+
+    void opengl_renderer_upload_sub_chunk_to_gpu(World *world,
+                                                 Chunk *chunk,
+                                                 u32 sub_chunk_index);
+
+    bool opengl_renderer_recreate_frame_buffers();
+
+    glm::vec2 opengl_renderer_get_frame_buffer_size();
+    const Opengl_Renderer_Stats *opengl_renderer_get_stats();
+    i64 opengl_renderer_get_free_chunk_bucket_count();
+
+    bool opengl_renderer_is_fxaa_enable();
+    void opengl_renderer_toggle_fxaa();
+
+    // todo(harlequin): temprary use game assets
+    Opengl_Texture *opengl_renderer_get_block_sprite_sheet_texture();
 }

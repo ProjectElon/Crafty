@@ -10,8 +10,11 @@
 
 #include "renderer/camera.h"
 
+#include "game/ecs.h"
 #include "game/world.h"
 #include "game/inventory.h"
+
+#include "ui/dropdown_console.h"
 
 struct GLFWwindow;
 
@@ -51,6 +54,13 @@ namespace minecraft {
         Memory_Arena transient_arena;
     };
 
+    enum GameState
+    {
+        GameState_StartScene,
+        GameState_MainMenu,
+        GameState_Gameplay
+    };
+
     struct Game_Debug_State
     {
         String8 frames_per_second_text;
@@ -77,27 +87,29 @@ namespace minecraft {
 
     struct Game_State
     {
-        Game_Memory *game_memory;
-        Game_Config  game_config;
-        GLFWwindow  *window;
+        GameState         state;
+        Game_Memory      *game_memory;
+        Game_Config       game_config;
+        GLFWwindow       *window;
 
-        Event_System event_system;
-        Input        input;
-        Input        gameplay_input;
-        Input        inventory_input;
-        Inventory    inventory;
-        Camera       camera;
+        Event_System     event_system;
+        Input            input;
+        Input            gameplay_input;
+        Input            inventory_input;
+        Inventory        inventory;
+        Camera           camera;
+        Dropdown_Console console;
 
-        World        *world;
+        bool             is_minimized;
+        bool             is_running;
+        bool             is_inventory_active;
+        bool             is_cursor_locked;
 
-        bool         is_minimized;
-        bool         is_running;
-        bool         is_inventory_active;
-        bool         is_cursor_locked;
+        World            *world;
 
         // todo(harlequin): game_assets
-        void        *ingame_crosshair_texture;
-        void        *inventory_crosshair_texture;
+        void             *ingame_crosshair_texture;
+        void             *inventory_crosshair_texture;
 
         bool             is_visual_debugging_enabled;
         Game_Debug_State debug_state;

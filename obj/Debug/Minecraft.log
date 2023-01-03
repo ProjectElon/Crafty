@@ -1,3 +1,4 @@
-﻿  world.cpp
-C:\dev\cpp\Crafty\src\game\world.cpp(821,29): warning C4244: 'initializing': conversion from '__int64' to 'i16', possible loss of data
+﻿  dropdown_console.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

@@ -66,8 +66,8 @@ namespace minecraft {
     };
 
     bool initialize_inventory(Inventory *inventory,
-                    Bitmap_Font *font,
-                    Opengl_Texture *hud_sprite);
+                              Bitmap_Font *font,
+                              Opengl_Texture *hud_sprite);
 
     void shutdown_inventory(Inventory *inventory, String8 path);
 

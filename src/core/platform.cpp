@@ -1,9 +1,8 @@
 #include "platform.h"
+#include "event.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
-#include "event.h"
 
 namespace minecraft {
 

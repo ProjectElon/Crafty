@@ -54,4 +54,37 @@ namespace minecraft {
         return result;
     }
 
+    bool equal(String8 *str0, String8 *str1)
+    {
+        if (str0->count != str1->count)
+        {
+            return false;
+        }
+        for (i32 i = 0; i < str0->count; i++)
+        {
+            if (str0->data[i] != str1->data[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    i32 find_first_any_char(String8 *str, const char *pattern)
+    {
+        u32 pattern_count = strlen(pattern);
+
+        for (i32 i = 0; i < str->count; i++)
+        {
+            for (i32 j = 0; j < pattern_count; j++)
+            {
+                if (str->data[i] == pattern[j])
+                {
+                    return i;
+                }
+            }
+        }
+
+        return -1;
+    }
 }

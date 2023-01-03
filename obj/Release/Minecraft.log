@@ -1,5 +1,4 @@
-﻿  texture_packer.cpp
-  event.cpp
+﻿  event.cpp
   input.cpp
   platform.cpp
   Inventory.cpp
@@ -7,31 +6,30 @@
   game.cpp
   job_system.cpp
   jobs.cpp
-  math.cpp
   physics.cpp
   profiler.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
-C:\dev\cpp\Crafty\src\assets\texture_packer.cpp(121,42): warning C4838: conversion from 'u32' to 'i32' requires a narrowing conversion
-C:\dev\cpp\Crafty\src\assets\texture_packer.cpp(121,53): warning C4838: conversion from 'u32' to 'i32' requires a narrowing conversion
-C:\dev\cpp\Crafty\src\core\event.cpp(46,35): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+  world.cpp
+  main.cpp
+C:\dev\cpp\Crafty\src\game\console_commands.cpp(161,23): warning C4244: 'initializing': conversion from '__int64' to 'u32', possible loss of data
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\console_commands.cpp(114,61): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\game.cpp(445): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
-C:\dev\cpp\Crafty\src\game\game.cpp(604): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
-  world.cpp
-C:\dev\cpp\Crafty\src\core\event.cpp(252): warning C4715: 'minecraft::convert_event_to_string': not all control paths return a value
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\physics.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\profiler.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\profiler.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\input.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\input.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\platform.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\platform.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\jobs.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\jobs.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\event.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file core\event.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file main.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file main.cpp)
+  opengl_2d_renderer.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\Inventory.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\Inventory.cpp)
 C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\physics.cpp)
 C:\dev\cpp\Crafty\src\game\ecs.h(125): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
           with
@@ -43,14 +41,40 @@ C:\dev\cpp\Crafty\src\game\physics.cpp(34): message : see reference to function 
           [
               T=minecraft::Transform
           ]
-  main.cpp
-  camera.cpp
-  opengl_2d_renderer.cpp
-  opengl_debug_renderer.cpp
-  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\world.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file game\world.cpp)
+C:\dev\cpp\Crafty\src\core\event.cpp(46,35): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\core\event.cpp(64,70): warning C4267: 'initializing': conversion from 'size_t' to 'i32', possible loss of data
 C:\dev\cpp\Crafty\src\game\physics.cpp(170): warning C4715: 'minecraft::get_collision_direction': not all control paths return a value
+  opengl_debug_renderer.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\game.cpp(415): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
+          with
+          [
+              T=minecraft::Transform
+          ]
+  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(125): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
+          with
+          [
+              T=minecraft::Transform
+          ] (compiling source file game\game.cpp)
+C:\dev\cpp\Crafty\src\game\game.cpp(556): message : see reference to function template instantiation 'std::tuple<T *,minecraft::Rigid_Body *,minecraft::Character_Controller *> minecraft::Registry::get_components<minecraft::Transform,minecraft::Rigid_Body,minecraft::Character_Controller>(minecraft::Entity)' being compiled
+          with
+          [
+              T=minecraft::Transform
+          ]
   dropdown_console.cpp
+C:\dev\cpp\Crafty\src\core\event.cpp(257): warning C4715: 'minecraft::convert_event_to_string': not all control paths return a value
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_2d_renderer.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_2d_renderer.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_debug_renderer.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_debug_renderer.cpp)
+C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(279,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_renderer.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file renderer\opengl_renderer.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file ui\dropdown_console.cpp)
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior (compiling source file ui\dropdown_console.cpp)
 C:\dev\cpp\Crafty\src\renderer\opengl_debug_renderer.cpp(163,62): warning C4267: 'initializing': conversion from 'size_t' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(183,27): warning C4018: '<': signed/unsigned mismatch
-C:\dev\cpp\Crafty\src\renderer\opengl_2d_renderer.cpp(273,111): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

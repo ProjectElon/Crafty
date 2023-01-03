@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/common.h"
-#include <unordered_map> // todo(harlequin): data structures
 
 namespace minecraft {
 
@@ -15,26 +14,27 @@ namespace minecraft {
     struct Opengl_Shader
     {
         u32 program_id;
-        std::unordered_map<const char *, i32> uniform_name_to_location_table;
-
-        bool load_from_file(const char *file_name);
-
-        void use();
-        void destroy();
-
-        i32 get_uniform_location(const char *uniform_name);
-
-        void set_uniform_i32(const char *uniform_name, i32 value);
-        void set_uniform_i32_array(const char *uniform_name, i32* values, u32 count);
-
-        void set_uniform_ivec2(const char *uniform_name, i32 value0, i32 value1);
-        void set_uniform_ivec3(const char *uniform_name, i32 value0, i32 value1, i32 value2);
-
-        void set_uniform_f32(const char *uniform_name, f32 value);
-        void set_uniform_vec2(const char *uniform_name, f32 value0, f32 value1);
-        void set_uniform_vec3(const char *uniform_name, f32 value0, f32 value1, f32 value2);
-        void set_uniform_vec4(const char *uniform_name, f32 value0, f32 value1, f32 value2, f32 value3);
-        void set_uniform_mat3(const char *uniform_name, f32 *matrix);
-        void set_uniform_mat4(const char *uniform_name, f32 *matrix);
     };
+
+    bool load_shader(Opengl_Shader *shader, const char *file_name);
+
+    void bind_shader(Opengl_Shader *shader);
+    void destroy_shader(Opengl_Shader *shader);
+
+    i32 get_uniform_location(Opengl_Shader *shader, const char *uniform_name);
+
+    void set_uniform_bool(Opengl_Shader *shader, const char *uniform_name, bool value);
+
+    void set_uniform_i32(Opengl_Shader *shader, const char *uniform_name, i32 value);
+    void set_uniform_i32_array(Opengl_Shader *shader, const char *uniform_name, i32* values, u32 count);
+
+    void set_uniform_ivec2(Opengl_Shader *shader, const char *uniform_name, i32 value0, i32 value1);
+    void set_uniform_ivec3(Opengl_Shader *shader, const char *uniform_name, i32 value0, i32 value1, i32 value2);
+
+    void set_uniform_f32(Opengl_Shader *shader,  const char *uniform_name, f32 value);
+    void set_uniform_vec2(Opengl_Shader *shader, const char *uniform_name, f32 value0, f32 value1);
+    void set_uniform_vec3(Opengl_Shader *shader, const char *uniform_name, f32 value0, f32 value1, f32 value2);
+    void set_uniform_vec4(Opengl_Shader *shader, const char *uniform_name, f32 value0, f32 value1, f32 value2, f32 value3);
+    void set_uniform_mat3(Opengl_Shader *shader, const char *uniform_name, f32 *matrix);
+    void set_uniform_mat4(Opengl_Shader *shader, const char *uniform_name, f32 *matrix);
 }

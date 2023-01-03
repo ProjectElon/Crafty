@@ -1,39 +1,45 @@
 #pragma once
 
 #include "core/common.h"
-#include "core/event.h"
-
-#include "game/console_commands.h"
+#include "memory/memory_arena.h"
+#include "containers/string.h"
 
 #include <glm/glm.hpp>
-
-#include <string>
-#include <vector>
 
 namespace minecraft {
 
     struct Bitmap_Font;
+    struct Event_System;
+    struct Memory_Arena;
 
     enum ConsoleState
     {
         ConsoleState_Closed,
-        ConsoleState_Half_Open,
-        ConsoleState_Full_Open
+        ConsoleState_HalfOpen,
+        ConsoleState_FullOpen
     };
 
-    struct Dropdown_Console_Word
+    struct Dropdown_Console_Line_Info
     {
-        std::string text;
-        glm::vec4   color;
+        String8 str;
+        bool    is_command;
     };
 
-    struct Dropdown_Console_Line
+    struct Dropdown_Console
     {
-        std::vector<Dropdown_Console_Word> words;
-    };
+        Memory_Arena string_input_arena;
+        Memory_Arena string_arena;
+        Memory_Arena line_arena;
 
-    struct Dropdown_Console_Data
-    {
+        ConsoleState state;
+
+        i32 current_cursor_index;
+
+        u32                         line_count;
+        Dropdown_Console_Line_Info *lines;
+
+        Bitmap_Font *font;
+
         glm::vec4 text_color;
         glm::vec4 background_color;
 
@@ -47,16 +53,8 @@ namespace minecraft {
         glm::vec4 scroll_bar_color;
 
         glm::vec4 command_color;
-        glm::vec4 argument_color;
-        glm::vec4 type_color;
 
-        ConsoleState state;
-        Bitmap_Font *font;
-
-        f32 padding_x;
-
-        std::string current_text;
-        i32 current_cursor_index;
+        String8 current_text;
 
         f32 cursor_cooldown_time;
         f32 cursor_current_cooldown_time;
@@ -65,6 +63,7 @@ namespace minecraft {
 
         f32 toggle_speed;
 
+        f32 padding_x;
         f32 y_extent;
         f32 y_extent_target;
 
@@ -76,51 +75,31 @@ namespace minecraft {
 
         f32 scroll_x;
         f32 scroll_x_target;
-
-        std::vector< Dropdown_Console_Line > history;
     };
 
-    struct Dropdown_Console
-    {
-        static Dropdown_Console_Data internal_data;
+    bool initialize_dropdown_console(Dropdown_Console *console,
+                                     Memory_Arena     *arena,
+                                     Bitmap_Font      *font,
+                                     Event_System     *event_system,
+                                     const glm::vec4  &text_color,
+                                     const glm::vec4  &background_color,
+                                     const glm::vec4  &input_text_color,
+                                     const glm::vec4  &input_text_background_color,
+                                     const glm::vec4  &input_text_cursor_color,
+                                     const glm::vec4  &scroll_bar_background_color,
+                                     const glm::vec4  &scroll_bar_color,
+                                     const glm::vec4  &command_color);
 
-        static bool initialize(Bitmap_Font *font,
-                               Event_System *event_system,
-                               const glm::vec4& text_color,
-                               const glm::vec4& background_color,
-                               const glm::vec4& input_text_color,
-                               const glm::vec4& input_text_background_color,
-                               const glm::vec4& input_text_cursor_color,
-                               const glm::vec4& scroll_bar_background_color,
-                               const glm::vec4& scroll_bar_color,
-                               const glm::vec4& command_color,
-                               const glm::vec4& argument_color,
-                               const glm::vec4& type_color);
-        static void shutdown();
+    void shutdown_dropdown_console(Dropdown_Console *console);
+    void toggle_dropdown_console(Dropdown_Console *console);
+    void clear_dropdown_console(Dropdown_Console *console);
 
-        static void toggle();
+    void open_dropdown_console_with_half_extent(Dropdown_Console *console);
+    void open_dropdown_console_with_full_extent(Dropdown_Console *console);
 
-        static bool on_char_input(const Event *event, void *sender);
-        static bool on_key(const Event *event, void *sender);
-        static bool on_mouse_wheel(const Event *event, void *sender);
+    void close_dropdown_console(Dropdown_Console *console);
 
-        static void clear();
+    void draw_dropdown_console(Dropdown_Console *console, f32 delta_time);
 
-        static void open_with_half_extent();
-        static void open_with_full_extent();
-
-        static void close();
-
-        inline static bool is_closed() { return internal_data.state == ConsoleState_Closed; }
-
-        static f32 get_text_height();
-        static f32 get_line_height();
-        static f32 get_size_y();
-        static f32 get_max_scroll_y();
-
-        static void draw(f32 dt);
-
-        static void log(const std::string& text, const glm::vec4& color = internal_data.text_color);
-        static void log_with_new_line(const std::string& text, const glm::vec4& color = internal_data.text_color);
-    };
+    void push_line(Dropdown_Console *console, String8 line, bool is_command = false);
 }

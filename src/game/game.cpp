@@ -1,4 +1,3 @@
-#include "core/common.h"
 #include "core/platform.h"
 
 #include "containers/string.h"
@@ -9,7 +8,6 @@
 #include "game/console_commands.h"
 #include "game/math.h"
 #include "game/physics.h"
-#include "game/ecs.h"
 #include "game/inventory.h"
 #include "game/profiler.h"
 
@@ -21,7 +19,6 @@
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
 #include "ui/ui.h"
-#include "ui/dropdown_console.h"
 
 #include "assets/texture_packer.h"
 
@@ -79,7 +76,6 @@ namespace minecraft {
             Platform::switch_to_window_mode(game_state->window, game_config, mode);
         }
 
-
         if (key == MC_KEY_ESCAPE)
         {
             game_state->is_running = false;
@@ -95,6 +91,16 @@ namespace minecraft {
             Platform::toggle_cursor_visiblity(game_state->window, game_config);
             game_state->is_cursor_locked = !game_state->is_cursor_locked;
             toggle_inventory(game_state);
+        }
+
+        if (key == MC_KEY_F1)
+        {
+            toggle_dropdown_console(&game_state->console);
+        }
+
+        if (key == MC_KEY_F)
+        {
+            opengl_renderer_toggle_fxaa();
         }
 
         return false;
@@ -172,15 +178,13 @@ namespace minecraft {
 
     bool initialize_game(Game_State *game_state)
     {
-        Game_Memory  *game_memory  = game_state->game_memory;
-        Game_Config  *game_config  = &game_state->game_config;
-        Event_System *event_system = &game_state->event_system;
-        Input        *input        = &game_state->input;
-        Inventory    *inventory    = &game_state->inventory;
-        Camera       *camera       = &game_state->camera;
-
-        game_state->world = ArenaPushAlignedZero(&game_memory->transient_arena, World);
-        World *game_world = game_state->world;
+        Game_Memory      *game_memory  = game_state->game_memory;
+        Game_Config      *game_config  = &game_state->game_config;
+        Event_System     *event_system = &game_state->event_system;
+        Input            *input        = &game_state->input;
+        Inventory        *inventory    = &game_state->inventory;
+        Camera           *camera       = &game_state->camera;
+        Dropdown_Console *console      = &game_state->console;
 
         // @todo(harlequin): load/save the game config from/to a file
         game_config->window_title                = "Minecraft";
@@ -246,9 +250,10 @@ namespace minecraft {
                                        game_config,
                                        game_config->is_cursor_visible);
 
-        if (!Opengl_Renderer::initialize(game_state->window,
-                                         game_config->window_width,
-                                         game_config->window_height))
+        if (!initialize_opengl_renderer(game_state->window,
+                                        game_config->window_width,
+                                        game_config->window_height,
+                                        &game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize render system\n");
             return false;
@@ -288,7 +293,7 @@ namespace minecraft {
         register_event(event_system, EventType_Quit,             on_quit);
         register_event(event_system, EventType_KeyPress,         on_key_press, game_state);
         register_event(event_system, EventType_Char,             on_char);
-        register_event(event_system, EventType_Resize,           Opengl_Renderer::on_resize);
+        register_event(event_system, EventType_Resize,           opengl_renderer_on_resize);
         register_event(event_system, EventType_Resize,           on_resize, game_state);
         register_event(event_system, EventType_MouseButtonPress, on_mouse_press);
         register_event(event_system, EventType_MouseMove,        on_mouse_move);
@@ -303,13 +308,13 @@ namespace minecraft {
         noto_mono->load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
 
         Bitmap_Font *consolas = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        consolas->load_from_file("../assets/fonts/Consolas.ttf", 20);
+        consolas->load_from_file("../assets/fonts/Consolas.ttf", 22);
 
         Bitmap_Font *liberation_mono = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        liberation_mono->load_from_file("../assets/fonts/liberation-mono.ttf", 20);
+        liberation_mono->load_from_file("../assets/fonts/liberation-mono.ttf", 22);
 
         Opengl_Texture *hud_sprites = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
-        hud_sprites->load_from_file("../assets/textures/hudSprites.png", TextureUsage_UI);
+        load_texture(hud_sprites, "../assets/textures/hudSprites.png", TextureUsage_UI);
 
         UI_State default_ui_state;
         default_ui_state.cursor     = { 0.0f, 0.0f };
@@ -323,6 +328,14 @@ namespace minecraft {
             fprintf(stderr, "[ERROR]: failed to initialize ui system\n");
             return false;
         }
+
+        if (!initialize_console_commands(&game_memory->permanent_arena))
+        {
+            fprintf(stderr, "[ERROR]: failed to initialize console commands\n");
+            return false;
+        }
+
+        console_commands_set_user_pointer(game_state);
 
         f32 normalize_color_factor = 1.0f / 255.0f;
 
@@ -338,27 +351,28 @@ namespace minecraft {
         glm::vec4 scrool_bar_color = { 0xf7, 0x6e, 0x11, 0xff }; // F76E11
 
         glm::vec4 command_color = { 0xf4, 0x73, 0x40, 0xff }; // F47340
-        glm::vec4 argument_color = { 0xFF, 0x59, 0x59, 0xff }; // FF5959
-        glm::vec4 type_color = { 0x84, 0x79, 0xe1, 0xff }; // 8479E1
 
-        if (!Dropdown_Console::initialize(consolas,
-                                          event_system,
-                                          text_color * normalize_color_factor,
-                                          background_color * normalize_color_factor,
-                                          input_text_color * normalize_color_factor,
-                                          input_text_background_color * normalize_color_factor,
-                                          input_text_cursor_color * normalize_color_factor,
-                                          scroll_bar_background_color * normalize_color_factor,
-                                          scrool_bar_color * normalize_color_factor,
-                                          command_color * normalize_color_factor,
-                                          argument_color * normalize_color_factor,
-                                          type_color * normalize_color_factor))
+        if (!initialize_dropdown_console(console,
+                                         &game_memory->permanent_arena,
+                                         noto_mono,
+                                         event_system,
+                                         text_color * normalize_color_factor,
+                                         background_color * normalize_color_factor,
+                                         input_text_color * normalize_color_factor,
+                                         input_text_background_color * normalize_color_factor,
+                                         input_text_cursor_color * normalize_color_factor,
+                                         scroll_bar_background_color * normalize_color_factor,
+                                         scrool_bar_color * normalize_color_factor,
+                                         command_color * normalize_color_factor))
         {
             fprintf(stderr, "[ERROR]: failed to initialize dropdown console\n");
             return false;
         }
 
         // @todo(harlequin): game menu to add worlds
+        game_state->world = ArenaPushAlignedZero(&game_memory->transient_arena, World);
+        World *game_world = game_state->world;
+
         const char *world_name = "harlequin";
         String8 world_path = push_formatted_string8(&game_memory->transient_arena, "../assets/worlds/%s", world_name);
         initialize_world(game_world, world_path);
@@ -384,15 +398,39 @@ namespace minecraft {
         game_state->is_minimized                 = false;
         game_state->is_cursor_locked             = true;
         game_state->is_running                   = true;
+        game_state->state                        = GameState_StartScene;
 
         // @todo(harlequin): Game Assets
         game_state->ingame_crosshair_texture     = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         Opengl_Texture *ingame_crosshair_texture = (Opengl_Texture*)game_state->ingame_crosshair_texture;
-        ingame_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair001.png", TextureUsage_UI);
+        load_texture(ingame_crosshair_texture, "../assets/textures/crosshair/crosshair001.png", TextureUsage_UI);
 
         game_state->inventory_crosshair_texture     = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         Opengl_Texture *inventory_crosshair_texture = (Opengl_Texture *)game_state->inventory_crosshair_texture;
-        inventory_crosshair_texture->load_from_file("../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
+        load_texture(inventory_crosshair_texture, "../assets/textures/crosshair/crosshair022.png", TextureUsage_UI);
+
+        Registry& registry   = ECS::internal_data.registry;
+
+        Entity player = registry.create_entity(EntityArchetype_Guy, EntityTag_Player);
+        Transform *transform = registry.add_component< Transform >(player);
+        Box_Collider *collider = registry.add_component< Box_Collider >(player);
+        Rigid_Body *rb = registry.add_component< Rigid_Body >(player);
+        Character_Controller *controller = registry.add_component< Character_Controller >(player);
+
+        transform->position    = { 0.0f, 257.0f, 0.0f };
+        transform->scale       = { 1.0f, 1.0f,  1.0f  };
+        transform->orientation = { 0.0f, 0.0f,  0.0f  };
+
+        collider->size   = { 0.55f, 1.8f, 0.55f };
+        collider->offset = { 0.0f,  0.0f, 0.0f  };
+
+        controller->terminal_velocity = { 50.0f, 50.0f, 50.0f };
+        controller->walk_speed        = 4.0f;
+        controller->run_speed         = 9.0f;
+        controller->jump_force        = 7.6f;
+        controller->fall_force        = -25.0f;
+        controller->turn_speed        = 180.0f;
+        controller->sensetivity       = 0.5f;
 
         return true;
     }
@@ -404,18 +442,20 @@ namespace minecraft {
 
         Job_System::shutdown();
 
+        shutdown_console_commands();
+
         ECS::shutdown();
 
         Physics::shutdown();
 
-        Dropdown_Console::shutdown();
+        shutdown_dropdown_console(&game_state->console);
         UI::shutdown();
 
         shutdown_inventory(&game_state->inventory, game_state->world->path);
 
         Opengl_2D_Renderer::shutdown();
         Opengl_Debug_Renderer::shutdown();
-        Opengl_Renderer::shutdown();
+        shutdown_opengl_renderer();
 
         shutdown_event_system(&game_state->event_system);
         shutdown_input(&game_state->input);
@@ -432,42 +472,20 @@ namespace minecraft {
         World            *game_world      = game_state->world;
         Inventory        *inventory       = &game_state->inventory;
         Game_Debug_State *debug_state     = &game_state->debug_state;
+        Dropdown_Console *console         = &game_state->console;
+
+        Camera& camera      = game_state->camera;
+        Registry& registry  = ECS::internal_data.registry;
 
         f32 frame_timer            = 0;
         u32 last_frames_per_second = 0;
         u32 frames_per_second      = 0;
 
-        Camera& camera      = game_state->camera;
-        Registry& registry  = ECS::internal_data.registry;
-
-        {
-            Entity player = registry.create_entity(EntityArchetype_Guy, EntityTag_Player);
-            Transform *transform = registry.add_component< Transform >(player);
-            Box_Collider *collider = registry.add_component< Box_Collider >(player);
-            Rigid_Body *rb = registry.add_component< Rigid_Body >(player);
-            Character_Controller *controller = registry.add_component< Character_Controller >(player);
-
-            transform->position    = { 0.0f, 257.0f, 0.0f };
-            transform->scale       = { 1.0f, 1.0f,  1.0f  };
-            transform->orientation = { 0.0f, 0.0f,  0.0f  };
-
-            collider->size   = { 0.55f, 1.8f, 0.55f };
-            collider->offset = { 0.0f,  0.0f, 0.0f  };
-
-            controller->terminal_velocity = { 50.0f, 50.0f, 50.0f };
-            controller->walk_speed        = 4.0f;
-            controller->run_speed         = 9.0f;
-            controller->jump_force        = 7.6f;
-            controller->fall_force        = -25.0f;
-            controller->turn_speed        = 180.0f;
-            controller->sensetivity       = 0.5f;
-        }
-
-        f64 last_time = Platform::get_current_time_in_seconds();
-
         f32 game_time_rate = 1.0f / 1000.0f; // 1 / 72.0f is the number used by minecraft
         f32 game_timer     = 0.0f;
         i32 game_time      = 43200; // todo(harlequin): game time to real time function
+
+        f64 last_time = Platform::get_current_time_in_seconds();
 
         while (game_state->is_running)
         {
@@ -493,7 +511,10 @@ namespace minecraft {
             while (game_timer >= game_time_rate)
             {
                 game_time++;
-                if (game_time >= 86400) game_time -= 86400;
+                if (game_time >= 86400)
+                {
+                    game_time -= 86400;
+                }
                 game_timer -= game_time_rate;
             }
 
@@ -512,24 +533,112 @@ namespace minecraft {
             Platform::pump_messages();
 
             update_input(input, game_state->window);
-
-            memset(gameplay_input, 0, sizeof(Input));
+            memset(gameplay_input,  0, sizeof(Input));
             memset(inventory_input, 0, sizeof(Input));
 
-            if (game_state->is_inventory_active)
+            if (game_state->console.state == ConsoleState_Closed)
             {
-                *inventory_input = *input;
+                if (game_state->is_inventory_active)
+                {
+                    *inventory_input = *input;
+                }
+                else
+                {
+                    *gameplay_input  = *input;
+                }
             }
-            else
+
+            glm::vec2 mouse_delta = get_mouse_delta(gameplay_input);
+
+            auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
+            for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
             {
-                *gameplay_input  = *input;
+                auto [transform, rb, controller] = registry.get_components< Transform, Rigid_Body, Character_Controller >(entity);
+
+                transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
+                if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
+                if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
+
+                glm::vec3 angles      = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
+                glm::quat orientation = glm::quat(angles);
+                glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
+                glm::vec3 right       = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
+
+                controller->movement = { 0.0f, 0.0f, 0.0f };
+
+                if (get_key(gameplay_input, MC_KEY_W))
+                {
+                    controller->movement += forward;
+                }
+
+                if (get_key(gameplay_input, MC_KEY_S))
+                {
+                    controller->movement -= forward;
+                }
+
+                if (get_key(gameplay_input, MC_KEY_D))
+                {
+                    controller->movement += right;
+                }
+
+                if (get_key(gameplay_input, MC_KEY_A))
+                {
+                    controller->movement -= right;
+                }
+
+                controller->is_running = false;
+                controller->movement_speed = controller->walk_speed;
+
+                if (get_key(gameplay_input, MC_KEY_LEFT_SHIFT))
+                {
+                    controller->is_running     = true;
+                    controller->movement_speed = controller->run_speed;
+                }
+
+                if (is_key_pressed(gameplay_input, MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
+                {
+                    rb->velocity.y = controller->jump_force;
+                    controller->is_jumping  = true;
+                    controller->is_grounded = false;
+                }
+
+                if (controller->is_jumping && rb->velocity.y <= 0.0f)
+                {
+                    rb->acceleration.y = controller->fall_force;
+                    controller->is_jumping = false;
+                }
+
+                if (controller->movement.x != 0.0f &&
+                    controller->movement.z != 0.0f &&
+                    controller->movement.y != 0.0f)
+                {
+                    controller->movement = glm::normalize(controller->movement);
+                }
             }
+
+            Entity player = registry.find_entity_by_tag(EntityTag_Player);
+
+            if (registry.is_entity_valid(player))
+            {
+                auto transform = registry.get_component< Transform >(player);
+
+                if (transform)
+                {
+                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
+                    camera.yaw      = transform->orientation.y;
+                }
+            }
+
+            // todo(harlequin): follow entity and make the camera an entity
+            camera.update_transform(gameplay_input, delta_time);
+            camera.update();
 
             glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera.position);
             game_world->active_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
                                                                                   active_chunk_coords);
             load_chunks_at_region(game_world, game_world->active_region_bounds);
             schedule_chunk_lighting_jobs(game_world, game_world->active_region_bounds);
+            free_chunks_out_of_region(game_world, game_world->active_region_bounds);
 
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
@@ -607,6 +716,7 @@ namespace minecraft {
                     Transform block_transform   = {};
                     block_transform.position    = get_block_position(block_facing_normal_query.chunk,
                                                                      block_facing_normal_query.block_coords);
+
                     block_transform.scale       = { 1.0f, 1.0f, 1.0f };
                     block_transform.orientation = { 0.0f, 0.0f, 0.0f };
 
@@ -722,92 +832,7 @@ namespace minecraft {
                 }
             }
 
-            glm::vec2 mouse_delta = get_mouse_delta(gameplay_input);
-
-            auto view = get_view< Transform, Rigid_Body, Character_Controller >(&registry);
-            for (auto entity = view.begin(); entity != view.end(); entity = view.next(entity))
-            {
-                auto [transform, rb, controller] = registry.get_components< Transform, Rigid_Body, Character_Controller >(entity);
-
-                transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
-                if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
-                if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
-
-                glm::vec3 angles      = glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f);
-                glm::quat orientation = glm::quat(angles);
-                glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
-                glm::vec3 right       = glm::rotate(orientation, glm::vec3(1.0f, 0.0f, 0.0f));
-
-                controller->movement = { 0.0f, 0.0f, 0.0f };
-
-                if (get_key(gameplay_input, MC_KEY_W))
-                {
-                    controller->movement += forward;
-                }
-
-                if (get_key(gameplay_input, MC_KEY_S))
-                {
-                    controller->movement -= forward;
-                }
-
-                if (get_key(gameplay_input, MC_KEY_D))
-                {
-                    controller->movement += right;
-                }
-
-                if (get_key(gameplay_input, MC_KEY_A))
-                {
-                    controller->movement -= right;
-                }
-
-                controller->is_running = false;
-                controller->movement_speed = controller->walk_speed;
-
-                if (get_key(gameplay_input, MC_KEY_LEFT_SHIFT))
-                {
-                    controller->is_running = true;
-                    controller->movement_speed = controller->run_speed;
-                }
-
-                if (is_key_pressed(gameplay_input, MC_KEY_SPACE) && !controller->is_jumping && controller->is_grounded)
-                {
-                    rb->velocity.y = controller->jump_force;
-                    controller->is_jumping  = true;
-                    controller->is_grounded = false;
-                }
-
-                if (controller->is_jumping && rb->velocity.y <= 0.0f)
-                {
-                    rb->acceleration.y = controller->fall_force;
-                    controller->is_jumping = false;
-                }
-
-                if (controller->movement.x != 0.0f &&
-                    controller->movement.z != 0.0f &&
-                    controller->movement.y != 0.0f)
-                {
-                    controller->movement = glm::normalize(controller->movement);
-                }
-            }
-
             Physics::simulate(delta_time, game_world, &registry);
-
-            Entity player = registry.find_entity_by_tag(EntityTag_Player);
-
-            if (registry.is_entity_valid(player))
-            {
-                auto transform = registry.get_component<Transform>(player);
-
-                if (transform)
-                {
-                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                    camera.yaw      = transform->orientation.y;
-                }
-            }
-
-            // todo(harlequin): follow entity and make the camera an entity
-            camera.update_transform(gameplay_input, delta_time);
-            camera.update();
 
             f32 normalize_color_factor = 1.0f / 255.0f;
             glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
@@ -821,22 +846,24 @@ namespace minecraft {
                 clear_color *= tint_color;
             }
 
-            Opengl_Renderer::begin(clear_color,
-                                   tint_color,
-                                   &camera);
+            opengl_renderer_begin_frame(clear_color,
+                                        tint_color,
+                                        &camera);
 
-            Opengl_Renderer::render_chunks_at_region(game_world,
+            opengl_renderer_render_chunks_at_region(game_world,
                                                      game_world->active_region_bounds,
                                                      &camera);
 
-            Opengl_Renderer::end(game_world->chunk_radius,
+            opengl_renderer_end_frame(game_world->chunk_radius,
                                  game_world->sky_light_level,
                                  &select_query);
 
-            glm::vec2 frame_buffer_size = Opengl_Renderer::get_frame_buffer_size();
+            glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
 
             if (game_state->is_visual_debugging_enabled)
             {
+                const Opengl_Renderer_Stats *stats = opengl_renderer_get_stats();
+
                 debug_state->frames_per_second_text = push_formatted_string8(&frame_arena,
                                                                              "FPS: %d",
                                                                              last_frames_per_second);
@@ -851,17 +878,17 @@ namespace minecraft {
 
                 debug_state->vertex_count_text = push_formatted_string8(&frame_arena,
                                                                         "vertex count: %d",
-                                                                        Opengl_Renderer::internal_data.stats.face_count * 4);
+                                                                        stats->per_frame.face_count * 4);
 
                 debug_state->face_count_text = push_formatted_string8(&frame_arena,
                                                                       "face count: %u",
-                                                                      Opengl_Renderer::internal_data.stats.face_count);
+                                                                      stats->per_frame.face_count);
 
                 debug_state->sub_chunk_bucket_capacity_text = push_formatted_string8(&frame_arena,
                                                                                      "sub chunk bucket capacity: %llu",
                                                                                      World::sub_chunk_bucket_capacity);
 
-                i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - Opengl_Renderer::internal_data.free_buckets.size();
+                i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - opengl_renderer_get_free_chunk_bucket_count();
                 debug_state->sub_chunk_bucket_count_text = push_formatted_string8(&frame_arena,
                                                                                   "sub chunk buckets: %llu",
                                                                                   sub_chunk_bucket_count);
@@ -881,7 +908,7 @@ namespace minecraft {
                 }
 
                 {
-                    f64 total_size = Opengl_Renderer::internal_data.sub_chunk_used_memory / (1024.0 * 1024.0);
+                    f64 total_size = stats->persistent.sub_chunk_used_memory / (1024.0 * 1024.0);
                     debug_state->sub_chunk_bucket_used_memory_text = push_formatted_string8(&frame_arena,
                                                                                             "buckets used memory: %.2f",
                                                                                             total_size);
@@ -957,6 +984,21 @@ namespace minecraft {
                 UI::text(debug_state->block_facing_normal_light_source_level_text);
                 UI::text(debug_state->block_facing_normal_light_level_text);
 
+                UI::text(empty);
+
+                String8 fxaa_lable = {};
+                bool fxaa_enabled = opengl_renderer_is_fxaa_enable();
+                if (fxaa_enabled)
+                {
+                    fxaa_lable.data  = "FXAA: ON";
+                    fxaa_lable.count = (u32)strlen("FXAA: ON");
+                }
+                else
+                {
+                    fxaa_lable.data  = "FXAA: OFF";
+                    fxaa_lable.count = (u32)strlen("FXAA: OFF");
+                }
+                UI::text(fxaa_lable);
                 UI::end();
             }
 
@@ -967,7 +1009,7 @@ namespace minecraft {
                 draw_inventory(inventory, game_world, inventory_input, &frame_arena);
             }
 
-            handle_hotbar_input(inventory, inventory_input);
+            handle_hotbar_input(inventory, gameplay_input);
             draw_hotbar(inventory, game_world, frame_buffer_size, &frame_arena);
 
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
@@ -989,14 +1031,12 @@ namespace minecraft {
                                           { 1.0f, 1.0f, 1.0f, 1.0f },
                                           cursor_texture);
 
-            // Dropdown_Console::draw(delta_time);
+            draw_dropdown_console(console, delta_time);
 
             Opengl_2D_Renderer::begin();
             Opengl_2D_Renderer::end();
 
-            free_chunks_out_of_region(game_world, game_world->active_region_bounds);
-
-            Opengl_Renderer::swap_buffers(game_state->window);
+            opengl_renderer_swap_buffers(game_state->window);
 
             end_temprary_memory_arena(&frame_arena);
         }

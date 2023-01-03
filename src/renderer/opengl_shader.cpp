@@ -78,102 +78,120 @@ namespace minecraft {
         return true;
     }
 
-    void Opengl_Shader::use()
+    void bind_shader(Opengl_Shader *shader)
     {
-        glUseProgram(program_id);
+        glUseProgram(shader->program_id);
     }
 
-    void Opengl_Shader::destroy()
+    void destroy_shader(Opengl_Shader *shader)
     {
-        glDeleteProgram(program_id);
-        program_id = 0;
+        glDeleteProgram(shader->program_id);
+        shader->program_id = 0;
     }
 
-    i32 Opengl_Shader::get_uniform_location(const char *uniform_name)
+    i32 get_uniform_location(Opengl_Shader *shader, const char *uniform_name)
     {
-        auto it = this->uniform_name_to_location_table.find(uniform_name);
-
-        if (it == this->uniform_name_to_location_table.end())
-        {
-            i32 uniform_location = glGetUniformLocation(this->program_id, uniform_name);
-
-            if (uniform_location != -1)
-            {
-                uniform_name_to_location_table.emplace(uniform_name, uniform_location);
-            }
-            else
-            {
-                fprintf(stderr, "[WARNING]: failed to get the location of the uniform \"%s\" at shader %d\n", uniform_name, this->program_id);
-            }
-
-            return uniform_location;
-        }
-
-        return it->second;
+        i32 uniform_location = glGetUniformLocation(shader->program_id, uniform_name);
+        return uniform_location;
     }
 
-    void Opengl_Shader::set_uniform_i32(const char *uniform_name, i32 value)
+    void set_uniform_bool(Opengl_Shader *shader,
+                          const char *uniform_name,
+                          bool value)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 uniform_location = glGetUniformLocation(shader->program_id, uniform_name);
+        glUniform1i(uniform_location, value);
+    }
+
+    void set_uniform_i32(Opengl_Shader *shader,
+                         const char *uniform_name,
+                         i32 value)
+    {
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform1i(location, value);
     }
 
-    void Opengl_Shader::set_uniform_i32_array(const char *uniform_name, i32* values, u32 count)
+    void set_uniform_i32_array(Opengl_Shader *shader,
+                               const char *uniform_name,
+                               i32* values,
+                               u32 count)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform1iv(location, count, values);
     }
 
 
-    void Opengl_Shader::set_uniform_ivec2(const char *uniform_name, i32 value0, i32 value1)
+    void set_uniform_ivec2(Opengl_Shader *shader,
+                           const char *uniform_name,
+                           i32 value0,
+                           i32 value1)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform2i(location, value0, value1);
     }
 
-    void Opengl_Shader::set_uniform_ivec3(const char *uniform_name, i32 value0, i32 value1, i32 value2)
+    void set_uniform_ivec3(Opengl_Shader *shader,
+                           const char *uniform_name,
+                           i32 value0,
+                           i32 value1,
+                           i32 value2)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform3i(location, value0, value1, value2);
     }
 
-    void Opengl_Shader::set_uniform_f32(const char *uniform_name, float value)
+    void set_uniform_f32(Opengl_Shader *shader,
+                         const char *uniform_name,
+                         float value)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform1f(location, value);
     }
 
-    void Opengl_Shader::set_uniform_vec2(const char *uniform_name, float value0, float value1)
+    void set_uniform_vec2(Opengl_Shader *shader,
+                          const char *uniform_name,
+                          float value0,
+                          float value1)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform2f(location, value0, value1);
     }
 
-    void Opengl_Shader::set_uniform_vec3(const char *uniform_name, float value0, float value1, float value2)
+    void set_uniform_vec3(Opengl_Shader *shader,
+                          const char *uniform_name,
+                          float value0,
+                          float value1,
+                          float value2)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform3f(location, value0, value1, value2);
     }
 
-    void Opengl_Shader::set_uniform_vec4(const char *uniform_name, float value0, float value1, float value2, float value3)
+    void set_uniform_vec4(Opengl_Shader *shader,
+                          const char *uniform_name,
+                          float value0,
+                          float value1,
+                          float value2,
+                          float value3)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniform4f(location, value0, value1, value2, value3);
     }
 
-    void Opengl_Shader::set_uniform_mat3(const char *uniform_name, f32 *matrix)
+    void set_uniform_mat3(Opengl_Shader *shader, const char *uniform_name, f32 *matrix)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniformMatrix3fv(location, 1, GL_FALSE, matrix);
     }
 
-    void Opengl_Shader::set_uniform_mat4(const char *uniform_name, f32 *matrix)
+    void set_uniform_mat4(Opengl_Shader *shader, const char *uniform_name, f32 *matrix)
     {
-        i32 location = get_uniform_location(uniform_name);
+        i32 location = get_uniform_location(shader, uniform_name);
         glUniformMatrix4fv(location, 1, GL_FALSE, matrix);
     }
 
-    bool Opengl_Shader::load_from_file(const char *file_name)
+    bool load_shader(Opengl_Shader *shader,
+                     const char *file_name)
     {
         // todo(harlequin): move to platform
         // always read text in binary mode
@@ -233,18 +251,18 @@ namespace minecraft {
             return false;
         }
 
-        program_id = glCreateProgram();
-        glAttachShader(program_id, vertex_shader_id);
-        glAttachShader(program_id, fragment_shader_id);
-        glLinkProgram(program_id);
+        shader->program_id = glCreateProgram();
+        glAttachShader(shader->program_id, vertex_shader_id);
+        glAttachShader(shader->program_id, fragment_shader_id);
+        glLinkProgram(shader->program_id);
 
         i32 success;
-        glGetProgramiv(program_id, GL_LINK_STATUS, &success);
+        glGetProgramiv(shader->program_id, GL_LINK_STATUS, &success);
 
         if (!success)
         {
             char info_log[512];
-            glGetProgramInfoLog(program_id, sizeof(info_log), NULL, info_log);
+            glGetProgramInfoLog(shader->program_id, sizeof(info_log), NULL, info_log);
             fprintf(stderr, "[ERROR]: failed to link shader program at %s\n%s", file_name, info_log);
             return false;
         }

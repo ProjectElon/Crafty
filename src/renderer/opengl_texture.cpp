@@ -43,15 +43,20 @@ namespace minecraft {
         return 0;
     }
 
-    bool Opengl_Texture::initialize(u8 *data, u32 width, u32 height, TextureFormat format, TextureUsage usage)
+    bool initialize_texture(Opengl_Texture *texture,
+                            u8 *data,
+                            u32 width,
+                            u32 height,
+                            TextureFormat format,
+                            TextureUsage usage)
     {
-        this->width  = width;
-        this->height = height;
-        this->format = format;
-        this->usage  = usage;
+        texture->width  = width;
+        texture->height = height;
+        texture->format = format;
+        texture->usage  = usage;
 
-        glGenTextures(1, &this->id);
-        glBindTexture(GL_TEXTURE_2D, this->id);
+        glGenTextures(1, &texture->id);
+        glBindTexture(GL_TEXTURE_2D, texture->id);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -81,15 +86,24 @@ namespace minecraft {
         i32 internal_format = texture_format_to_opengl_internal_format(format);
         i32 texture_format  = texture_format_to_opengl_texture_format(format);
 
-        glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, texture_format, GL_UNSIGNED_BYTE, data);
-        // glGenerateMipmap(GL_TEXTURE_2D);
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     internal_format,
+                     width,
+                     height,
+                     0,
+                     texture_format,
+                     GL_UNSIGNED_BYTE,
+                     data);
 
         glBindTexture(GL_TEXTURE_2D, 0);
 
         return true;
     }
 
-    bool Opengl_Texture::load_from_file(const char *file_path, TextureUsage usage)
+    bool load_texture(Opengl_Texture *texture,
+                      const char     *file_path,
+                      TextureUsage    usage)
     {
         i32 width;
         i32 height;
@@ -103,7 +117,10 @@ namespace minecraft {
             return false;
         }
 
-        defer { stbi_image_free(data); };
+        defer
+        {
+            stbi_image_free(data);
+        };
 
         u32 opengl_texture_format;
         u32 opengl_internal_format;
@@ -122,7 +139,12 @@ namespace minecraft {
             Assert(false && "unsupported channel count");
         }
 
-        bool success = initialize(data, (u32)width, (u32)height, (TextureFormat)texture_format, usage);
+        bool success = initialize_texture(texture,
+                                          data,
+                                          (u32)width,
+                                          (u32)height,
+                                          (TextureFormat)texture_format,
+                                          usage);
 
         if (success)
         {
@@ -132,9 +154,9 @@ namespace minecraft {
         return success;
     }
 
-    void Opengl_Texture::bind(u32 texture_slot)
+    void bind_texture(Opengl_Texture *texture, u32 texture_slot)
     {
         glActiveTexture(GL_TEXTURE0 + texture_slot);
-        glBindTexture(GL_TEXTURE_2D, this->id);
+        glBindTexture(GL_TEXTURE_2D, texture->id);
     }
 }

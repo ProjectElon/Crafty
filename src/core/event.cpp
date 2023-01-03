@@ -8,7 +8,7 @@ namespace minecraft {
     bool initialize_event_system(Event_System *event_system, bool is_logging_enabled)
     {
         event_system->is_logging_enabled = is_logging_enabled;
-        event_system->registry->entries = std::vector<Event_Entry>();
+        event_system->registry->entries  = std::vector< Event_Entry >(); // todo(harlequin): remove std::vector
         event_system->registry->entries.reserve(128);
         return true;
     }
@@ -61,14 +61,19 @@ namespace minecraft {
 
     void fire_event(Event_System *event_system, EventType event_type, const Event *event)
     {
-        for (auto& event_entry : event_system->registry[event_type].entries)
+        i32 count = event_system->registry[event_type].entries.size();
+        for (i32 i = count - 1; i >= 0; i--)
         {
-            bool handled = event_entry.on_event(event, event_entry.sender);
+            Event_Entry &event_entry = event_system->registry[event_type].entries[i];
+            bool handled             = event_entry.on_event(event, event_entry.sender);
 
             if (event_system->is_logging_enabled)
             {
                 const char* event_string = convert_event_to_string(event_type, event);
-                fprintf(stderr, "[TRACE]: %s event fired with sender %p\n", event_string, event_entry.sender);
+                fprintf(stderr,
+                        "[TRACE]: %s event fired with sender %p\n",
+                        event_string,
+                        event_entry.sender);
             }
 
             if (handled)

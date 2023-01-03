@@ -38,7 +38,7 @@ namespace minecraft {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
             if (render_data.pending_for_update)
             {
-                Opengl_Renderer::update_sub_chunk(world, chunk, sub_chunk_index);
+                opengl_renderer_update_sub_chunk(world, chunk, sub_chunk_index);
                 render_data.pending_for_update = false;
             }
         }
@@ -65,7 +65,7 @@ namespace minecraft {
 
             if (!render_data.pending_for_update && render_data.uploaded_to_gpu)
             {
-                Opengl_Renderer::free_sub_chunk(chunk, sub_chunk_index);
+                opengl_renderer_free_sub_chunk(chunk, sub_chunk_index);
             }
         }
         serialize_chunk(chunk, world->seed, world->path, temp_arena);

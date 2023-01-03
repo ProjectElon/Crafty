@@ -65,7 +65,7 @@ namespace minecraft {
         auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
         auto& update_chunk_jobs_queue        = world->update_chunk_jobs_queue;
 
-        Circular_FIFO_Queue<Block_Query_Result> light_queue;
+        Circular_FIFO_Queue< Block_Query_Result > light_queue;
         light_queue.initialize(ArenaPushArrayAlignedZero(permanent_arena, Block_Query_Result, DEFAULT_QUEUE_SIZE));
 
         while (Job_System::internal_data.running)

@@ -80,7 +80,7 @@ namespace minecraft {
             pixels[i] = alpha | (alpha << 8) | (alpha << 16) | (alpha << 24);
         }
 
-        bool success = this->atlas.initialize(reinterpret_cast<u8*>(pixels), texture_width, texture_height, TextureFormat_RGBA, TextureUsage_Font);
+        bool success = initialize_texture(&this->atlas, (u8*)pixels, texture_width, texture_height, TextureFormat_RGBA, TextureUsage_Font);
 
         if (success)
         {

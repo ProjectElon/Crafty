@@ -59,9 +59,9 @@ namespace minecraft {
     {
         auto& [line_vao_id, line_vbo_id, line_vertices] = internal_data;
 
-        shader->use();
-        shader->set_uniform_mat4("u_view", glm::value_ptr(camera->view));
-        shader->set_uniform_mat4("u_projection", glm::value_ptr(camera->projection));
+        bind_shader(shader);
+        set_uniform_mat4(shader, "u_view", glm::value_ptr(camera->view));
+        set_uniform_mat4(shader, "u_projection", glm::value_ptr(camera->projection));
 
         glLineWidth(line_thickness);
     }
@@ -145,10 +145,10 @@ namespace minecraft {
 
         if (line_vertices.size())
         {
-            glEnable(GL_CULL_FACE);
+            glDisable(GL_CULL_FACE);
             glEnable(GL_DEPTH_TEST);
-            glDepthFunc(GL_LESS);
-            glDepthMask(GL_FALSE);
+            glDepthFunc(GL_LEQUAL);
+            glDepthMask(GL_TRUE);
             glDisable(GL_BLEND);
 
             glBindVertexArray(line_vao_id);

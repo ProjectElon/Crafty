@@ -3,14 +3,13 @@
 #include "game/inventory.h"
 #include "game/world.h"
 #include "core/input.h"
+#include "core/file_system.h"
 #include "renderer/opengl_renderer.h"
 #include "renderer/opengl_2d_renderer.h"
+#include "renderer/opengl_texture.h"
 #include "renderer/font.h"
 #include "memory/memory_arena.h"
 #include "containers/string.h"
-#include <filesystem>
-#include <sstream>
-
 
 namespace minecraft {
 
@@ -95,7 +94,8 @@ namespace minecraft {
         return found;
     }
 
-    void calculate_slot_positions_and_sizes(Inventory *inventory, const glm::vec2& frame_buffer_size)
+    void calculate_slot_positions_and_sizes(Inventory *inventory,
+                                            const glm::vec2& frame_buffer_size)
     {
         f32 hot_bar_size_x = frame_buffer_size.x * inventory->hot_bar_scale;
         auto& inventory_hud_pos = inventory->inventory_hud_pos;
@@ -289,7 +289,7 @@ namespace minecraft {
                                           slot_size,
                                           0.0f,
                                           color,
-                                          &Opengl_Renderer::internal_data.block_sprite_sheet,
+                                          opengl_renderer_get_block_sprite_sheet_texture(), // todo(harlequin): game_assets
                                           side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                           side_texture_uv_rect.bottom_left);
 
@@ -391,7 +391,7 @@ namespace minecraft {
                                               { slot_width, slot_height },
                                               0.0f,
                                               color,
-                                              &Opengl_Renderer::internal_data.block_sprite_sheet,
+                                              opengl_renderer_get_block_sprite_sheet_texture(),
                                               side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                               side_texture_uv_rect.bottom_left);
 
@@ -438,7 +438,7 @@ namespace minecraft {
         char inventory_file_path[256];
         sprintf(inventory_file_path, "%s/inventory", path.data);
 
-        if (!std::filesystem::exists(inventory_file_path))
+        if (!File_System::exists(inventory_file_path))
         {
             return;
         }
