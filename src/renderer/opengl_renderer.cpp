@@ -6,6 +6,7 @@
 #include "memory/memory_arena.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
+#include "core/file_system.h"
 
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -14,7 +15,12 @@
 #include "game/world.h"
 #include "game/profiler.h"
 
+#include <stb/stb_image.h>
 #include <mutex>
+
+// todo(harlequin): to be removed
+#include <fstream>
+#include <sstream>
 
 namespace minecraft {
 
@@ -29,7 +35,7 @@ namespace minecraft {
 // vertex1 masks
 #define SKY_LIGHT_LEVEL_MASK 15 // 4 bits
 #define LIGHT_SOURCE_LEVEL_MASK 15 // 4 bits
-#define AMBIENT_OCCLUSION_LEVEL_MASK 3 // 2bits
+#define AMBIENT_OCCLUSION_LEVEL_MASK 3 // 2 bits
 
     static void APIENTRY gl_debug_output(GLenum      source,
                                          GLenum      type,
@@ -108,6 +114,8 @@ namespace minecraft {
         Opengl_Renderer_Stats stats;
 
         bool enable_fxaa;
+
+        u32 block_sprite_sheet_array_texture;
     };
 
     static Opengl_Renderer *renderer;
@@ -138,7 +146,7 @@ namespace minecraft {
         {
             glEnable(GL_DEBUG_OUTPUT);
             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-            glDebugMessageCallback(gl_debug_output, &internal_data);
+            glDebugMessageCallback(gl_debug_output, renderer);
             glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
         }
 #endif
@@ -339,6 +347,106 @@ namespace minecraft {
         // todo(harlequin): config file
         renderer->enable_fxaa = true;
 
+        // todo(harlequin): temprary
+        u8 white_block_texture[32 * 32 * 4];
+        for (u32 i = 0; i < 32 * 32 * 4; i += 4)
+        {
+            u8 *R = white_block_texture + i + 0;
+            u8 *G = white_block_texture + i + 1;
+            u8 *B = white_block_texture + i + 2;
+            u8 *A = white_block_texture + i + 3;
+            *R = 255;
+            *G = 0;
+            *B = 255;
+            *A = 255;
+        }
+
+        // todo(harlequin): temprary
+        std::vector< std::string > texture_extensions = { ".png" };
+        bool recursive = true;
+        std::vector< std::string > paths = File_System::list_files_at_path("../assets/textures/blocks", recursive, texture_extensions);
+
+        auto compare = [](const std::string& a, const std::string& b) -> bool
+        {
+            unsigned char buf[8];
+
+            std::ifstream a_in(a);
+            a_in.seekg(16);
+            a_in.read(reinterpret_cast<char*>(&buf), 8);
+            a_in.close();
+
+            u32 a_height = (buf[4] << 24) + (buf[5] << 16) + (buf[6] << 8) + (buf[7] << 0);
+
+            std::ifstream b_in(b);
+            b_in.seekg(16);
+            b_in.read(reinterpret_cast<char*>(&buf), 8);
+            b_in.close();
+
+            u32 b_height = (buf[4] << 24) + (buf[5] << 16) + (buf[6] << 8) + (buf[7] << 0);
+
+            if (a_height == b_height)
+            {
+                return a < b;
+            }
+
+            return a_height < b_height;
+        };
+
+        std::sort(std::begin(paths), std::end(paths), compare);
+
+        renderer->block_sprite_sheet_array_texture = 0;
+        glGenTextures(1, &renderer->block_sprite_sheet_array_texture);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
+        // 6 -> 32 16 8 4 2 1
+        glTexStorage3D(GL_TEXTURE_2D_ARRAY, 6, GL_RGBA8, 32, 32, paths.size());
+
+        u32 texture_id = 0;
+
+        for (auto& path : paths)
+        {
+            i32 width;
+            i32 height;
+            i32 channels;
+
+            stbi_set_flip_vertically_on_load(true);
+            u8* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+
+            if (!data)
+            {
+                continue;
+            }
+
+            glTexSubImage3D(GL_TEXTURE_2D_ARRAY,
+                            0,
+                            0, 0, texture_id,
+                            32, 32, 1,
+                            GL_RGBA,
+                            GL_UNSIGNED_BYTE,
+                            (width == 32 && height == 32) ? data : white_block_texture);
+
+            stbi_image_free(data);
+            texture_id++;
+        }
+
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); // GL_LINEAR_MIPMAP_LINEAR - GL_NEAREST_MIPMAP_NEAREST
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        f32 max_anisotropy = 0.0f;
+        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_anisotropy);
+
+        f32 anisotropy = 16.0f;
+        if (anisotropy > max_anisotropy)
+        {
+            anisotropy = max_anisotropy;
+        }
+        glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+
+        glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
+
+        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+
         return true;
     }
 
@@ -378,7 +486,7 @@ namespace minecraft {
         parse_resize_event(event, &width, &height);
         if (width == 0 || height == 0)
         {
-            return true; // todo(harlequin): maybe we should return true
+            return true;
         }
         renderer->frame_buffer_size = { (f32)width, (f32)height };
         opengl_renderer_recreate_frame_buffers();
@@ -411,13 +519,13 @@ namespace minecraft {
                                 u32 &out_face_corner_id,
                                 u32 &out_flags)
     {
-        block_coords.x = vertex & BLOCK_X_MASK;
-        block_coords.y = (vertex >> 4) & BLOCK_Y_MASK;
-        block_coords.z = (vertex >> 12) & BLOCK_Z_MASK;
+        block_coords.x        = vertex & BLOCK_X_MASK;
+        block_coords.y        = (vertex >> 4) & BLOCK_Y_MASK;
+        block_coords.z        = (vertex >> 12) & BLOCK_Z_MASK;
         out_local_position_id = (vertex >> 16) & LOCAL_POSITION_ID_MASK;
-        out_face_id = (vertex >> 19) & FACE_ID_MASK;
-        out_face_corner_id = (vertex >> 22) & FACE_CORNER_ID_MASK;
-        out_flags = (vertex >> 24);
+        out_face_id           = (vertex >> 19) & FACE_ID_MASK;
+        out_face_corner_id    = (vertex >> 22) & FACE_CORNER_ID_MASK;
+        out_flags             = (vertex >> 24);
     }
 
     static u32 compress_vertex1(u32 texture_uv_id,
@@ -439,10 +547,10 @@ namespace minecraft {
                                 u32 &out_light_source_level,
                                 u32 &out_ambient_occlusion_level)
     {
-        out_sky_light_level = vertex & SKY_LIGHT_LEVEL_MASK;
-        out_light_source_level = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
+        out_sky_light_level         = vertex        & SKY_LIGHT_LEVEL_MASK;
+        out_light_source_level      = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
         out_ambient_occlusion_level = (vertex >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK;
-        out_texture_uv_id = (vertex >> 10);
+        out_texture_uv_id           = (vertex >> 10);
     }
 
     void opengl_renderer_allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
@@ -1548,6 +1656,10 @@ namespace minecraft {
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_BUFFER, renderer->uv_texture_id);
 
+        set_uniform_i32(opaque_shader, "u_block_array_texture", 2);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
+
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->opaque_command_count, renderer->opaque_command_buffer);
 
@@ -1602,6 +1714,10 @@ namespace minecraft {
 
         set_uniform_i32(transparent_shader, "u_uvs", 1);
         set_uniform_f32(transparent_shader, "u_sky_light_level", sky_light_level);
+
+        set_uniform_i32(transparent_shader, "u_block_array_texture", 2);
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->transparent_command_count, renderer->transparent_command_buffer);

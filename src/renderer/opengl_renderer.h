@@ -8,8 +8,8 @@
 #include <vector>
 #include <atomic>
 
-#define OPENGL_DEBUGGING 0
-#define OPENGL_TRACE_DEBUG_MESSAGE 0
+#define OPENGL_DEBUGGING 1
+#define OPENGL_TRACE_DEBUG_MESSAGE 1
 
 namespace minecraft {
 

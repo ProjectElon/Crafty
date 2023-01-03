@@ -5,6 +5,8 @@
 #include "renderer/font.h"
 #include "game/console_commands.h"
 #include "core/input.h"
+#include "core/file_system.h"
+#include "assets/texture_packer.h"
 
 #include <glm/gtx/compatibility.hpp>
 
@@ -63,6 +65,18 @@ namespace minecraft {
         String8 str = args[0].string;
         push_line(console, str);
         return true;
+    }
+
+    static bool build_assets_command(Console_Command_Argument *args)
+    {
+        std::vector< std::string > texture_extensions = { ".png" };
+        bool recursive = true;
+        std::vector< std::string > paths = File_System::list_files_at_path("../assets/textures/blocks", recursive, texture_extensions);
+        const char *output_path        = "../assets/textures/block_spritesheet.png";
+        const char *locations_path     = "../assets/textures/spritesheet_meta.txt";
+        const char *header_file_path   = "../src/meta/spritesheet_meta.h";
+        bool success = Texture_Packer::pack_textures(paths, output_path, locations_path, header_file_path);
+        return success;
     }
 
     bool initialize_dropdown_console(Dropdown_Console *console,
@@ -137,6 +151,7 @@ namespace minecraft {
         };
         console_commands_register_command(Str8("echo"),  &echo_command, echo_command_args, ArrayCount(echo_command_args));
         console_commands_register_command(Str8("print"), &echo_command, echo_command_args, ArrayCount(echo_command_args));
+        console_commands_register_command(Str8("build_assets"), &build_assets_command);
 
         return true;
     }

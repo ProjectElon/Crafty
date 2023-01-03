@@ -428,17 +428,4 @@ namespace minecraft {
     //     // }
     //     // Inventory::add_block(block_id);
     // }
-
-    // void build_assets(const Console_Command::Arguments& args)
-    // {
-    //     // Dropdown_Console::log_with_new_line("packing block textures ...");
-    //     // std::vector<std::string> texture_extensions = { ".png" };
-    //     // bool recursive = true;
-    //     // std::vector<std::string> paths = File_System::list_files_at_path("../assets/textures/blocks", recursive, texture_extensions);
-    //     // const char *output_path        = "../assets/textures/block_spritesheet.png";
-    //     // const char *locations_path     = "../assets/textures/spritesheet_meta.txt";
-    //     // const char *header_file_path   = "../src/meta/spritesheet_meta.h";
-    //     // bool success = Texture_Packer::pack_textures(paths, output_path, locations_path, header_file_path);
-    //     // if (success) Dropdown_Console::log_with_new_line("block texture packed successfully");
-    // }
 }

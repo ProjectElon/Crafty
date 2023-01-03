@@ -7,8 +7,17 @@ layout (location = 1) in uint  in_data1;
 layout (location = 2) in ivec2 instance_chunk_coords;
 
 out vec2 a_uv;
+out flat int a_texture_id;
+
 // out flat uint a_data0;
 // out flat uint a_data1;
+
+vec2 uv_look_up[4] = vec2[](
+    vec2(1.0f, 0.0f),
+    vec2(0.0f, 0.0f),
+    vec2(0.0f, 1.0f),
+    vec2(1.0f, 1.0f)
+);
 
 out vec4 a_biome_color;
 out flat vec4 a_highlight_color;
@@ -46,7 +55,8 @@ vec3 local_positions[8] = vec3[](
 );
 
 uniform vec4 u_biome_color;
-uniform samplerBuffer u_uvs;
+uniform samplerBuffer  u_uvs;
+uniform sampler2DArray u_block_array_texture;
 
 #define Top_Face_ID    0
 #define Bottom_Face_ID 1
@@ -73,7 +83,7 @@ void main()
     vec3 block_coords = vec3(block_x, block_y, block_z);
     uint local_position_id = (in_data0 >> 16) & LOCAL_POSITION_ID_MASK;
     uint face_id = (in_data0 >> 19) & FACE_ID_MASK;
-    // uint face_corner_id = (in_data0 >> 22) & FACE_CORNER_ID_MASK;
+    uint face_corner_id = (in_data0 >> 22) & FACE_CORNER_ID_MASK;
     uint flags = in_data0 >> 24;
 
     vec3 position = vec3(instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
@@ -87,9 +97,12 @@ void main()
     a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
     int uv_index = int(in_data1 >> 10);
-    float u = texelFetch(u_uvs, uv_index).r;
-    float v = texelFetch(u_uvs, uv_index + 1).r;
-    a_uv = vec2(u, v);
+    // float u = texelFetch(u_uvs, uv_index).r;
+    // float v = texelFetch(u_uvs, uv_index + 1).r;
+    // a_uv = vec2(u, v);
+
+    a_uv         = uv_look_up[face_corner_id];
+    a_texture_id = uv_index / 8;
 
     // a_data0 = in_data0;
     // a_data1 = in_data1;
@@ -160,6 +173,7 @@ layout (location = 0) out vec4  accum;
 layout (location = 1) out float reveal;
 
 in vec2 a_uv;
+in flat int a_texture_id;
 // in flat uint a_data0;
 // in flat uint a_data1;
 in vec4 a_biome_color;
@@ -170,6 +184,7 @@ in float a_light_level;
 uniform vec4 u_sky_color;
 uniform vec4 u_tint_color;
 uniform sampler2D u_block_sprite_sheet;
+uniform sampler2DArray u_block_array_texture;
 
 vec3 light_dir   = normalize(vec3(0.0f, 1.0f, 0.0f));
 vec3 light_color = vec3(1.0f, 1.0f, 1.0f);
@@ -212,7 +227,7 @@ void main()
 
     // vec3 normal = face_normal[face_id];
 
-    vec4 block_color = texture(u_block_sprite_sheet, a_uv) * a_biome_color * a_highlight_color;
+    vec4 block_color = texture(u_block_array_texture, vec3(a_uv.x, a_uv.y, a_texture_id)) * a_biome_color * a_highlight_color;
     vec4 color = mix(vec4(block_color.rgb * a_light_level, block_color.a), u_sky_color, a_fog_factor) * u_tint_color;
 
     float weight = clamp(pow(min(1.0, color.a * 10.0) + 0.01, 3.0) * 1e8 * pow(1.0 - gl_FragCoord.z * 0.9, 3.0), 1e-2, 3e3);
