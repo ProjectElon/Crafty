@@ -49,36 +49,6 @@ namespace minecraft {
         return max_scroll_y;
     }
 
-    static bool clear_command(Console_Command_Argument *args)
-    {
-        Game_State       *game_state = (Game_State*)console_commands_get_user_pointer();
-        Dropdown_Console *console    = &game_state->console;
-        clear_dropdown_console(console);
-        return true;
-    }
-
-    static bool echo_command(Console_Command_Argument *args)
-    {
-        Game_State       *game_state = (Game_State*)console_commands_get_user_pointer();
-        Dropdown_Console *console    = &game_state->console;
-
-        String8 str = args[0].string;
-        push_line(console, str);
-        return true;
-    }
-
-    static bool build_assets_command(Console_Command_Argument *args)
-    {
-        std::vector< std::string > texture_extensions = { ".png" };
-        bool recursive = true;
-        std::vector< std::string > paths = File_System::list_files_at_path("../assets/textures/blocks", recursive, texture_extensions);
-        const char *output_path        = "../assets/textures/block_spritesheet.png";
-        const char *locations_path     = "../assets/textures/spritesheet_meta.txt";
-        const char *header_file_path   = "../src/meta/spritesheet_meta.h";
-        bool success = Texture_Packer::pack_textures(paths, output_path, locations_path, header_file_path);
-        return success;
-    }
-
     bool initialize_dropdown_console(Dropdown_Console *console,
                                      Memory_Arena     *arena,
                                      Bitmap_Font      *font,
@@ -98,6 +68,7 @@ namespace minecraft {
         console->string_arena       = create_memory_arena(ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1)), MegaBytes(1));
         console->line_arena         = create_memory_arena(ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1)), MegaBytes(1));
         console->font               = font;
+        console->push_line_mutex    = new std::mutex();
 
         console->text_color       = text_color;
         console->background_color = background_color;
@@ -142,16 +113,6 @@ namespace minecraft {
         register_event(event_system, EventType_KeyPress,   on_key,         console);
         register_event(event_system, EventType_KeyHeld,    on_key,         console);
         register_event(event_system, EventType_MouseWheel, on_mouse_wheel, console);
-
-        console_commands_register_command(Str8("clear"), &clear_command);
-        console_commands_register_command(Str8("cls"),   &clear_command);
-
-        ConsoleCommandArgumentType echo_command_args[] = {
-            ConsoleCommandArgumentType_String
-        };
-        console_commands_register_command(Str8("echo"),  &echo_command, echo_command_args, ArrayCount(echo_command_args));
-        console_commands_register_command(Str8("print"), &echo_command, echo_command_args, ArrayCount(echo_command_args));
-        console_commands_register_command(Str8("build_assets"), &build_assets_command);
 
         return true;
     }
@@ -226,7 +187,7 @@ namespace minecraft {
         }
     }
 
-    void push_line(Dropdown_Console *console, String8 line, bool is_command /*= false*/)
+    void push_line(Dropdown_Console *console, String8 line /*= Str8("")*/, bool is_command /*= false*/)
     {
         char *str = ArenaPushArrayAligned(&console->string_arena, char, line.count);
         memcpy(str, line.data, sizeof(char) * line.count);
@@ -241,6 +202,13 @@ namespace minecraft {
         }
 
         console->line_count++;
+    }
+
+    void thread_safe_push_line(Dropdown_Console *console, String8 line /*= Str8("")*/, bool is_command /*= false*/)
+    {
+        console->push_line_mutex->lock();
+        push_line(console, line, is_command);
+        console->push_line_mutex->unlock();
     }
 
     void draw_dropdown_console(Dropdown_Console *console, f32 dt)

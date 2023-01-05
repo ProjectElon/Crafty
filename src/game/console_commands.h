@@ -55,12 +55,18 @@ namespace minecraft {
 
     typedef bool (*console_command_fn)(Console_Command_Argument *arg_list);
 
+    struct Console_Command_Argument_Info
+    {
+        ConsoleCommandArgumentType type;
+        String8                    name;
+    };
+
     struct Console_Command
     {
-        String8                     name;
-        u32                         arg_count;
-        ConsoleCommandArgumentType *args;
-        console_command_fn          execute;
+        String8                        name;
+        u32                            arg_count;
+        Console_Command_Argument_Info *args;
+        console_command_fn             execute;
     };
 
     struct Console_Command_Node
@@ -73,12 +79,17 @@ namespace minecraft {
     void shutdown_console_commands();
 
     void console_commands_set_user_pointer(void *user_pointer);
-    void* console_commands_get_user_pointer();
+    void *console_commands_get_user_pointer();
 
     bool console_commands_register_command(String8                     name,
                                            console_command_fn          command_fn,
-                                           ConsoleCommandArgumentType *args      = nullptr,
+                                           Console_Command_Argument_Info *args   = nullptr,
                                            u32                         arg_count = 0);
+
+    const Console_Command *console_commands_get_command_iterator();
+    const Console_Command *console_commands_next_command(const Console_Command *command_iterator);
+
+    const char *convert_console_command_argument_type_to_cstring(ConsoleCommandArgumentType type);
 
     ConsoleCommandExecutionResult console_commands_execute_command(String8 command_line);
 }

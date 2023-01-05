@@ -4,6 +4,7 @@
 #include "memory/memory_arena.h"
 #include "containers/string.h"
 
+#include <mutex>
 #include <glm/glm.hpp>
 
 namespace minecraft {
@@ -30,6 +31,8 @@ namespace minecraft {
         Memory_Arena string_input_arena;
         Memory_Arena string_arena;
         Memory_Arena line_arena;
+
+        std::mutex *push_line_mutex;
 
         ConsoleState state;
 
@@ -101,5 +104,6 @@ namespace minecraft {
 
     void draw_dropdown_console(Dropdown_Console *console, f32 delta_time);
 
-    void push_line(Dropdown_Console *console, String8 line, bool is_command = false);
+    void push_line(Dropdown_Console *console, String8 line = Str8(""), bool is_command = false);
+    void thread_safe_push_line(Dropdown_Console *console, String8 line = Str8(""), bool is_command = false);
 }

@@ -17,6 +17,9 @@ namespace minecraft {
 
     #define Str8(CStringLiteral) String8 { CStringLiteral, strlen(CStringLiteral) }
 
+    String8 push_formatted_string8_null_terminated(Memory_Arena *arena, const char *format, ...);
+    String8 push_formatted_string8_null_terminated(Temprary_Memory_Arena *temp_arena, const char *format, ...);
+
     String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...);
     String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...);
 

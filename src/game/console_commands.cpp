@@ -47,10 +47,10 @@ namespace minecraft {
         return state->user_pointer;
     }
 
-    bool console_commands_register_command(String8                     name,
-                                           console_command_fn          command_fn,
-                                           ConsoleCommandArgumentType *args /* = nullptr */,
-                                           u32                         arg_count /* = 0 */)
+    bool console_commands_register_command(String8                        name,
+                                           console_command_fn             command_fn,
+                                           Console_Command_Argument_Info *args /* = nullptr */,
+                                           u32                            arg_count /* = 0 */)
     {
         for (Console_Command_Node *node = state->first_command_node; node; node = node->next)
         {
@@ -68,8 +68,8 @@ namespace minecraft {
         if (args && arg_count)
         {
             command->arg_count    = arg_count;
-            command->args         = ArenaPushArrayAligned(&state->arena, ConsoleCommandArgumentType, arg_count);
-            memcpy(command->args, args, arg_count * sizeof(ConsoleCommandArgumentType));
+            command->args         = ArenaPushArrayAligned(&state->arena, Console_Command_Argument_Info, arg_count);
+            memcpy(command->args, args, arg_count * sizeof(Console_Command_Argument_Info));
         }
 
         command->execute = command_fn;
@@ -86,6 +86,18 @@ namespace minecraft {
         }
 
         return true;
+    }
+
+    const Console_Command *console_commands_get_command_iterator()
+    {
+        return &state->first_command_node->command;
+    }
+
+    const Console_Command *console_commands_next_command(const Console_Command *command_iterator)
+    {
+        Console_Command_Node *command_node = (Console_Command_Node*)command_iterator;
+        Console_Command_Node *next_node    = command_node->next;
+        return &next_node->command;
     }
 
     struct String8_Node
@@ -183,11 +195,12 @@ namespace minecraft {
 
             for (u32 i = 0; i < command->arg_count; i++, token = token->next)
             {
-                String8 token_null_terminated_str = push_formatted_string8(&temp_arena,
-                                                                           "%.*s",
-                                                                           token->str.count,
-                                                                           token->str.data);
-                ConsoleCommandArgumentType   type     = command->args[i];
+                String8 token_str_nt = push_formatted_string8_null_terminated(&temp_arena,
+                                                                              "%.*s",
+                                                                              token->str.count,
+                                                                              token->str.data);
+
+                ConsoleCommandArgumentType   type     = command->args[i].type;
                 Console_Command_Argument    *argument = &arg_list[i];
 
                 switch (type)
@@ -206,57 +219,57 @@ namespace minecraft {
 
                     case ConsoleCommandArgumentType_Int8:
                     {
-                        argument->int8 = (i8)atoi(token_null_terminated_str.data);
+                        argument->int8 = (i8)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_Int16:
                     {
-                        argument->int16 = (i16)atoi(token_null_terminated_str.data);
+                        argument->int16 = (i16)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_Int32:
                     {
-                        argument->int32 = (i32)atoi(token_null_terminated_str.data);
+                        argument->int32 = (i32)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_Int64:
                     {
-                        argument->int64 = (i64)atoll(token_null_terminated_str.data);
+                        argument->int64 = (i64)atoll(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_UInt8:
                     {
-                        argument->uint8 = (u8)atoi(token_null_terminated_str.data);
+                        argument->uint8 = (u8)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_UInt16:
                     {
-                        argument->uint16 = (u16)atoi(token_null_terminated_str.data);
+                        argument->uint16 = (u16)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_UInt32:
                     {
-                        argument->uint32 = (u32)atoi(token_null_terminated_str.data);
+                        argument->uint32 = (u32)atoi(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_UInt64:
                     {
-                        argument->uint64 = (u64)atoll(token_null_terminated_str.data);
+                        argument->uint64 = (u64)atoll(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_Float32:
                     {
-                        argument->float32 = (f32)atof(token_null_terminated_str.data);
+                        argument->float32 = (f32)atof(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_Float64:
                     {
-                        argument->float64 = (f64)atof(token_null_terminated_str.data);
+                        argument->float64 = (f64)atof(token_str_nt.data);
                     } break;
 
                     case ConsoleCommandArgumentType_String:
                     {
-                        argument->string = token_null_terminated_str;
+                        argument->string = token_str_nt;
                     } break;
                 }
             }
@@ -266,166 +279,69 @@ namespace minecraft {
         return status ? ConsoleCommandExecutionResult_Success : ConsoleCommandExecutionResult_Error;
     }
 
-    // bool register_command(const Console_Command& command)
-    // {
-    //     for (auto& current_command : registered_commands)
-    //     {
-    //         if (current_command.name == command.name && current_command.args == command.args)
-    //         {
-    //             return false;
-    //         }
-    //     }
-    //     registered_commands.push_back(command);
-    //     return true;
-    // }
+    const char *convert_console_command_argument_type_to_cstring(ConsoleCommandArgumentType type)
+    {
+        switch (type)
+        {
+            case ConsoleCommandArgumentType_Boolean:
+            {
+                return "bool";
+            } break;
 
-    // Console_Command_Parse_Result parse_command(const std::string& text)
-    // {
-    //     std::stringstream ss(text);
+            case ConsoleCommandArgumentType_Int8:
+            {
+                return "i8";
+            } break;
 
-    //     Console_Command_Parse_Result result;
+            case ConsoleCommandArgumentType_Int16:
+            {
+                return "i16";
+            } break;
 
-    //     std::string token;
-    //     std::getline(ss, token, ' ');
-    //     result.name = token;
+            case ConsoleCommandArgumentType_Int32:
+            {
+                return "i32";
+            } break;
 
-    //     while (std::getline(ss, token, ' '))
-    //     {
-    //         result.args.push_back( token );
-    //     }
+            case ConsoleCommandArgumentType_Int64:
+            {
+                return "i64";
+            } break;
 
-    //     return result;
-    // }
+            case ConsoleCommandArgumentType_UInt8:
+            {
+                return "u8";
+            } break;
 
-    // const Console_Command* find_command_from_parse_result(const Console_Command_Parse_Result& parse_result)
-    // {
-    //     for (i32 i = 0; i < registered_commands.size(); i++)
-    //     {
-    //         const Console_Command* command = &registered_commands[i];
+            case ConsoleCommandArgumentType_UInt16:
+            {
+                return "u16";
+            } break;
 
-    //         // todo(harlequin): to proper function to command meta programming please
-    //         if (command->name == parse_result.name &&
-    //            (command->args.size() == parse_result.args.size() || command->args[0].find("args:any") != std::string::npos))
-    //         {
-    //             return command;
-    //         }
-    //     }
+            case ConsoleCommandArgumentType_UInt32:
+            {
+                return "u32";
+            } break;
 
-    //     return nullptr;
-    // }
+            case ConsoleCommandArgumentType_UInt64:
+            {
+                return "u64";
+            } break;
 
-    // void register_commands()
-    // {
-    //     register_command({ "print", { "args:any" }, print });
+            case ConsoleCommandArgumentType_Float32:
+            {
+                return "f32";
+            } break;
 
-    //     register_command({ "exit", {}, exit });
-    //     register_command({ "close", {}, close });
+            case ConsoleCommandArgumentType_Float64:
+            {
+                return "f64";
+            } break;
 
-    //     register_command({ "clear", {}, clear });
-    //     register_command({ "list_commands", {}, list_commands });
-    //     register_command({ "list_blocks", {}, list_blocks });
-
-    //     register_command({ "chunk_radius", {}, chunk_radius });
-    //     register_command({ "set_chunk_radius", { "radius:i32" }, set_chunk_radius });
-    //     register_command({ "add_block", { "block_name:string" }, add_block_to_inventory });
-
-    //     register_command({ "build_assets", {}, build_assets });
-    // }
-
-    // void print(const Console_Command::Arguments& args)
-    // {
-    //     // std::string text;
-    //     // for (auto& arg : args) text += arg + " ";
-    //     // Dropdown_Console::log_with_new_line(text);
-    // }
-
-    // void exit(const Console_Command::Arguments& args)
-    // {
-    //     // Game::internal_data.is_running = false;
-    // }
-
-    // void close(const Console_Command::Arguments& args)
-    // {
-    //     // Dropdown_Console::close();
-    // }
-
-    // void clear(const Console_Command::Arguments& args)
-    // {
-    //     // Dropdown_Console::clear();
-    // }
-
-    // void list_commands(const Console_Command::Arguments& args)
-    // {
-    //     // for (i32 i = 0; i < registered_commands.size(); i++)
-    //     // {
-    //     //     Console_Command& command = registered_commands[i];
-    //     //     Dropdown_Console::log(command.name, Dropdown_Console::internal_data.command_color);
-
-    //     //     for (auto& arg : command.args)
-    //     //     {
-    //     //         i32 colon_index = arg.find_first_of(":");
-    //     //         std::string arg_name = arg.substr(0, colon_index);
-    //     //         std::string arg_type = arg.substr(colon_index + 1);
-    //     //         Dropdown_Console::log(" " + arg_name, Dropdown_Console::internal_data.argument_color);
-    //     //         Dropdown_Console::log(":", Dropdown_Console::internal_data.text_color);
-    //     //         Dropdown_Console::log(arg_type, Dropdown_Console::internal_data.type_color);
-    //     //     }
-
-    //     //     Dropdown_Console::log("\n");
-    //     // }
-    // }
-
-    // void list_blocks(const Console_Command::Arguments& args)
-    // {
-    //     for (i32 i = 0; i < BlockId_Count; i++)
-    //     {
-    //         // const Block_Info& block_info = World::block_infos[i];
-    //         // Dropdown_Console::log_with_new_line(block_info.name);
-    //     }
-    // }
-
-    // void chunk_radius(const Console_Command::Arguments& args)
-    // {
-    //     // std::stringstream ss;
-    //     // ss << World::chunk_radius;
-    //     // Dropdown_Console::log_with_new_line(ss.str());
-
-    // }
-
-    // void set_chunk_radius(const Console_Command::Arguments& args)
-    // {
-    //     // i32 chunk_radius;
-    //     // std::stringstream ss(args[0]);
-    //     // ss >> chunk_radius;
-    //     // if (ss.fail())
-    //     // {
-    //     //     Dropdown_Console::log_with_new_line("invalid argument expected an integer");
-    //     //     return;
-    //     // }
-    //     // if (chunk_radius > World::max_chunk_radius) chunk_radius = World::max_chunk_radius;
-    //     // World::chunk_radius = chunk_radius;
-    // }
-
-    // void add_block_to_inventory(const Console_Command::Arguments& args)
-    // {
-    //     // std::string block_name;
-    //     // std::stringstream ss(args[0]);
-    //     // ss >> block_name;
-    //     // i16 block_id = -1;
-    //     // for (u16 i = 1; i < BlockId_Count; i++)
-    //     // {
-    //     //     const Block_Info& block_info = World::block_infos[i];
-    //     //     if (block_info.name == block_name)
-    //     //     {
-    //     //         block_id = i;
-    //     //         break;
-    //     //     }
-    //     // }
-    //     // if (block_id == -1)
-    //     // {
-    //     //     Dropdown_Console::log_with_new_line("invalid block\n");
-    //     //     return;
-    //     // }
-    //     // Inventory::add_block(block_id);
-    // }
+            case ConsoleCommandArgumentType_String:
+            {
+                return "string";
+            } break;
+        }
+    }
 }

@@ -7,7 +7,7 @@
 
 namespace minecraft {
 
-    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...)
+    String8 push_formatted_string8_null_terminated(Memory_Arena *arena, const char *format, ...)
     {
         String8 result = {};
 
@@ -30,7 +30,7 @@ namespace minecraft {
         return result;
     }
 
-    String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...)
+    String8 push_formatted_string8_null_terminated(Temprary_Memory_Arena *temp_arena, const char *format, ...)
     {
         String8 result = {};
 
@@ -48,6 +48,53 @@ namespace minecraft {
                 result.data       = buffer;
                 result.count      = (u32)count;
                 arena->allocated += (u32)count + 1;
+            }
+        }
+        va_end(args);
+        return result;
+    }
+
+    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...)
+    {
+        String8 result = {};
+
+        va_list args;
+        va_start(args, format);
+
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            if (arena->allocated + count <= arena->size)
+            {
+                result.data       = buffer;
+                result.count      = (u32)count;
+                arena->allocated += (u32)count;
+            }
+        }
+        va_end(args);
+        return result;
+    }
+
+    String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...)
+    {
+        String8 result = {};
+
+        va_list args;
+        va_start(args, format);
+
+        Memory_Arena *arena = temp_arena->arena;
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            if (arena->allocated + count <= arena->size)
+            {
+                result.data       = buffer;
+                result.count      = (u32)count;
+                arena->allocated += (u32)count;
             }
         }
         va_end(args);

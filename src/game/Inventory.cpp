@@ -294,7 +294,7 @@ namespace minecraft {
                                           side_texture_uv_rect.bottom_left);
 
             Bitmap_Font* font   = inventory->font;
-            String8 slot_text   = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
+            String8 slot_text   = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
             glm::vec2 text_size = font->get_string_size(slot_text);
 
             Opengl_2D_Renderer::draw_string(font,
@@ -397,7 +397,7 @@ namespace minecraft {
 
 
                 Bitmap_Font* font = inventory->font;
-                String8 slot_text = push_formatted_string8(temp_arena, "%d", (u32)slot.count);
+                String8 slot_text = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
                 auto text_size    = font->get_string_size(slot_text);
                 Opengl_2D_Renderer::draw_string(font,
                                                 slot_text,
