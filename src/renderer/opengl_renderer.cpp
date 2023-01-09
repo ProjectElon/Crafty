@@ -1743,9 +1743,10 @@ namespace minecraft {
         glBindVertexArray(renderer->quad_vertex_array_id);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
-        f32 line_thickness = 5.0f;
-        Opengl_Debug_Renderer::begin(camera, &renderer->line_shader, line_thickness);
-        Opengl_Debug_Renderer::end();
+        f32 line_thickness = 3.0f;
+        opengl_debug_renderer_draw_lines(camera,
+                                         &renderer->line_shader,
+                                         line_thickness);
 
         glDisable(GL_BLEND);
         glDisable(GL_DEPTH_TEST);
@@ -1892,7 +1893,12 @@ namespace minecraft {
         return &renderer->block_sprite_sheet;
     }
 
-    bool opengl_renderer_is_fxaa_enable()
+    void opengl_renderer_set_is_fxaa_enabled(bool enabled)
+    {
+        renderer->enable_fxaa = enabled;
+    }
+
+    bool opengl_renderer_is_fxaa_enabled()
     {
         return renderer->enable_fxaa;
     }

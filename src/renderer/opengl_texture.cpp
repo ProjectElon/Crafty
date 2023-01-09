@@ -53,35 +53,13 @@ namespace minecraft {
         texture->width  = width;
         texture->height = height;
         texture->format = format;
-        texture->usage  = usage;
 
         glGenTextures(1, &texture->id);
         glBindTexture(GL_TEXTURE_2D, texture->id);
 
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        switch (usage)
-        {
-            case TextureUsage_SpriteSheet:
-            {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-            } break;
-
-            case TextureUsage_UI:
-            {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            } break;
-
-            case TextureUsage_Font:
-            {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            }
-            break;
-        }
+        set_texture_usage(texture, usage);
 
         i32 internal_format = texture_format_to_opengl_internal_format(format);
         i32 texture_format  = texture_format_to_opengl_texture_format(format);
@@ -152,6 +130,34 @@ namespace minecraft {
         }
 
         return success;
+    }
+
+    void set_texture_usage(Opengl_Texture *texture, TextureUsage usage)
+    {
+        texture->usage = usage;
+        glBindTexture(GL_TEXTURE_2D, texture->id);
+
+        switch (usage)
+        {
+            case TextureUsage_SpriteSheet:
+            {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            } break;
+
+            case TextureUsage_UI:
+            {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            } break;
+
+            case TextureUsage_Font:
+            {
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            }
+            break;
+        }
     }
 
     void bind_texture(Opengl_Texture *texture, u32 texture_slot)

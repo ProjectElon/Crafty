@@ -134,4 +134,24 @@ namespace minecraft {
 
         return -1;
     }
+
+    i32 find_last_any_char(String8 *str, const char *pattern)
+    {
+        u32 pattern_count = strlen(pattern);
+        i32 index = -1;
+
+        for (i32 i = 0; i < str->count; i++)
+        {
+            for (i32 j = 0; j < pattern_count; j++)
+            {
+                if (str->data[i] == pattern[j])
+                {
+                    index = i;
+                    break;
+                }
+            }
+        }
+
+        return index;
+    }
 }

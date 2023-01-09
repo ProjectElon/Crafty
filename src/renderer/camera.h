@@ -17,10 +17,7 @@ namespace minecraft {
     {
         glm::vec3 position;
 
-        // todo(harlequin): move to player controller
-        f32 walk_speed;
-        f32 run_speed;
-        f32 movment_speed;
+        // todo(harlequin): move to controller
         f32 rotation_speed;
         f32 sensetivity;
 
@@ -41,12 +38,15 @@ namespace minecraft {
         glm::mat4 projection;
 
         Frustum frustum;
-
-        void initialize(const glm::vec3& position, f32 fov = 45.0f, f32 aspect_ratio = 16.0f / 9.0f, f32 near = 0.01f, f32 far = 1000.0f);
-        void update_transform(Input *input, f32 delta_time);
-        void update();
-
-        void update_view();
-        void update_projection();
     };
+
+    void initialize_camera(Camera          *camera,
+                           const glm::vec3 &position,
+                           f32              fov = 90.0f,
+                           f32              aspect_ratio = 16.0f / 9.0f,
+                           f32              near = 0.01f,
+                           f32              far  = 1000.0f);
+
+    void update_camera_transform(Camera *camera, Input *input, f32 delta_time);
+    void update_camera(Camera *camera);
 }

@@ -26,4 +26,5 @@ namespace minecraft {
     bool equal(String8 *str0, String8 *str1);
 
     i32 find_first_any_char(String8 *str, const char *pattern);
+    i32 find_last_any_char(String8 *str, const char *pattern);
 }

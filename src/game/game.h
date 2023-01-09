@@ -15,12 +15,13 @@
 #include "game/inventory.h"
 
 #include "ui/dropdown_console.h"
+#include "game/game_assets.h"
 
 struct GLFWwindow;
 
 namespace minecraft {
 
-    enum WindowMode
+    enum WindowMode : u8
     {
         WindowMode_None,
         WindowMode_Fullscreen,
@@ -30,16 +31,18 @@ namespace minecraft {
 
     struct Game_Config
     {
-        const char *window_title;
-        i32         window_x;
-        i32         window_y;
-        i32         window_x_before_fullscreen;
-        i32         window_y_before_fullscreen;
-        u32         window_width;
-        u32         window_height;
-        WindowMode  window_mode;
-        bool        is_cursor_visible;
-        bool        is_raw_mouse_motion_enabled;
+        char       window_title[256];
+        i32        window_x;
+        i32        window_y;
+        i32        window_x_before_fullscreen;
+        i32        window_y_before_fullscreen;
+        u32        window_width;
+        u32        window_height;
+        WindowMode window_mode;
+        bool       is_cursor_visible;
+        bool       is_raw_mouse_motion_enabled;
+        bool       is_fxaa_enabled;
+        u32        chunk_radius;
     };
 
     struct Game_Memory

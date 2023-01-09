@@ -87,7 +87,8 @@ namespace minecraft {
     const Opengl_Renderer_Stats *opengl_renderer_get_stats();
     i64 opengl_renderer_get_free_chunk_bucket_count();
 
-    bool opengl_renderer_is_fxaa_enable();
+    void opengl_renderer_set_is_fxaa_enabled(bool enabled);
+    bool opengl_renderer_is_fxaa_enabled();
     void opengl_renderer_toggle_fxaa();
 
     // todo(harlequin): temprary use game assets

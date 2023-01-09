@@ -285,23 +285,23 @@ namespace minecraft {
                 color = grass_color;
             }
 
-            Opengl_2D_Renderer::draw_rect(slot_pos + half_slot_size,
-                                          slot_size,
-                                          0.0f,
-                                          color,
-                                          opengl_renderer_get_block_sprite_sheet_texture(), // todo(harlequin): game_assets
-                                          side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
-                                          side_texture_uv_rect.bottom_left);
+            opengl_2d_renderer_push_quad(slot_pos + half_slot_size,
+                                         slot_size,
+                                         0.0f,
+                                         color,
+                                         opengl_renderer_get_block_sprite_sheet_texture(), // todo(harlequin): game_assets
+                                         side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
+                                         side_texture_uv_rect.bottom_left);
 
             Bitmap_Font* font   = inventory->font;
             String8 slot_text   = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
-            glm::vec2 text_size = font->get_string_size(slot_text);
+            glm::vec2 text_size = get_string_size(font, slot_text);
 
-            Opengl_2D_Renderer::draw_string(font,
-                                            slot_text,
-                                            text_size,
-                                            slot_pos + half_slot_size,
-                                            { 1.0f, 1.0f, 1.0f, 1.0f });
+            opengl_2d_renderer_push_string(font,
+                                           slot_text,
+                                           text_size,
+                                           slot_pos + half_slot_size,
+                                           { 1.0f, 1.0f, 1.0f, 1.0f });
         }
     }
 
@@ -312,13 +312,13 @@ namespace minecraft {
         auto& inventory_hud_pos  = inventory->inventory_hud_pos;
         auto& inventory_hud_size = inventory->inventory_hud_size;
 
-        Opengl_2D_Renderer::draw_rect(inventory_hud_pos,
-                                      inventory_hud_size,
-                                      0.0f,
-                                      { 1.0f, 1.0f, 1.0f, 1.0f },
-                                      inventory->hud_sprite,
-                                      inventory->inventory_hud_uv_rect.top_right - inventory->inventory_hud_uv_rect.bottom_left,
-                                      inventory->inventory_hud_uv_rect.bottom_left);
+        opengl_2d_renderer_push_quad(inventory_hud_pos,
+                                     inventory_hud_size,
+                                     0.0f,
+                                     { 1.0f, 1.0f, 1.0f, 1.0f },
+                                     inventory->hud_sprite,
+                                     inventory->inventory_hud_uv_rect.top_right - inventory->inventory_hud_uv_rect.bottom_left,
+                                     inventory->inventory_hud_uv_rect.bottom_left);
 
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
@@ -387,7 +387,7 @@ namespace minecraft {
                 UV_Rect& side_texture_uv_rect = texture_uv_rects[info.side_texture_id];
                 glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-                Opengl_2D_Renderer::draw_rect({ slot_center_x, slot_center_y },
+                opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
                                               { slot_width, slot_height },
                                               0.0f,
                                               color,
@@ -398,15 +398,15 @@ namespace minecraft {
 
                 Bitmap_Font* font = inventory->font;
                 String8 slot_text = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
-                auto text_size    = font->get_string_size(slot_text);
-                Opengl_2D_Renderer::draw_string(font,
+                auto text_size    = get_string_size(font, slot_text);
+                opengl_2d_renderer_push_string(font,
                                                 slot_text,
                                                 text_size,
                                                 { slot_center_x, slot_center_y },
                                                 { 1.0f, 1.0f, 1.0f, 1.0f });
             }
 
-            Opengl_2D_Renderer::draw_rect({ slot_center_x, slot_center_y },
+            opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
                                           { slot_width, slot_height },
                                           0.0f,
                                           { 1.0f, 1.0f, 1.0f, 1.0f },

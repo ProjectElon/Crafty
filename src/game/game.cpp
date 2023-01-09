@@ -231,6 +231,25 @@ namespace minecraft {
         return true;
     }
 
+    static bool toggle_fxaa_command(Console_Command_Argument *args)
+    {
+        Game_State  *game_state = (Game_State*)console_commands_get_user_pointer();
+        game_state->game_config.is_fxaa_enabled = !game_state->game_config.is_fxaa_enabled;
+        opengl_renderer_toggle_fxaa();
+        return true;
+    }
+
+    static bool set_chunk_radius_command(Console_Command_Argument *args)
+    {
+        u32 new_chunk_radius = glm::clamp(args[0].uint32,
+                                          (u32)8,
+                                          (u32)World::max_chunk_radius);
+        Game_State *game_state   = (Game_State*)console_commands_get_user_pointer();
+        game_state->game_config.chunk_radius = new_chunk_radius;
+        game_state->world->chunk_radius = new_chunk_radius;
+        return true;
+    }
+
     bool list_commands_command(Console_Command_Argument *args)
     {
         Game_State       *game_state   = (Game_State*)console_commands_get_user_pointer();
@@ -286,6 +305,63 @@ namespace minecraft {
         return true;
     }
 
+    static void load_game_config_defaults(Game_Config *config)
+    {
+        strcpy(config->window_title,  "Crafty");
+        config->window_x                    = -1;
+        config->window_y                    = -1;
+        config->window_x_before_fullscreen  = -1;
+        config->window_y_before_fullscreen  = -1;
+        config->window_width                = 1280;
+        config->window_height               = 720;
+        config->window_mode                 = WindowMode_None;
+        config->is_cursor_visible           = false;
+        config->is_raw_mouse_motion_enabled = true;
+        config->is_fxaa_enabled             = false;
+        config->chunk_radius                = 8;
+    }
+
+    static bool load_game_config(Game_Config *config)
+    {
+        FILE *config_file = fopen("config", "rb");
+
+        if (!config_file)
+        {
+            fprintf(stderr, "[ERROR]: failed to open config file\n");
+            return false;
+        }
+
+        defer { fclose(config_file); };
+
+        fseek(config_file, 0, SEEK_END);
+        size_t config_file_size = ftell(config_file);
+        fseek(config_file, 0, SEEK_SET);
+
+        if (config_file_size != sizeof(Game_Config))
+        {
+            return false;
+        }
+
+        size_t read_count = fread(config, sizeof(Game_Config), 1, config_file);
+        return read_count == 1;
+    }
+
+    static bool save_game_config(Game_Config *config)
+    {
+        FILE *config_file = fopen("config", "wb");
+
+        if (!config_file)
+        {
+            fprintf(stderr, "[ERROR]: failed to open config file for writting\n");
+            return false;
+        }
+
+        defer { fclose(config_file); };
+
+        size_t written_count = fwrite(config, sizeof(Game_Config), 1, config_file);
+        return written_count == 1;
+    }
+
     bool initialize_game(Game_State *game_state)
     {
         Game_Memory      *game_memory  = game_state->game_memory;
@@ -296,20 +372,13 @@ namespace minecraft {
         Camera           *camera       = &game_state->camera;
         Dropdown_Console *console      = &game_state->console;
 
-        // @todo(harlequin): load/save the game config from/to a file
-        game_config->window_title                = "Minecraft";
-        game_config->window_x                    = -1;
-        game_config->window_y                    = -1;
-        game_config->window_x_before_fullscreen  = -1;
-        game_config->window_y_before_fullscreen  = -1;
-        game_config->window_width                = 1280;
-        game_config->window_height               = 720;
-        game_config->window_mode                 = WindowMode_None;
-        game_config->is_cursor_visible           = false;
-        game_config->is_raw_mouse_motion_enabled = true;
+        if (!load_game_config(game_config))
+        {
+            load_game_config_defaults(game_config);
+        }
 
-        u32 opengl_major_version = 4;
-        u32 opengl_minor_version = 4;
+        u32 opengl_major_version       = 4;
+        u32 opengl_minor_version       = 4;
         u32 opengl_back_buffer_samples = 16;
 
         if (!Platform::initialize(game_config,
@@ -332,10 +401,12 @@ namespace minecraft {
 
         Platform::hook_window_event_callbacks(game_state->window);
 
-        WindowMode window_mode = WindowMode_Windowed;
+        WindowMode window_mode = game_config->window_mode;
         Platform::switch_to_window_mode(game_state->window,
                                         game_config,
                                         window_mode);
+
+        Platform::set_window_user_pointer(game_state->window, event_system);
 
         bool is_tracing_events = false;
         if (!initialize_event_system(event_system, is_tracing_events))
@@ -343,8 +414,6 @@ namespace minecraft {
             fprintf(stderr, "[ERROR]: failed to initialize event system\n");
             return false;
         }
-
-        Platform::set_window_user_pointer(game_state->window, event_system);
 
         if (!initialize_input(input, game_state->window))
         {
@@ -369,15 +438,23 @@ namespace minecraft {
             return false;
         }
 
-        if (!Opengl_2D_Renderer::initialize())
+        opengl_renderer_set_is_fxaa_enabled(game_config->is_fxaa_enabled);
+
+        if (!initialize_opengl_2d_renderer(&game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize 2d renderer system\n");
             return false;
         }
 
-        if (!Opengl_Debug_Renderer::initialize())
+        if (!initialize_opengl_debug_renderer(&game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize debug render system\n");
+            return false;
+        }
+
+        if (!initialize_game_assets(&game_memory->permanent_arena))
+        {
+            fprintf(stderr, "[ERROR]: failed to initialize game_assets\n");
             return false;
         }
 
@@ -385,20 +462,20 @@ namespace minecraft {
 
         if (!Physics::initialize(physics_update_rate))
         {
-            fprintf(stderr, "[ERROR] failed to initialize physics system\n");
+            fprintf(stderr, "[ERROR]: failed to initialize physics system\n");
             return false;
         }
 
         const u32 max_entity_count = 1024;
         if (!ECS::initialize(max_entity_count))
         {
-            fprintf(stderr, "[ERROR] failed to initialize ecs\n");
+            fprintf(stderr, "[ERROR]: failed to initialize ecs\n");
             return false;
         }
 
-        f32 fov = 90.0f;
+        f32 fov                   = 90.0f;
         glm::vec3 camera_position = { 0.0f, 0.0f, 0.0f };
-        camera->initialize(camera_position, fov);
+        initialize_camera(camera, camera_position, fov);
 
         register_event(event_system, EventType_Quit,             on_quit);
         register_event(event_system, EventType_KeyPress,         on_key_press, game_state);
@@ -412,16 +489,16 @@ namespace minecraft {
         register_event(event_system, EventType_Restore,          on_restore, game_state);
 
         Bitmap_Font *fira_code = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        fira_code->load_from_file("../assets/fonts/FiraCode-Regular.ttf", 22);
+        load_font(fira_code, "../assets/fonts/FiraCode-Regular.ttf", 22);
 
         Bitmap_Font *noto_mono = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        noto_mono->load_from_file("../assets/fonts/NotoMono-Regular.ttf", 22);
+        load_font(noto_mono, "../assets/fonts/NotoMono-Regular.ttf", 22);
 
         Bitmap_Font *consolas = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        consolas->load_from_file("../assets/fonts/Consolas.ttf", 22);
+        load_font(consolas, "../assets/fonts/Consolas.ttf", 22);
 
         Bitmap_Font *liberation_mono = ArenaPushAlignedZero(&game_memory->permanent_arena, Bitmap_Font);
-        liberation_mono->load_from_file("../assets/fonts/liberation-mono.ttf", 22);
+        load_font(liberation_mono, "../assets/fonts/liberation-mono.ttf", 22);
 
         Opengl_Texture *hud_sprites = ArenaPushAlignedZero(&game_memory->permanent_arena, Opengl_Texture);
         load_texture(hud_sprites, "../assets/textures/hudSprites.png", TextureUsage_UI);
@@ -488,7 +565,7 @@ namespace minecraft {
         initialize_world(game_world, world_path);
 
         game_world->sky_light_level = 15.0f;
-        game_world->chunk_radius    = 8;
+        game_world->chunk_radius    = game_config->chunk_radius;
 
         if (!initialize_inventory(inventory, liberation_mono, hud_sprites))
         {
@@ -566,6 +643,18 @@ namespace minecraft {
                                           add_block_to_inventory_command_args,
                                           ArrayCount(add_block_to_inventory_command_args));
 
+
+        console_commands_register_command(Str8("toggle_fxaa"),
+                                          &toggle_fxaa_command);
+
+        Console_Command_Argument_Info set_chunk_radius_command_args[] = {
+            { ConsoleCommandArgumentType_UInt32, Str8("chunk_radius") }
+        };
+        console_commands_register_command(Str8("set_chunk_radius"),
+                                          &set_chunk_radius_command,
+                                          set_chunk_radius_command_args,
+                                          ArrayCount(set_chunk_radius_command_args));
+
         return true;
     }
 
@@ -587,12 +676,24 @@ namespace minecraft {
 
         shutdown_inventory(&game_state->inventory, game_state->world->path);
 
-        Opengl_2D_Renderer::shutdown();
-        Opengl_Debug_Renderer::shutdown();
+        shutdown_opengl_2d_renderer();
+        shutdown_opengl_debug_renderer();
         shutdown_opengl_renderer();
+
+        shutdown_game_assets();
 
         shutdown_event_system(&game_state->event_system);
         shutdown_input(&game_state->input);
+
+        bool saved = save_game_config(&game_state->game_config);
+        if (saved)
+        {
+            fprintf(stderr, "[INFO]: saved game config\n");
+        }
+        else
+        {
+            fprintf(stderr, "[ERROR]: failed to save game config\n");
+        }
 
         Platform::shutdown();
     }
@@ -607,8 +708,8 @@ namespace minecraft {
         Inventory        *inventory       = &game_state->inventory;
         Game_Debug_State *debug_state     = &game_state->debug_state;
         Dropdown_Console *console         = &game_state->console;
+        Camera           *camera          = &game_state->camera;
 
-        Camera& camera      = game_state->camera;
         Registry& registry  = ECS::internal_data.registry;
 
         f32 frame_timer            = 0;
@@ -758,16 +859,16 @@ namespace minecraft {
 
                 if (transform)
                 {
-                    camera.position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                    camera.yaw      = transform->orientation.y;
+                    camera->position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
+                    camera->yaw      = transform->orientation.y;
                 }
             }
 
             // todo(harlequin): follow entity and make the camera an entity
-            camera.update_transform(gameplay_input, delta_time);
-            camera.update();
+            update_camera_transform(camera, gameplay_input, delta_time);
+            update_camera(camera);
 
-            glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera.position);
+            glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera->position);
             game_world->active_region_bounds = get_world_bounds_from_chunk_coords(game_world->chunk_radius,
                                                                                   active_chunk_coords);
             load_chunks_at_region(game_world, game_world->active_region_bounds);
@@ -777,8 +878,8 @@ namespace minecraft {
             Ray_Cast_Result ray_cast_result = {};
             u32 max_block_select_dist_in_cube_units = 5;
             Block_Query_Result select_query = select_block(game_world,
-                                                           camera.position,
-                                                           camera.forward,
+                                                           camera->position,
+                                                           camera->forward,
                                                            max_block_select_dist_in_cube_units,
                                                            &ray_cast_result);
             const char *back_facing_normal_label = "";
@@ -877,8 +978,8 @@ namespace minecraft {
                     {
                         glm::vec3 abs_normal  = glm::abs(normal);
                         glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
-                        Opengl_Debug_Renderer::draw_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, debug_color);
-                        Opengl_Debug_Renderer::draw_line(block_position, block_position + normal * 1.5f, debug_color);
+                        opengl_debug_renderer_push_cube(block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, debug_color);
+                        opengl_debug_renderer_push_line(block_position, block_position + normal * 1.5f, debug_color);
 
                         debug_state->block_facing_normal_chunk_coords_text = push_formatted_string8_null_terminated(&frame_arena,
                                                                                                     "chunk: (%d, %d)",
@@ -956,7 +1057,7 @@ namespace minecraft {
             }
 
             bool is_under_water  = false;
-            auto block_at_camera = query_block(game_world, camera.position);
+            auto block_at_camera = query_block(game_world, camera->position);
 
             if (is_block_query_valid(block_at_camera))
             {
@@ -982,15 +1083,15 @@ namespace minecraft {
 
             opengl_renderer_begin_frame(clear_color,
                                         tint_color,
-                                        &camera);
+                                        camera);
 
             opengl_renderer_render_chunks_at_region(game_world,
-                                                     game_world->active_region_bounds,
-                                                     &camera);
+                                                    game_world->active_region_bounds,
+                                                    camera);
 
             opengl_renderer_end_frame(game_world->chunk_radius,
-                                 game_world->sky_light_level,
-                                 &select_query);
+                                      game_world->sky_light_level,
+                                     &select_query);
 
             glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
 
@@ -1050,9 +1151,9 @@ namespace minecraft {
 
                 debug_state->player_position_text = push_formatted_string8_null_terminated(&frame_arena,
                                                                            "position: (%.2f, %.2f, %.2f)",
-                                                                           camera.position.x,
-                                                                           camera.position.y,
-                                                                           camera.position.z);
+                                                                           camera->position.x,
+                                                                           camera->position.y,
+                                                                           camera->position.z);
 
                 debug_state->player_chunk_coords_text = push_formatted_string8_null_terminated(&frame_arena,
                                                                                "chunk coords: (%d, %d)",
@@ -1070,9 +1171,9 @@ namespace minecraft {
                 i32 hours = game_time / (60 * 60);
                 i32 minutes = (game_time % (60 * 60)) / 60;
                 debug_state->game_time_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                     "game time: %d:%d",
-                                                                     hours,
-                                                                     minutes);
+                                                                                     "game time: %d:%d",
+                                                                                     hours,
+                                                                                     minutes);
 
                 UI::begin(input);
 
@@ -1120,19 +1221,17 @@ namespace minecraft {
 
                 UI::text(empty);
 
-                String8 fxaa_lable = {};
-                bool fxaa_enabled = opengl_renderer_is_fxaa_enable();
+                bool fxaa_enabled = opengl_renderer_is_fxaa_enabled();
+                String8 fxaa_label = {};
                 if (fxaa_enabled)
                 {
-                    fxaa_lable.data  = "FXAA: ON";
-                    fxaa_lable.count = (u32)strlen("FXAA: ON");
+                    fxaa_label = Str8("FXAA: ON");
                 }
                 else
                 {
-                    fxaa_lable.data  = "FXAA: OFF";
-                    fxaa_lable.count = (u32)strlen("FXAA: OFF");
+                    fxaa_label = Str8("FXAA: OFF");
                 }
-                UI::text(fxaa_lable);
+                UI::text(fxaa_label);
                 UI::end();
             }
 
@@ -1159,17 +1258,15 @@ namespace minecraft {
             // cursor_ui
             glm::vec2 cursor_size = { cursor_texture->width  * 0.5f, cursor_texture->height * 0.5f };
 
-            Opengl_2D_Renderer::draw_rect(cursor,
-                                          cursor_size,
-                                          0.0f,
-                                          { 1.0f, 1.0f, 1.0f, 1.0f },
-                                          cursor_texture);
+            opengl_2d_renderer_push_quad(cursor,
+                                         cursor_size,
+                                         0.0f,
+                                         { 1.0f, 1.0f, 1.0f, 1.0f },
+                                         cursor_texture);
 
             draw_dropdown_console(console, delta_time);
 
-            Opengl_2D_Renderer::begin();
-            Opengl_2D_Renderer::end();
-
+            opengl_2d_renderer_draw_quads();
             opengl_renderer_swap_buffers(game_state->window);
 
             end_temprary_memory_arena(&frame_arena);

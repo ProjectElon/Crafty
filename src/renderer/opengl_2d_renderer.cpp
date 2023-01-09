@@ -3,6 +3,7 @@
 #include "opengl_shader.h"
 #include "opengl_texture.h"
 #include "font.h"
+#include "memory/memory_arena.h"
 
 #include <glad/glad.h>
 
@@ -11,8 +12,56 @@
 
 namespace minecraft {
 
-    bool Opengl_2D_Renderer::initialize()
+    struct Quad_Vertex
     {
+        glm::vec2 position;
+        glm::vec2 texture_coords;
+    };
+
+    struct Quad_Instance
+    {
+        glm::vec2  position;
+        glm::vec2  scale;
+        f32        rotation;
+        glm::vec4  color;
+        i32        texture_index;
+        glm::vec2  uv_scale;
+        glm::vec2  uv_offset;
+    };
+
+    struct Opengl_2D_Renderer
+    {
+        u32 quad_vao;
+
+        u32 quad_vbo;
+        u32 quad_ibo;
+
+        u32 quad_instance_vbo;
+
+        Quad_Vertex quad_vertices[4];
+        u16         quad_indicies[6];
+
+        i32 samplers[32];
+        i32 texture_slots[32];
+
+        u32 quad_count;
+        Quad_Instance quad_instances[MAX_QUAD_COUNT];
+
+        Opengl_Texture white_pixel;
+        Opengl_Shader  ui_shader;
+    };
+
+    static Opengl_2D_Renderer *renderer;
+
+    bool initialize_opengl_2d_renderer(Memory_Arena *arena)
+    {
+        if (renderer)
+        {
+            return false;
+        }
+
+        renderer = ArenaPushAlignedZero(arena, Opengl_2D_Renderer);
+
         /*
         2----------3
         |          |
@@ -29,33 +78,31 @@ namespace minecraft {
         // -1.0f, 1.0f,  0.0f, 0.0f, 1.0f
         // -1.0f, -1.0f, 0.0f, 0.0f, 0.0f
 
-        internal_data.quad_vertices[0] = { {  0.5f, -0.5f }, { 1.0f, 0.0f } };
-        internal_data.quad_vertices[1] = { { -0.5f, -0.5f }, { 0.0f, 0.0f } };
-        internal_data.quad_vertices[2] = { { -0.5f,  0.5f }, { 0.0f, 1.0f } };
-        internal_data.quad_vertices[3] = { {  0.5f,  0.5f }, { 1.0f, 1.0f } };
+        renderer->quad_vertices[0] = { {  0.5f, -0.5f }, { 1.0f, 0.0f } };
+        renderer->quad_vertices[1] = { { -0.5f, -0.5f }, { 0.0f, 0.0f } };
+        renderer->quad_vertices[2] = { { -0.5f,  0.5f }, { 0.0f, 1.0f } };
+        renderer->quad_vertices[3] = { {  0.5f,  0.5f }, { 1.0f, 1.0f } };
 
-        internal_data.quad_indicies[0] = 3;
-        internal_data.quad_indicies[1] = 1;
-        internal_data.quad_indicies[2] = 0;
+        renderer->quad_indicies[0] = 3;
+        renderer->quad_indicies[1] = 1;
+        renderer->quad_indicies[2] = 0;
 
-        internal_data.quad_indicies[3] = 3;
-        internal_data.quad_indicies[4] = 2;
-        internal_data.quad_indicies[5] = 1;
-
-        internal_data.quad_instances.reserve(internal_data.instance_count_per_patch);
+        renderer->quad_indicies[3] = 3;
+        renderer->quad_indicies[4] = 2;
+        renderer->quad_indicies[5] = 1;
 
         for (u32 i = 0; i < 32; i++)
         {
-            internal_data.samplers[i] = i;
-            internal_data.texture_slots[i] = -1;
+            renderer->samplers[i]      = i;
+            renderer->texture_slots[i] = -1;
         }
 
-        glGenVertexArrays(1, &internal_data.quad_vao);
-        glBindVertexArray(internal_data.quad_vao);
+        glGenVertexArrays(1, &renderer->quad_vao);
+        glBindVertexArray(renderer->quad_vao);
 
-        glGenBuffers(1, &internal_data.quad_vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Quad_Vertex) * 4, internal_data.quad_vertices, GL_STATIC_DRAW);
+        glGenBuffers(1, &renderer->quad_vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer->quad_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Quad_Vertex) * 4, renderer->quad_vertices, GL_STATIC_DRAW);
 
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 2, GL_FLOAT, false, sizeof(Quad_Vertex), (const void*)offsetof(Quad_Vertex, position));
@@ -65,9 +112,9 @@ namespace minecraft {
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-        glGenBuffers(1, &internal_data.quad_instance_vbo);
-        glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_instance_vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(Quad_Instance) * internal_data.instance_count_per_patch, nullptr, GL_STREAM_DRAW);
+        glGenBuffers(1, &renderer->quad_instance_vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, renderer->quad_instance_vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(Quad_Instance) * MAX_QUAD_COUNT, nullptr, GL_STREAM_DRAW);
 
         glEnableVertexAttribArray(2);
         glVertexAttribPointer(2, 2, GL_FLOAT, false, sizeof(Quad_Instance), (const void*)offsetof(Quad_Instance, position));
@@ -99,15 +146,15 @@ namespace minecraft {
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-        glGenBuffers(1, &internal_data.quad_ibo);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.quad_ibo);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u16) * 6, internal_data.quad_indicies, GL_STATIC_DRAW);
+        glGenBuffers(1, &renderer->quad_ibo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->quad_ibo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u16) * 6, renderer->quad_indicies, GL_STATIC_DRAW);
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
         u32 white_pxiel = 0xffffffff;
-        bool success = initialize_texture(&internal_data.white_pixel,
+        bool success = initialize_texture(&renderer->white_pixel,
                                           (u8*)(&white_pxiel),
                                           1,
                                           1,
@@ -115,38 +162,75 @@ namespace minecraft {
                                           TextureUsage_UI);
         Assert(success);
 
-        load_shader(&internal_data.ui_shader, "../assets/shaders/quad.glsl");
+        // todo(harlequin): game_assets
+        if (!load_shader(&renderer->ui_shader, "../assets/shaders/quad.glsl"))
+        {
+            return false;
+        }
+
         return true;
     }
 
-    void Opengl_2D_Renderer::shutdown()
+    void shutdown_opengl_2d_renderer()
     {
     }
 
-    void Opengl_2D_Renderer::begin()
+    void opengl_2d_renderer_draw_quads()
     {
-        glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
-        glm::mat4 projection = glm::ortho(0.0f, frame_buffer_size.x, 0.0f, frame_buffer_size.y); // left right bottom top
+        if (!renderer->quad_count)
+        {
+            return;
+        }
 
-        Opengl_Shader *shader = &internal_data.ui_shader;
+        glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
+
+        f32 left   = 0.0f;
+        f32 right  = frame_buffer_size.x;
+        f32 bottom = 0.0f;
+        f32 top    = frame_buffer_size.y;
+        glm::mat4 projection  = glm::ortho(left, right, bottom, top);
+
+        Opengl_Shader *shader = &renderer->ui_shader;
         bind_shader(shader);
         set_uniform_mat4(shader, "u_projection", glm::value_ptr(projection));
-        set_uniform_i32_array(shader, "u_textures", internal_data.samplers, 32);
+        set_uniform_i32_array(shader, "u_textures", renderer->samplers, 32);
+
+        glDisable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        glBindBuffer(GL_ARRAY_BUFFER, renderer->quad_instance_vbo);
+        glBufferSubData(GL_ARRAY_BUFFER,
+                        0,
+                        sizeof(Quad_Instance) * renderer->quad_count,
+                        renderer->quad_instances);
+
+        glBindVertexArray(renderer->quad_vao);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->quad_ibo);
+        glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0, renderer->quad_count);
+        renderer->quad_count = 0;
     }
 
-    void Opengl_2D_Renderer::draw_rect(const glm::vec2& position,
-                                       const glm::vec2& scale,
-                                       f32 rotation,
-                                       const glm::vec4& color,
-                                       Opengl_Texture *texture,
-                                       const glm::vec2& uv_scale,
-                                       const glm::vec2& uv_offset)
+    void opengl_2d_renderer_push_quad(const glm::vec2& position,
+                                      const glm::vec2& scale,
+                                      f32 rotation,
+                                      const glm::vec4& color,
+                                      Opengl_Texture *texture,
+                                      const glm::vec2& uv_scale,
+                                      const glm::vec2& uv_offset)
     {
+        Assert(renderer->quad_count < MAX_QUAD_COUNT);
+
+        if (!texture)
+        {
+            texture = &renderer->white_pixel;
+        }
+
         i32 texture_index = -1;
 
         for (u32 i = 5; i < 32; i++)
         {
-            if (internal_data.texture_slots[i] == texture->id)
+            if (renderer->texture_slots[i] == texture->id)
             {
                 texture_index = i;
                 break;
@@ -157,10 +241,10 @@ namespace minecraft {
         {
             for (u32 i = 5; i < 32; i++)
             {
-                if (internal_data.texture_slots[i] == -1)
+                if (renderer->texture_slots[i] == -1)
                 {
                     bind_texture(texture, i);
-                    internal_data.texture_slots[i] = texture->id;
+                    renderer->texture_slots[i] = texture->id;
                     texture_index = i;
                     break;
                 }
@@ -169,19 +253,18 @@ namespace minecraft {
 
         Assert(texture_index != -1);
 
-        glm::vec2 size = opengl_renderer_get_frame_buffer_size();
+        glm::vec2 size              = opengl_renderer_get_frame_buffer_size();
         glm::vec2 top_left_position = position;
-        top_left_position.y = size.y - position.y;
+        top_left_position.y         = size.y - position.y;
 
-        Quad_Instance instance = { top_left_position, scale, rotation, color, texture_index, uv_scale, uv_offset };
-        internal_data.quad_instances.emplace_back(instance);
+        renderer->quad_instances[renderer->quad_count++] = { top_left_position, scale, rotation, color, texture_index, uv_scale, uv_offset };
     }
 
-    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font,
-                                         String8 text,
-                                         const glm::vec2& text_size,
-                                         const glm::vec2& position,
-                                         const glm::vec4& color)
+    void opengl_2d_renderer_push_string(Bitmap_Font *font,
+                                        String8 text,
+                                        const glm::vec2& text_size,
+                                        const glm::vec2& position,
+                                        const glm::vec4& color)
     {
         glm::vec2 half_text_size = text_size * 0.5f;
         glm::vec2 cursor = position;
@@ -208,78 +291,13 @@ namespace minecraft {
             glm::vec2 uv1 = { quad.s1, quad.t0 };
             glm::vec2 uv_scale = uv1 - uv0;
 
-            draw_rect(glm::vec2(xp - half_text_size.x, yp + half_text_size.y),
-                      glm::vec2(sx, sy),
-                      0.0f,
-                      color,
-                      &font->atlas,
-                      uv_scale,
-                      uv0);
+            opengl_2d_renderer_push_quad(glm::vec2(xp - half_text_size.x, yp + half_text_size.y),
+                                         glm::vec2(sx, sy),
+                                         0.0f,
+                                         color,
+                                         &font->atlas,
+                                         uv_scale,
+                                         uv0);
         }
     }
-
-    void Opengl_2D_Renderer::draw_string(Bitmap_Font *font,
-                                         const std::string &text,
-                                         const glm::vec2& text_size,
-                                         const glm::vec2& position,
-                                         const glm::vec4& color)
-    {
-        glm::vec2 half_text_size = text_size * 0.5f;
-        glm::vec2 cursor = position;
-
-        for (i32 i = 0; i < text.length(); i++)
-        {
-            stbtt_aligned_quad quad;
-            stbtt_GetPackedQuad(font->glyphs,
-                                font->atlas.width,
-                                font->atlas.height,
-                                text[i] - ' ',
-                                &cursor.x,
-                                &cursor.y,
-                                &quad,
-                                1); // 1 for opengl, 0 for dx3d
-
-            f32 xp = (quad.x1 + quad.x0) / 2.0f;
-            f32 yp = (quad.y1 + quad.y0) / 2.0f;
-
-            f32 sx = (quad.x1 - quad.x0);
-            f32 sy = (quad.y1 - quad.y0);
-
-            glm::vec2 uv0 = { quad.s0, quad.t1 };
-            glm::vec2 uv1 = { quad.s1, quad.t0 };
-            glm::vec2 uv_scale = uv1 - uv0;
-
-            draw_rect(glm::vec2(xp - half_text_size.x, yp + half_text_size.y),
-                      glm::vec2(sx, sy),
-                      0.0f,
-                      color,
-                      &font->atlas,
-                      uv_scale,
-                      uv0);
-        }
-    }
-
-    void Opengl_2D_Renderer::end()
-    {
-        if (internal_data.quad_instances.size())
-        {
-            glDisable(GL_DEPTH_TEST);
-
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-            glBindBuffer(GL_ARRAY_BUFFER, internal_data.quad_instance_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER,
-                            0,
-                            sizeof(Quad_Instance) * internal_data.quad_instances.size(),
-                            internal_data.quad_instances.data());
-
-            glBindVertexArray(internal_data.quad_vao);
-            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_data.quad_ibo);
-            glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0, internal_data.quad_instances.size());
-            internal_data.quad_instances.resize(0);
-        }
-    }
-
-    Opengl_2D_Renderer_Data Opengl_2D_Renderer::internal_data;
 }

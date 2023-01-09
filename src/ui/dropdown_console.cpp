@@ -252,10 +252,10 @@ namespace minecraft {
 
         glm::vec2 console_background_pos  = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent * 0.5f };
         glm::vec2 console_background_size = { frame_buffer_size.x, frame_buffer_size.y * y_extent };
-        Opengl_2D_Renderer::draw_rect(console_background_pos,
-                                      console_background_size,
-                                      0.0f,
-                                      background_color);
+        opengl_2d_renderer_push_quad(console_background_pos,
+                                     console_background_size,
+                                     0.0f,
+                                     background_color);
 
         glm::vec2 cursor = { padding_x, frame_buffer_size.y * y_extent - 2.0f * line_height + scroll_y };
         f32 text_height  = get_text_height(console);
@@ -266,33 +266,34 @@ namespace minecraft {
             Dropdown_Console_Line_Info *line_info = console->lines + i;
             String8 line_str = line_info->str;
 
-            glm::vec2 text_size = font->get_string_size(line_str);
+            glm::vec2 text_size = get_string_size(font, line_str);
 
             if (cursor.y <= frame_buffer_size.y * y_extent - 2.0f * line_height)
             {
-                Opengl_2D_Renderer::draw_string(font,
-                                                line_str,
-                                                text_size,
-                                                cursor + text_size * 0.5f,
-                                                line_info->is_command ? command_color : input_text_color);
+                opengl_2d_renderer_push_string(font,
+                                               line_str,
+                                               text_size,
+                                               cursor + text_size * 0.5f,
+                                               line_info->is_command ? command_color : input_text_color);
             }
         }
 
         glm::vec2 input_text_position = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * y_extent - line_height };
         glm::vec2 input_text_size = { frame_buffer_size.x, 2.0f * line_height };
-        Opengl_2D_Renderer::draw_rect(input_text_position, input_text_size, 0.0f, input_text_background_color);
+        opengl_2d_renderer_push_quad(input_text_position, input_text_size, 0.0f, input_text_background_color);
 
-        glm::vec2 current_text_size = font->get_string_size(current_text);
-        Opengl_2D_Renderer::draw_string(font,
-                                        current_text,
-                                        current_text_size,
-                                        glm::vec2(padding_x + current_text_size.x * 0.5f - scroll_x, frame_buffer_size.y * y_extent - line_height),
-                                        input_text_color);
+        glm::vec2 current_text_size        = get_string_size(font, current_text);
+        glm::vec2 current_text_fixed_size  = { 2.0f * current_text.count * input_text_cursor_size.x, current_text_size.y };
+        opengl_2d_renderer_push_string(font,
+                                       current_text,
+                                       current_text_fixed_size,
+                                       glm::vec2(padding_x + current_text_fixed_size.x * 0.5f - scroll_x, frame_buffer_size.y * y_extent - line_height),
+                                       input_text_color);
 
         String8 sub_string = {};
         sub_string.data    = current_text.data;
         sub_string.count   = current_cursor_index;
-        glm::vec2 sub_string_size = font->get_string_size(sub_string);
+        glm::vec2 sub_string_size = get_string_size(font, sub_string);
         glm::vec2 input_text_cursor_position = { padding_x + input_text_cursor_size.x * 0.5f + sub_string_size.x, frame_buffer_size.y * y_extent - line_height };
 
         // cursor
@@ -310,10 +311,10 @@ namespace minecraft {
                 input_text_cursor_color.a = glm::max(glm::abs(glm::sin(glm::radians(cursor_opacity))), cursor_opacity_limit);
             }
 
-            Opengl_2D_Renderer::draw_rect(input_text_cursor_position - glm::vec2(scroll_x, 0.0f),
-                                          input_text_cursor_size,
-                                          0.0f,
-                                          input_text_cursor_color);
+            opengl_2d_renderer_push_quad(input_text_cursor_position - glm::vec2(scroll_x, 0.0f),
+                                         input_text_cursor_size,
+                                         0.0f,
+                                         input_text_cursor_color);
         }
 
         // scroll bar
@@ -337,8 +338,15 @@ namespace minecraft {
                 glm::vec2 scroll_rect_size = { scroll_bar_size.x, console_size_y };
                 glm::vec2 scroll_rect_pos  = { frame_buffer_size.x - scroll_rect_size.x + scroll_rect_size.x * 0.5f, console_size_y * 0.5f };
 
-                Opengl_2D_Renderer::draw_rect(scroll_rect_pos, scroll_rect_size, 0.0f, scroll_bar_background_color);
-                Opengl_2D_Renderer::draw_rect(scroll_bar_pos + scroll_bar_size * 0.5f, scroll_bar_size, 0.0f, scroll_bar_color);
+                opengl_2d_renderer_push_quad(scroll_rect_pos,
+                                             scroll_rect_size,
+                                             0.0f,
+                                             scroll_bar_background_color);
+
+                opengl_2d_renderer_push_quad(scroll_bar_pos + scroll_bar_size * 0.5f,
+                                             scroll_bar_size,
+                                             0.0f,
+                                             scroll_bar_color);
             }
         }
 
@@ -447,7 +455,6 @@ namespace minecraft {
                 current_cursor_index++;
             }
         }
-
 
         return true;
     }

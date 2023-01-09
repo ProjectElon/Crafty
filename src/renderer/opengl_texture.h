@@ -37,5 +37,7 @@ namespace minecraft {
                       const char     *file_path,
                       TextureUsage    usage);
 
+    void set_texture_usage(Opengl_Texture *texture, TextureUsage usage);
+
     void bind_texture(Opengl_Texture *texture, u32 texture_slot);
 }
