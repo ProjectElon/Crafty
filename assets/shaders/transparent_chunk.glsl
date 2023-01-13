@@ -1,6 +1,6 @@
 #vertex
 
-#version 440 core
+#version 450 core
 
 layout (location = 0) in uint  in_data0;
 layout (location = 1) in uint  in_data1;
@@ -167,7 +167,7 @@ void main()
 
 #fragment
 
-#version 440 core
+#version 450 core
 
 layout (location = 0) out vec4  accum;
 layout (location = 1) out float reveal;

@@ -49,7 +49,9 @@ namespace minecraft {
         glm::vec2       dragging_slot_offset;
 
         Bitmap_Font    *font;
+        Opengl_Texture *blocks_sprite_sheet;
         Opengl_Texture *hud_sprite;
+
         UV_Rectangle    inventory_slot_uv_rect;
         UV_Rectangle    active_inventory_slot_uv_rect;
         UV_Rectangle    inventory_hud_uv_rect;
@@ -65,9 +67,8 @@ namespace minecraft {
         Rectangle2 slot_positions[INVENTORY_SLOT_TOTAL_COUNT];
     };
 
-    bool initialize_inventory(Inventory *inventory,
-                              Bitmap_Font *font,
-                              Opengl_Texture *hud_sprite);
+    bool initialize_inventory(Inventory          *inventory,
+                              struct Game_Assets *assets);
 
     void shutdown_inventory(Inventory *inventory, String8 path);
 

@@ -327,11 +327,11 @@ namespace minecraft {
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size         = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
 
-        // todo(harlequin): to be added to game_config
-        i32                 chunk_radius;
+        f32 game_time_rate;
+        f32 game_timer;
+        u32 game_time;
 
-        // todo(harlequin): we calculate sky light level from game time
-        f32                 sky_light_level;
+        f32 sky_light_level;
 
         String8             path;
         i32                 seed;
@@ -359,6 +359,17 @@ namespace minecraft {
 
     bool initialize_world(World *world, String8 path);
     void shutdown_world(World *world);
+
+    void update_world_time(World *world, f32 delta_time);
+
+    u32 real_time_to_game_time(u32 hours,
+                               u32 minutes,
+                               u32 seconds);
+
+    void game_time_to_real_time(u32  game_time,
+                                u32 *out_hours,
+                                u32 *out_minutes,
+                                u32 *out_seconds);
 
     Chunk *allocate_chunk(World *world);
     void free_chunk(World *world, Chunk *chunk);
@@ -402,13 +413,24 @@ namespace minecraft {
 
     std::array< Block_Query_Result, 6 > query_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
 
-    Block_Query_Result select_block(World           *world,
+    struct Select_Block_Result
+    {
+        Block_Query_Result block_query;
+        Block_Query_Result block_facing_normal_query;
+        Ray_Cast_Result    ray_cast_result;
+        BlockFace          face;
+        glm::vec3          block_position;
+        glm::vec3          block_facing_normal_position;
+        glm::vec3          normal;
+    };
+
+    Select_Block_Result select_block(World          *world,
                                     const glm::vec3 &view_position,
                                     const glm::vec3 &view_direction,
-                                    u32              max_block_select_dist_in_cube_units,
-                                    struct Ray_Cast_Result *out_ray_cast_result = nullptr);
+                                    u32              max_block_select_dist_in_cube_units);
 
-    void schedule_chunk_lighting_jobs(World *world, const World_Region_Bounds &player_region_bounds);
+    void schedule_chunk_lighting_jobs(World *world,
+                                      const World_Region_Bounds &player_region_bounds);
     void schedule_save_chunks_jobs(World *world);
 
     void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);

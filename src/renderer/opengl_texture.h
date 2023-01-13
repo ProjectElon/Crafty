@@ -27,15 +27,17 @@ namespace minecraft {
     };
 
     bool initialize_texture(Opengl_Texture *texture,
-                            u8 *data,
-                            u32 width,
-                            u32 height,
-                            TextureFormat format,
-                            TextureUsage usage);
+                            u8             *data,
+                            u32             width,
+                            u32             height,
+                            TextureFormat   format,
+                            TextureUsage    usage);
 
     bool load_texture(Opengl_Texture *texture,
                       const char     *file_path,
                       TextureUsage    usage);
+
+    void free_texture(Opengl_Texture *texture);
 
     void set_texture_usage(Opengl_Texture *texture, TextureUsage usage);
 

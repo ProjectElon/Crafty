@@ -62,7 +62,8 @@ namespace minecraft {
                                                  const World_Region_Bounds &player_region_bounds,
                                                  Camera *camera);
 
-    void opengl_renderer_end_frame(i32 chunk_radius,
+    void opengl_renderer_end_frame(struct Game_Assets *assets,
+                                   i32 chunk_radius,
                                    f32 sky_light_level,
                                    Block_Query_Result *selected_block_query);
 
@@ -90,7 +91,4 @@ namespace minecraft {
     void opengl_renderer_set_is_fxaa_enabled(bool enabled);
     bool opengl_renderer_is_fxaa_enabled();
     void opengl_renderer_toggle_fxaa();
-
-    // todo(harlequin): temprary use game assets
-    Opengl_Texture *opengl_renderer_get_block_sprite_sheet_texture();
 }

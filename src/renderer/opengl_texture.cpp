@@ -44,11 +44,11 @@ namespace minecraft {
     }
 
     bool initialize_texture(Opengl_Texture *texture,
-                            u8 *data,
-                            u32 width,
-                            u32 height,
-                            TextureFormat format,
-                            TextureUsage usage)
+                            u8             *data,
+                            u32             width,
+                            u32             height,
+                            TextureFormat   format,
+                            TextureUsage    usage)
     {
         texture->width  = width;
         texture->height = height;
@@ -95,10 +95,7 @@ namespace minecraft {
             return false;
         }
 
-        defer
-        {
-            stbi_image_free(data);
-        };
+        defer { stbi_image_free(data); };
 
         u32 opengl_texture_format;
         u32 opengl_internal_format;
@@ -130,6 +127,12 @@ namespace minecraft {
         }
 
         return success;
+    }
+
+    void free_texture(Opengl_Texture *texture)
+    {
+        glDeleteTextures(1, &texture->id);
+        texture->id = 0;
     }
 
     void set_texture_usage(Opengl_Texture *texture, TextureUsage usage)

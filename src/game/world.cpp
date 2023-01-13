@@ -1,12 +1,14 @@
 #include "world.h"
+#include "core/file_system.h"
 #include "renderer/opengl_renderer.h"
 #include "game/job_system.h"
 #include "game/jobs.h"
-#include "core/file_system.h"
+
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/noise.hpp>
-#include <time.h>
+#include <glm/gtx/compatibility.hpp>
 
+#include <time.h>
 #include <errno.h>
 
 extern int errno;
@@ -769,11 +771,59 @@ namespace minecraft {
         world->calculate_chunk_lighting_queue.initialize(world->calculate_chunk_lighting_queue_data, DEFAULT_QUEUE_SIZE);
         world->light_propagation_queue.initialize(world->light_propagation_queue_data, DEFAULT_QUEUE_SIZE);
 
+        world->game_timer     = 0.0f;
+        world->game_time_rate = 1.0f / 72.0f; // 1 / 72.0f is the number used by minecraft
+        world->game_time      = 43200;
+
         return true;
     }
 
     void shutdown_world(World *world)
     {
+    }
+
+    void update_world_time(World *world, f32 delta_time)
+    {
+        world->game_timer += delta_time;
+
+        while (world->game_timer >= world->game_time_rate)
+        {
+            world->game_time++;
+
+            if (world->game_time > 86400)
+            {
+                world->game_time -= 86400;
+            }
+
+            world->game_timer -= world->game_time_rate;
+        }
+
+        // night time
+        if (world->game_time >= 0 && world->game_time <= 43200)
+        {
+            f32 t = (f32)world->game_time / 43200.0f;
+            world->sky_light_level = glm::ceil(glm::lerp(1.0f, 15.0f, t));
+        } // day time
+        else if (world->game_time >= 43200 && world->game_time <= 86400)
+        {
+            f32 t = ((f32)world->game_time - 43200.0f) / 43200.0f;
+            world->sky_light_level = glm::ceil(glm::lerp(15.0f, 1.0f, t));
+        }
+    }
+
+    u32 real_time_to_game_time(u32 hours, u32 minutes, u32 seconds)
+    {
+        return seconds + minutes * 60 + hours * 60 * 60;
+    }
+
+    void game_time_to_real_time(u32  game_time,
+                                u32 *out_hours,
+                                u32 *out_minutes,
+                                u32 *out_seconds)
+    {
+        *out_seconds = game_time % 60;
+        *out_minutes = (game_time % (60 * 60)) / 60;
+        *out_hours   = game_time / (60 * 60);
     }
 
     Chunk *allocate_chunk(World *world)
@@ -860,16 +910,13 @@ namespace minecraft {
         return nullptr;
     }
 
-    Block_Query_Result select_block(World *world,
+    Select_Block_Result select_block(World          *world,
                                     const glm::vec3& view_position,
                                     const glm::vec3& view_direction,
-                                    u32              max_block_select_dist_in_cube_units,
-                                    Ray_Cast_Result *out_ray_cast_result /* = nullptr*/)
+                                    u32              max_block_select_dist_in_cube_units)
     {
-        Block_Query_Result result;
-        result.chunk = nullptr;
-        result.block = nullptr;
-        result.block_coords = { -1, -1, -1 };
+        Select_Block_Result result = {};
+        result.block_query.block_coords = { -1, -1, -1 };
 
         glm::vec3 query_position = view_position;
 
@@ -880,19 +927,80 @@ namespace minecraft {
             if (is_block_query_valid(query) && query.block->id != BlockId_Air && query.block->id != BlockId_Water)
             {
                 glm::vec3 block_position = get_block_position(query.chunk, query.block_coords);
-                Ray ray   = { view_position, view_direction };
+                Ray  ray  = { view_position, view_direction };
                 AABB aabb = { block_position - glm::vec3(0.5f, 0.5f, 0.5f), block_position + glm::vec3(0.5f, 0.5f, 0.5f) };
-                Ray_Cast_Result ray_cast_result = cast_ray_on_aabb(ray, aabb, (f32)max_block_select_dist_in_cube_units);
+                result.ray_cast_result = cast_ray_on_aabb(ray, aabb, (f32)max_block_select_dist_in_cube_units);
 
-                if (ray_cast_result.hit)
+                if (result.ray_cast_result.hit)
                 {
-                    result = query;
-                    if (out_ray_cast_result) *out_ray_cast_result = ray_cast_result;
+                    result.block_query = query;
                     break;
                 }
             }
 
             query_position += view_direction * 0.1f;
+        }
+
+        if (!result.ray_cast_result.hit)
+        {
+            return result;
+        }
+
+        constexpr f32 eps = glm::epsilon< f32 >();
+
+        const glm::vec3& hit_point = result.ray_cast_result.point;
+
+        result.block_position = get_block_position(result.block_query.chunk,
+                                                   result.block_query.block_coords);
+
+        if (glm::epsilonEqual(hit_point.y, result.block_position.y + 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_top(result.block_query.chunk,
+                                                                              result.block_query.block_coords);
+            result.normal = { 0.0f, 1.0f, 0.0f };
+            result.face   = BlockFace_Top;
+        }
+        else if (glm::epsilonEqual(hit_point.y, result.block_position.y - 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_bottom(result.block_query.chunk,
+                                                                                 result.block_query.block_coords);
+            result.normal = { 0.0f, -1.0f, 0.0f };
+            result.face   = BlockFace_Bottom;
+        }
+        else if (glm::epsilonEqual(hit_point.x, result.block_position.x + 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_right(result.block_query.chunk,
+                                                                                result.block_query.block_coords);
+            result.normal = { 1.0f, 0.0f, 0.0f };
+            result.face   = BlockFace_Right;
+        }
+        else if (glm::epsilonEqual(hit_point.x, result.block_position.x - 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_left(result.block_query.chunk,
+                                                                               result.block_query.block_coords);
+            result.normal = { -1.0f, 0.0f, 0.0f };
+            result.face   = BlockFace_Left;
+        }
+        else if (glm::epsilonEqual(hit_point.z, result.block_position.z - 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_front(result.block_query.chunk,
+                                                                                result.block_query.block_coords);
+            result.normal = { 0.0f, 0.0f, -1.0f };
+            result.face   = BlockFace_Front;
+        }
+        else if (glm::epsilonEqual(hit_point.z, result.block_position.z + 0.5f, eps))
+        {
+            result.block_facing_normal_query = query_neighbour_block_from_back(result.block_query.chunk,
+                                                                               result.block_query.block_coords);
+            result.normal = { 0.0f, 0.0f, 1.0f };
+            result.face   = BlockFace_Back;
+        }
+
+        if (is_block_query_valid(result.block_facing_normal_query))
+        {
+            result.block_facing_normal_position = get_block_position(result.block_facing_normal_query.chunk,
+                                                                     result.block_facing_normal_query.block_coords);
+
         }
 
         return result;

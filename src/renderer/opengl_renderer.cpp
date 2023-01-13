@@ -14,6 +14,7 @@
 #include "meta/spritesheet_meta.h"
 #include "game/world.h"
 #include "game/profiler.h"
+#include "game/game.h"
 
 #include <stb/stb_image.h>
 #include <mutex>
@@ -93,8 +94,6 @@ namespace minecraft {
 
         GLsync command_buffer_sync_object;
 
-        Opengl_Texture block_sprite_sheet;
-
         u32 uv_buffer_id;
         u32 uv_texture_id;
 
@@ -102,12 +101,6 @@ namespace minecraft {
 
         glm::vec4 sky_color;
         glm::vec4 tint_color;
-
-        Opengl_Shader opaque_chunk_shader;
-        Opengl_Shader transparent_chunk_shader;
-        Opengl_Shader composite_shader;
-        Opengl_Shader screen_shader;
-        Opengl_Shader line_shader;
 
         Camera *camera;
 
@@ -164,21 +157,6 @@ namespace minecraft {
 
         // fireframe mode
         // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-
-        const char *block_sprite_sheet_path = "../assets/textures/block_spritesheet.png";
-        bool success = load_texture(&renderer->block_sprite_sheet, block_sprite_sheet_path, TextureUsage_SpriteSheet);
-
-        if (!success)
-        {
-            fprintf(stderr, "[ERROR]: failed to load texture at %s\n", block_sprite_sheet_path);
-            return false;
-        }
-
-        load_shader(&renderer->opaque_chunk_shader, "../assets/shaders/opaque_chunk.glsl");
-        load_shader(&renderer->transparent_chunk_shader, "../assets/shaders/transparent_chunk.glsl");
-        load_shader(&renderer->composite_shader, "../assets/shaders/composite.glsl");
-        load_shader(&renderer->screen_shader, "../assets/shaders/screen.glsl");
-        load_shader(&renderer->line_shader, "../assets/shaders/line.glsl");
 
         glGenTextures(1, &renderer->uv_texture_id);
         glBindTexture(GL_TEXTURE_BUFFER, renderer->uv_texture_id);
@@ -311,7 +289,7 @@ namespace minecraft {
         renderer->transparent_frame_buffer_accum_texture_id = 0;
         renderer->transparent_frame_buffer_reveal_texture_id = 0;
 
-        success = opengl_renderer_recreate_frame_buffers();
+        bool success = opengl_renderer_recreate_frame_buffers();
 
         if (!success)
         {
@@ -428,7 +406,7 @@ namespace minecraft {
             texture_id++;
         }
 
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST); // GL_LINEAR_MIPMAP_LINEAR - GL_NEAREST_MIPMAP_NEAREST
+        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -442,7 +420,6 @@ namespace minecraft {
             anisotropy = max_anisotropy;
         }
         glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
-
         glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
@@ -1585,19 +1562,21 @@ namespace minecraft {
         memset(&renderer->stats.per_frame, 0, sizeof(PerFrame_Stats));
     }
 
-    void opengl_renderer_end_frame(i32 chunk_radius,
-                                   f32 sky_light_level,
+    void opengl_renderer_end_frame(Game_Assets        *assets,
+                                   i32                 chunk_radius,
+                                   f32                 sky_light_level,
                                    Block_Query_Result *selected_block_query)
     {
         glBindVertexArray(renderer->chunk_vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->chunk_index_buffer_id);
 
-        Opengl_Shader *opaque_shader      = &renderer->opaque_chunk_shader;
-        Opengl_Shader *transparent_shader = &renderer->transparent_chunk_shader;
-        Opengl_Shader *composite_shader   = &renderer->composite_shader;
-        Opengl_Shader *screen_shader      = &renderer->screen_shader;
+        Opengl_Shader *opaque_shader      = get_shader(&assets->opaque_chunk_shader);
+        Opengl_Shader *transparent_shader = get_shader(&assets->transparent_chunk_shader);
+        Opengl_Shader *composite_shader   = get_shader(&assets->composite_shader);
+        Opengl_Shader *screen_shader      = get_shader(&assets->screen_shader);
+        Opengl_Shader *line_shader        = get_shader(&assets->line_shader);
 
-        i32 width = (i32)renderer->frame_buffer_size.x;
+        i32 width  = (i32)renderer->frame_buffer_size.x;
         i32 height = (i32)renderer->frame_buffer_size.y;
 
         Camera *camera = renderer->camera;
@@ -1647,8 +1626,10 @@ namespace minecraft {
         set_uniform_ivec3(opaque_shader, "u_highlighted_block_coords", block_coords.x, block_coords.y, block_coords.z);
         set_uniform_ivec2(opaque_shader, "u_highlighted_block_chunk_coords", chunk_coords.x, chunk_coords.y);
 
+        Opengl_Texture *blocks_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
+
         set_uniform_i32(opaque_shader, "u_block_sprite_sheet", 0);
-        bind_texture(&renderer->block_sprite_sheet, 0);
+        bind_texture(blocks_sprite_sheet, 0);
 
         set_uniform_i32(opaque_shader, "u_uvs", 1);
         set_uniform_f32(opaque_shader, "u_sky_light_level", (f32)sky_light_level);
@@ -1745,7 +1726,7 @@ namespace minecraft {
 
         f32 line_thickness = 3.0f;
         opengl_debug_renderer_draw_lines(camera,
-                                         &renderer->line_shader,
+                                         line_shader,
                                          line_thickness);
 
         glDisable(GL_BLEND);
@@ -1886,11 +1867,6 @@ namespace minecraft {
     i64 opengl_renderer_get_free_chunk_bucket_count()
     {
         return renderer->free_buckets.size();
-    }
-
-    Opengl_Texture* opengl_renderer_get_block_sprite_sheet_texture()
-    {
-        return &renderer->block_sprite_sheet;
     }
 
     void opengl_renderer_set_is_fxaa_enabled(bool enabled)

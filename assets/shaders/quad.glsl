@@ -1,6 +1,6 @@
 #vertex
 
-#version 430 core
+#version 450 core
 
 layout (location = 0) in vec2 in_position;
 layout (location = 1) in vec2 in_uv;
@@ -37,7 +37,7 @@ void main()
 
 #fragment
 
-#version 430 core
+#version 450 core
 
 in vec4 a_color;
 in vec2 a_uv;

@@ -1,15 +1,10 @@
 #pragma once
 
-#include "game/inventory.h"
-#include "game/world.h"
-#include "core/input.h"
-#include "core/file_system.h"
-#include "renderer/opengl_renderer.h"
+#include "game.h"
 #include "renderer/opengl_2d_renderer.h"
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
-#include "memory/memory_arena.h"
-#include "containers/string.h"
+#include "core/file_system.h"
 
 namespace minecraft {
 
@@ -19,9 +14,8 @@ namespace minecraft {
         1x1 padding between slots
     */
 
-    bool initialize_inventory(Inventory      *inventory,
-                              Bitmap_Font    *font,
-                              Opengl_Texture *hud_sprite)
+    bool initialize_inventory(Inventory   *inventory,
+                              Game_Assets *assets)
     {
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
@@ -34,11 +28,13 @@ namespace minecraft {
         inventory->dragging_slot_index = INVENTORY_INVALID_SLOT_INDEX;
         inventory->is_dragging = false;
         inventory->dragging_slot_offset = { 0.0f, 0.0f };
-        inventory->font = font;
-        inventory->hud_sprite = hud_sprite;
 
-        f32 hud_sprite_width  = (f32)hud_sprite->width;
-        f32 hud_sprite_height = (f32)hud_sprite->height;
+        inventory->font                  = (Bitmap_Font*)assets->noto_mono_font.data;
+        inventory->blocks_sprite_sheet   = (Opengl_Texture*)assets->blocks_sprite_sheet.data;
+        inventory->hud_sprite            = (Opengl_Texture*)assets->hud_sprite.data;
+
+        f32 hud_sprite_width  = (f32)inventory->hud_sprite->width;
+        f32 hud_sprite_height = (f32)inventory->hud_sprite->height;
 
         inventory->inventory_slot_uv_rect        = convert_texture_rect_to_uv_rect({ 0, 176, 32, 32 },   hud_sprite_width, hud_sprite_height);
         inventory->active_inventory_slot_uv_rect = convert_texture_rect_to_uv_rect({ 0, 144, 32, 32 },   hud_sprite_width, hud_sprite_height);
@@ -289,7 +285,7 @@ namespace minecraft {
                                          slot_size,
                                          0.0f,
                                          color,
-                                         opengl_renderer_get_block_sprite_sheet_texture(), // todo(harlequin): game_assets
+                                         inventory->blocks_sprite_sheet,
                                          side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                          side_texture_uv_rect.bottom_left);
 
@@ -364,9 +360,9 @@ namespace minecraft {
         f32 half_slot_width = slot_width * 0.5f;
         f32 half_slot_height = slot_height * 0.5f;
 
-        f32 hot_bar_start_x = frame_buffer_size.x * 0.5f - hot_bar_size_x * 0.5f;        
+        f32 hot_bar_start_x = frame_buffer_size.x * 0.5f - hot_bar_size_x * 0.5f;
         f32 hot_bar_offset_from_bottom = frame_buffer_size.y - half_slot_height;
-        
+
         for (i32 slot_index = 0; slot_index < INVENTORY_HOT_BAR_SLOT_COUNT; slot_index++)
         {
             Inventory_Slot& slot = inventory->hot_bar[slot_index];
@@ -391,7 +387,7 @@ namespace minecraft {
                                               { slot_width, slot_height },
                                               0.0f,
                                               color,
-                                              opengl_renderer_get_block_sprite_sheet_texture(),
+                                              inventory->blocks_sprite_sheet,
                                               side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                               side_texture_uv_rect.bottom_left);
 

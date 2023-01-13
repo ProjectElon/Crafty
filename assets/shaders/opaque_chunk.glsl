@@ -1,6 +1,6 @@
 #vertex
 
-#version 440 core
+#version 450 core
 
 layout (location = 0) in uint  in_data0;
 layout (location = 1) in uint  in_data1;
