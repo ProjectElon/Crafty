@@ -339,9 +339,18 @@ namespace minecraft {
             auto& [transform, rb, controller] =
                 registry->get_components< Transform, Rigid_Body, Character_Controller >(entity);
 
-            transform->orientation.y += mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
-            if (transform->orientation.y >= 360.0f)  transform->orientation.y -= 360.0f;
-            if (transform->orientation.y <= -360.0f) transform->orientation.y += 360.0f;
+            transform->orientation.y +=
+                mouse_delta.x * controller->turn_speed * controller->sensetivity * delta_time;
+
+            if (transform->orientation.y >= 360.0f)
+            {
+                transform->orientation.y -= 360.0f;
+            }
+
+            if (transform->orientation.y <= -360.0f)
+            {
+                transform->orientation.y += 360.0f;
+            }
 
             glm::quat orientation = glm::quat(glm::vec3(0.0f, glm::radians(-transform->orientation.y), 0.0f));
             glm::vec3 forward     = glm::rotate(orientation, glm::vec3(0.0f, 0.0f, -1.0f));
@@ -400,24 +409,357 @@ namespace minecraft {
                 controller->movement = glm::normalize(controller->movement);
             }
         }
+    }
+
+    static void late_update_entities(Registry *registry,
+                                     Input *input,
+                                     Select_Block_Result *select_query,
+                                     Inventory *inventory,
+                                     f32 delta_time)
+    {
+        if (!select_query->ray_cast_result.hit)
+        {
+            return;
+        }
+
+        // todo(harlequin): we should check all entities not just the player baka
+        bool is_block_facing_normal_colliding_with_player = false;
 
         Entity player = registry->find_entity_by_tag(EntityTag_Player);
 
-        if (registry->is_entity_valid(player))
+        if (player && is_block_query_valid(select_query->block_facing_normal_query))
         {
-            Transform *transform = registry->get_component< Transform >(player);
+            auto player_transform    = registry->get_component< Transform >(player);
+            auto player_box_collider = registry->get_component< Box_Collider >(player);
 
-            if (transform)
+            Transform block_transform   = {};
+            block_transform.position    = get_block_position(select_query->block_facing_normal_query.chunk,
+                                                             select_query->block_facing_normal_query.block_coords);
+
+            block_transform.scale       = { 1.0f, 1.0f, 1.0f };
+            block_transform.orientation = { 0.0f, 0.0f, 0.0f };
+
+            Box_Collider block_collider = {};
+            block_collider.size         = { 0.9f, 0.9f, 0.9f };
+
+            is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
+                                                                               block_collider,
+                                                                              *player_transform,
+                                                                              *player_box_collider);
+        }
+
+        bool can_place_block = is_block_query_valid(select_query->block_facing_normal_query) &&
+                               select_query->block_facing_normal_query.block->id == BlockId_Air &&
+                              !is_block_facing_normal_colliding_with_player;
+
+        if (is_button_pressed(input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
+        {
+            i32 active_slot_index = inventory->active_hot_bar_slot_index;
+            if (active_slot_index != -1)
             {
-                camera->position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
-                camera->yaw      = transform->orientation.y;
+                Inventory_Slot &slot      = inventory->hot_bar[active_slot_index];
+                bool is_active_slot_empty = slot.block_id == BlockId_Air && slot.count == 0;
+                if (!is_active_slot_empty)
+                {
+                    set_block_id(select_query->block_facing_normal_query.chunk,
+                                 select_query->block_facing_normal_query.block_coords,
+                                 slot.block_id);
+                    slot.count--;
+                    if (slot.count == 0)
+                    {
+                        slot.block_id = BlockId_Air;
+                    }
+                }
             }
         }
 
-        update_camera_transform(camera,
-                                input,
-                                delta_time);
-        update_camera(camera);
+        if (is_button_pressed(input, MC_MOUSE_BUTTON_LEFT))
+        {
+            // @todo(harlequin): this solves the problem but do we really want this ?
+            bool any_neighbouring_water_block = false;
+            auto neighours = get_neighbours(select_query->block_query.chunk,
+                                            select_query->block_query.block_coords);
+            for (const auto& neighour : neighours)
+            {
+                if (neighour->id == BlockId_Water)
+                {
+                    any_neighbouring_water_block = true;
+                    break;
+                }
+            }
+
+            i32 block_id  = select_query->block_query.block->id;
+            bool is_added = add_block_to_inventory(inventory, block_id);
+
+            set_block_id(select_query->block_query.chunk,
+                         select_query->block_query.block_coords,
+                         any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
+            if (!is_added)
+            {
+                // todo(harlequin): dropped items
+            }
+        }
+    }
+
+    static void collect_visual_debugging_data(Game_Debug_State      *debug_state,
+                                              Game_State            *game_state,
+                                              Select_Block_Result   *select_query,
+                                              Temprary_Memory_Arena *frame_arena)
+    {
+        World *world             = game_state->world;
+        Game_Config *game_config = &game_state->game_config;
+
+        Camera *camera = &game_state->camera;
+
+        if (is_block_query_valid(select_query->block_query))
+        {
+            glm::ivec2 chunk_coords = select_query->block_facing_normal_query.chunk->world_coords;
+            glm::ivec3 block_coords = select_query->block_facing_normal_query.block_coords;
+
+            glm::vec3 abs_normal  = glm::abs(select_query->normal);
+            glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
+
+            opengl_debug_renderer_push_cube(select_query->block_facing_normal_position,
+                                            { 0.5f, 0.5f, 0.5f },
+                                            debug_color);
+
+            opengl_debug_renderer_push_line(select_query->block_position,
+                                            select_query->block_position + select_query->normal * 1.5f,
+                                            debug_color);
+
+            const char *back_facing_normal_label = "";
+
+            switch (select_query->face)
+            {
+                case BlockFace_Top:
+                {
+                    back_facing_normal_label = "top";
+                } break;
+
+                case BlockFace_Bottom:
+                {
+                    back_facing_normal_label = "bottom";
+                } break;
+
+                case BlockFace_Front:
+                {
+                    back_facing_normal_label = "front";
+                } break;
+
+                case BlockFace_Back:
+                {
+                    back_facing_normal_label = "back";
+                } break;
+
+                case BlockFace_Left:
+                {
+                    back_facing_normal_label = "left";
+                } break;
+
+                case BlockFace_Right:
+                {
+                    back_facing_normal_label = "right";
+                } break;
+            }
+
+            debug_state->block_facing_normal_face_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "block face: %s",
+                                                       back_facing_normal_label);
+
+            debug_state->block_facing_normal_chunk_coords_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "chunk: (%d, %d)",
+                                                       chunk_coords.x,
+                                                       chunk_coords.y);
+
+            debug_state->block_facing_normal_block_coords_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "block: (%d, %d, %d)",
+                                                        block_coords.x,
+                                                        block_coords.y,
+                                                        block_coords.z);
+
+            Block_Light_Info* light_info = get_block_light_info(select_query->block_facing_normal_query.chunk,
+                                                                select_query->block_facing_normal_query.block_coords);
+
+            i32 sky_light_level = get_sky_light_level(world, light_info);
+
+            debug_state->block_facing_normal_sky_light_level_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "sky light level: %d",
+                                                       sky_light_level);
+
+            debug_state->block_facing_normal_light_source_level_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "light source level: %d",
+                                                       (i32)light_info->light_source_level);
+
+            debug_state->block_facing_normal_light_level_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "light level: %d",
+                                                       glm::max(sky_light_level, (i32)light_info->light_source_level));
+
+        }
+
+        const Opengl_Renderer_Stats *stats = opengl_renderer_get_stats();
+
+        debug_state->frames_per_second_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "FPS: %d",
+                                                   game_state->frames_per_second);
+
+        debug_state->frame_time_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "frame time: %.2f ms",
+                                                   game_state->delta_time * 1000.0f);
+
+        debug_state->vertex_count_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "vertex count: %d",
+                                                   stats->per_frame.face_count * 4);
+
+        debug_state->face_count_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "face count: %u",
+                                                   stats->per_frame.face_count);
+
+        debug_state->sub_chunk_bucket_capacity_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "sub chunk bucket capacity: %llu",
+                                                   World::sub_chunk_bucket_capacity);
+
+        i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - opengl_renderer_get_free_chunk_bucket_count();
+        debug_state->sub_chunk_bucket_count_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "sub chunk buckets: %llu",
+                                                   sub_chunk_bucket_count);
+
+        {
+            f64 total_size =
+                (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+
+            debug_state->sub_chunk_bucket_total_memory_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "buckets total memory: %.2f",
+                                                       total_size);
+        }
+
+        {
+            f64 total_size =
+                (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+            debug_state->sub_chunk_bucket_allocated_memory_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "buckets allocated memory: %.2f",
+                                                       total_size);
+        }
+
+        {
+            f64 total_size =
+                stats->persistent.sub_chunk_used_memory / (1024.0 * 1024.0);
+            debug_state->sub_chunk_bucket_used_memory_text =
+                push_formatted_string8_null_terminated(frame_arena,
+                                                       "buckets used memory: %.2f",
+                                                       total_size);
+        }
+
+        debug_state->player_position_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "position: (%.2f, %.2f, %.2f)",
+                                                   camera->position.x,
+                                                   camera->position.y,
+                                                   camera->position.z);
+
+        glm::vec2 active_chunk_coords = world_position_to_chunk_coords(camera->position);
+
+        debug_state->player_chunk_coords_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "chunk coords: (%d, %d)",
+                                                   (i32)active_chunk_coords.x,
+                                                   (i32)active_chunk_coords.y);
+
+        debug_state->chunk_radius_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "chunk radius: %d",
+                                                   game_config->chunk_radius);
+
+        debug_state->global_sky_light_level_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "global sky light level: %d",
+                                                   (u32)world->sky_light_level);
+
+        u32 hours;
+        u32 minutes;
+        u32 seconds;
+        game_time_to_real_time(world->game_time, &hours, &minutes, &seconds);
+        debug_state->game_time_text =
+            push_formatted_string8_null_terminated(frame_arena,
+                                                   "game time: %d:%d:%d",
+                                                   hours,
+                                                   minutes,
+                                                   seconds);
+    }
+
+    static void draw_visual_debugging_data(Game_Debug_State *debug_state,
+                                           Input *input,
+                                           glm::vec2 frame_buffer_size)
+    {
+        UI::begin(input);
+
+        UI::set_offset({ 10.0f, 10.0f });
+        UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
+        UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+
+        UI::rect(frame_buffer_size * glm::vec2(0.33f, 1.0f) - glm::vec2(0.0f, 20.0f));
+        UI::set_cursor({ 10.0f, 10.0f });
+
+        UI::text(debug_state->player_chunk_coords_text);
+        UI::text(debug_state->player_position_text);
+        UI::text(debug_state->chunk_radius_text);
+
+        String8 empty = Str8("");
+        UI::text(empty);
+
+        UI::text(debug_state->frames_per_second_text);
+        UI::text(debug_state->frame_time_text);
+        UI::text(debug_state->face_count_text);
+        UI::text(debug_state->vertex_count_text);
+        UI::text(debug_state->sub_chunk_bucket_capacity_text);
+        UI::text(debug_state->sub_chunk_bucket_count_text);
+        UI::text(debug_state->sub_chunk_bucket_total_memory_text);
+        UI::text(debug_state->sub_chunk_bucket_allocated_memory_text);
+        UI::text(debug_state->sub_chunk_bucket_used_memory_text);
+
+        UI::text(empty);
+
+        UI::text(debug_state->game_time_text);
+        UI::text(debug_state->global_sky_light_level_text);
+
+        UI::text(empty);
+
+        String8 debug_block_label = Str8("debug block");
+        UI::text(debug_block_label);
+        UI::text(debug_state->block_facing_normal_chunk_coords_text);
+        UI::text(debug_state->block_facing_normal_block_coords_text);
+        UI::text(debug_state->block_facing_normal_face_text);
+        UI::text(debug_state->block_facing_normal_sky_light_level_text);
+        UI::text(debug_state->block_facing_normal_light_source_level_text);
+        UI::text(debug_state->block_facing_normal_light_level_text);
+
+        UI::text(empty);
+
+        bool fxaa_enabled = opengl_renderer_is_fxaa_enabled();
+        String8 fxaa_label = {};
+        if (fxaa_enabled)
+        {
+            fxaa_label = Str8("FXAA: ON");
+        }
+        else
+        {
+            fxaa_label = Str8("FXAA: OFF");
+        }
+        UI::text(fxaa_label);
+        UI::end();
     }
 
     void run_game(Game_State *game_state)
@@ -438,7 +780,6 @@ namespace minecraft {
         while (game_state->is_running)
         {
             Temprary_Memory_Arena frame_arena = begin_temprary_memory_arena(&game_memory->transient_arena);
-            memset(debug_state, 0, sizeof(Game_Debug_State));
 
             update_game_time(game_state);
             Platform::pump_messages();
@@ -459,8 +800,6 @@ namespace minecraft {
                 }
             }
 
-            update_entities(&registry, gameplay_input, camera, game_state->delta_time);
-
             update_world_time(game_world, game_state->delta_time);
             glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera->position);
             game_world->active_region_bounds = get_world_bounds_from_chunk_coords(game_config->chunk_radius,
@@ -469,133 +808,42 @@ namespace minecraft {
             schedule_chunk_lighting_jobs(game_world, game_world->active_region_bounds);
             free_chunks_out_of_region(game_world, game_world->active_region_bounds);
 
+            update_entities(&registry, gameplay_input, camera, game_state->delta_time);
+
+            Physics::simulate(game_state->delta_time,
+                              game_world,
+                              &registry);
+
+            Entity player = registry.find_entity_by_tag(EntityTag_Player);
+
+            if (registry.is_entity_valid(player))
+            {
+                Transform *transform = registry.get_component< Transform >(player);
+
+                if (transform)
+                {
+                    camera->position = transform->position + glm::vec3(0.0f, 0.85f, 0.0f);
+                    camera->yaw      = transform->orientation.y;
+                }
+            }
+
+            update_camera_transform(camera,
+                                    input,
+                                    game_state->delta_time);
+
+            update_camera(camera);
+
             u32 max_block_select_dist_in_cube_units = 5;
             Select_Block_Result select_query = select_block(game_world,
                                                             camera->position,
                                                             camera->forward,
                                                             max_block_select_dist_in_cube_units);
 
-            const char *back_facing_normal_label = "";
-
-            if (select_query.ray_cast_result.hit)
-            {
-                // todo(harlequin): we should check all entities not just the player baka
-                bool is_block_facing_normal_colliding_with_player = false;
-
-                Entity player = registry.find_entity_by_tag(EntityTag_Player);
-                if (player && is_block_query_valid(select_query.block_facing_normal_query))
-                {
-                    auto player_transform    = registry.get_component< Transform >(player);
-                    auto player_box_collider = registry.get_component< Box_Collider >(player);
-
-                    Transform block_transform   = {};
-                    block_transform.position    = get_block_position(select_query.block_facing_normal_query.chunk,
-                                                                     select_query.block_facing_normal_query.block_coords);
-
-                    block_transform.scale       = { 1.0f, 1.0f, 1.0f };
-                    block_transform.orientation = { 0.0f, 0.0f, 0.0f };
-
-                    Box_Collider block_collider = {};
-                    block_collider.size         = { 0.9f, 0.9f, 0.9f };
-
-                    is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
-                                                                                       block_collider,
-                                                                                      *player_transform,
-                                                                                      *player_box_collider);
-                }
-
-                bool can_place_block = is_block_query_valid(select_query.block_facing_normal_query) &&
-                                       select_query.block_facing_normal_query.block->id == BlockId_Air &&
-                                      !is_block_facing_normal_colliding_with_player;
-
-                if (can_place_block)
-                {
-                    glm::ivec2 chunk_coords = select_query.block_facing_normal_query.chunk->world_coords;
-                    glm::ivec3 block_coords = select_query.block_facing_normal_query.block_coords;
-
-                    if (game_state->is_visual_debugging_enabled)
-                    {
-                        glm::vec3 abs_normal  = glm::abs(select_query.normal);
-                        glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
-                        opengl_debug_renderer_push_cube(select_query.block_facing_normal_position, { 0.5f, 0.5f, 0.5f }, debug_color);
-                        opengl_debug_renderer_push_line(select_query.block_position, select_query.block_position + select_query.normal * 1.5f, debug_color);
-
-                        debug_state->block_facing_normal_chunk_coords_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                                    "chunk: (%d, %d)",
-                                                                                                                    chunk_coords.x,
-                                                                                                                    chunk_coords.y);
-
-                        debug_state->block_facing_normal_block_coords_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                                    "block: (%d, %d, %d)",
-                                                                                                                    block_coords.x,
-                                                                                                                    block_coords.y,
-                                                                                                                    block_coords.z);
-
-                        Block_Light_Info* light_info = get_block_light_info(select_query.block_facing_normal_query.chunk,
-                                                                            select_query.block_facing_normal_query.block_coords);
-                        i32 sky_light_level          = get_sky_light_level(game_world, light_info);
-
-                        debug_state->block_facing_normal_sky_light_level_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                       "sky light level: %d",
-                                                                                                       sky_light_level);
-
-                        debug_state->block_facing_normal_light_source_level_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                          "light source level: %d",
-                                                                                                          (i32)light_info->light_source_level);
-
-                        debug_state->block_facing_normal_light_level_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                   "light level: %d",
-                                                                                                   glm::max(sky_light_level, (i32)light_info->light_source_level));
-                    }
-                }
-
-                if (is_button_pressed(gameplay_input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
-                {
-                    i32 active_slot_index = inventory->active_hot_bar_slot_index;
-                    if (active_slot_index != -1)
-                    {
-                        Inventory_Slot &slot      = inventory->hot_bar[active_slot_index];
-                        bool is_active_slot_empty = slot.block_id == BlockId_Air && slot.count == 0;
-                        if (!is_active_slot_empty)
-                        {
-                            set_block_id(select_query.block_facing_normal_query.chunk,
-                                         select_query.block_facing_normal_query.block_coords,
-                                         slot.block_id);
-                            slot.count--;
-                            if (slot.count == 0)
-                            {
-                                slot.block_id = BlockId_Air;
-                            }
-                        }
-                    }
-                }
-
-                if (is_button_pressed(gameplay_input, MC_MOUSE_BUTTON_LEFT))
-                {
-                    // @todo(harlequin): this solves the problem but do we really want this ?
-                    bool any_neighbouring_water_block = false;
-                    auto neighours = get_neighbours(select_query.block_query.chunk, select_query.block_query.block_coords);
-                    for (const auto& neighour : neighours)
-                    {
-                        if (neighour->id == BlockId_Water)
-                        {
-                            any_neighbouring_water_block = true;
-                            break;
-                        }
-                    }
-
-                    i32 block_id = select_query.block_query.block->id;
-                    bool is_added = add_block_to_inventory(inventory, block_id);
-
-                    set_block_id(select_query.block_query.chunk,
-                                 select_query.block_query.block_coords,
-                                 any_neighbouring_water_block ? BlockId_Water : BlockId_Air);
-                    if (!is_added)
-                    {
-                        // todo(harlequin): dropped items
-                    }
-                }
-            }
+            late_update_entities(&registry,
+                                 gameplay_input,
+                                 &select_query,
+                                 inventory,
+                                 game_state->delta_time);
 
             bool is_under_water  = false;
             auto block_at_camera = query_block(game_world, camera->position);
@@ -608,8 +856,6 @@ namespace minecraft {
                 }
             }
 
-            Physics::simulate(game_state->delta_time, game_world, &registry);
-
             f32 normalize_color_factor = 1.0f / 255.0f;
             glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
             glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)game_world->sky_light_level / 15.0f);
@@ -618,7 +864,7 @@ namespace minecraft {
 
             if (is_under_water)
             {
-                tint_color = { 0.35f, 0.35f, 0.9f, 1.0f };
+                tint_color   = { 0.35f, 0.35f, 0.9f, 1.0f };
                 clear_color *= tint_color;
             }
 
@@ -639,145 +885,16 @@ namespace minecraft {
 
             if (game_state->is_visual_debugging_enabled)
             {
-                const Opengl_Renderer_Stats *stats = opengl_renderer_get_stats();
+                memset(debug_state, 0, sizeof(Game_Debug_State));
 
-                debug_state->frames_per_second_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                             "FPS: %d",
-                                                                                             game_state->frames_per_second);
+                collect_visual_debugging_data(&game_state->debug_state,
+                                              game_state,
+                                              &select_query,
+                                              &frame_arena);
 
-                debug_state->frame_time_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                      "frame time: %.2f ms",
-                                                                                      game_state->delta_time * 1000.0f);
-
-                debug_state->block_facing_normal_face_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                    "%s",
-                                                                                                    back_facing_normal_label);
-
-                debug_state->vertex_count_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                        "vertex count: %d",
-                                                                                        stats->per_frame.face_count * 4);
-
-                debug_state->face_count_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                      "face count: %u",
-                                                                                      stats->per_frame.face_count);
-
-                debug_state->sub_chunk_bucket_capacity_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                     "sub chunk bucket capacity: %llu",
-                                                                                                     World::sub_chunk_bucket_capacity);
-
-                i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - opengl_renderer_get_free_chunk_bucket_count();
-                debug_state->sub_chunk_bucket_count_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                  "sub chunk buckets: %llu",
-                                                                                                  sub_chunk_bucket_count);
-
-                {
-                    f64 total_size = (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
-                    debug_state->sub_chunk_bucket_total_memory_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                             "buckets total memory: %.2f",
-                                                                                                             total_size);
-                }
-
-                {
-                    f64 total_size = (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
-                    debug_state->sub_chunk_bucket_allocated_memory_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                                 "buckets allocated memory: %.2f",
-                                                                                                                 total_size);
-                }
-
-                {
-                    f64 total_size = stats->persistent.sub_chunk_used_memory / (1024.0 * 1024.0);
-                    debug_state->sub_chunk_bucket_used_memory_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                            "buckets used memory: %.2f",
-                                                                                                            total_size);
-                }
-
-                debug_state->player_position_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                           "position: (%.2f, %.2f, %.2f)",
-                                                                                           camera->position.x,
-                                                                                           camera->position.y,
-                                                                                           camera->position.z);
-
-                debug_state->player_chunk_coords_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                               "chunk coords: (%d, %d)",
-                                                                                               (i32)active_chunk_coords.x,
-                                                                                               (i32)active_chunk_coords.y);
-
-                debug_state->chunk_radius_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                        "chunk radius: %d",
-                                                                                        game_config->chunk_radius);
-
-                debug_state->global_sky_light_level_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                                  "global sky light level: %d",
-                                                                                                  (u32)game_world->sky_light_level);
-
-                u32 hours;
-                u32 minutes;
-                u32 seconds;
-                game_time_to_real_time(game_world->game_time, &hours, &minutes, &seconds);
-                debug_state->game_time_text = push_formatted_string8_null_terminated(&frame_arena,
-                                                                                     "game time: %d:%d:%d",
-                                                                                     hours,
-                                                                                     minutes,
-                                                                                     seconds);
-
-                UI::begin(input);
-
-                UI::set_offset({ 10.0f, 10.0f });
-                UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
-                UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
-
-                UI::rect(frame_buffer_size * glm::vec2(0.33f, 1.0f) - glm::vec2(0.0f, 20.0f));
-                UI::set_cursor({ 10.0f, 10.0f });
-
-                UI::text(debug_state->player_chunk_coords_text);
-                UI::text(debug_state->player_position_text);
-                UI::text(debug_state->chunk_radius_text);
-
-                String8 empty = {};
-                UI::text(empty);
-
-                UI::text(debug_state->frames_per_second_text);
-                UI::text(debug_state->frame_time_text);
-                UI::text(debug_state->face_count_text);
-                UI::text(debug_state->vertex_count_text);
-                UI::text(debug_state->sub_chunk_bucket_capacity_text);
-                UI::text(debug_state->sub_chunk_bucket_count_text);
-                UI::text(debug_state->sub_chunk_bucket_total_memory_text);
-                UI::text(debug_state->sub_chunk_bucket_allocated_memory_text);
-                UI::text(debug_state->sub_chunk_bucket_used_memory_text);
-
-                UI::text(empty);
-
-                UI::text(debug_state->game_time_text);
-                UI::text(debug_state->global_sky_light_level_text);
-
-                UI::text(empty);
-
-                String8 label = {};
-                label.data    = "debug block";
-                label.count   = (u32)strlen("debug block");
-                UI::text(label);
-                UI::text(debug_state->block_facing_normal_chunk_coords_text);
-                UI::text(debug_state->block_facing_normal_block_coords_text);
-                UI::text(debug_state->block_facing_normal_face_text);
-                UI::text(debug_state->block_facing_normal_sky_light_level_text);
-                UI::text(debug_state->block_facing_normal_light_source_level_text);
-                UI::text(debug_state->block_facing_normal_light_level_text);
-
-                UI::text(empty);
-
-                bool fxaa_enabled = opengl_renderer_is_fxaa_enabled();
-                String8 fxaa_label = {};
-                if (fxaa_enabled)
-                {
-                    fxaa_label = Str8("FXAA: ON");
-                }
-                else
-                {
-                    fxaa_label = Str8("FXAA: OFF");
-                }
-                UI::text(fxaa_label);
-                UI::end();
+                draw_visual_debugging_data(&game_state->debug_state,
+                                           input,
+                                           frame_buffer_size);
             }
 
             if (game_state->is_inventory_active)
@@ -791,13 +908,12 @@ namespace minecraft {
             draw_hotbar(inventory, game_world, frame_buffer_size, &frame_arena);
 
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
-            // todo(harlequin): game_assets
-            Opengl_Texture *cursor_texture = (Opengl_Texture *)game_state->assets.gameplay_crosshair.data;
+            Opengl_Texture *cursor_texture = get_texture(&game_state->assets.gameplay_crosshair);
 
             if (!game_state->is_cursor_locked)
             {
                 cursor = input->mouse_position;
-                cursor_texture = (Opengl_Texture *)game_state->assets.inventory_crosshair.data;
+                cursor_texture = get_texture(&game_state->assets.inventory_crosshair);
             }
 
             // cursor_ui
