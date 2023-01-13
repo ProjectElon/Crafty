@@ -43,6 +43,17 @@ namespace minecraft {
                                           &set_chunk_radius_command,
                                           set_chunk_radius_command_args,
                                           ArrayCount(set_chunk_radius_command_args));
+
+        Console_Command_Argument_Info set_time_command_args[] = {
+            { ConsoleCommandArgumentType_UInt32, Str8("hours") },
+            { ConsoleCommandArgumentType_UInt32, Str8("minutes") },
+            { ConsoleCommandArgumentType_UInt32, Str8("seconds") },
+        };
+
+        console_commands_register_command(Str8("set_time"),
+                                          &set_time_command,
+                                          set_time_command_args,
+                                          ArrayCount(set_time_command_args));
     }
 
     bool clear_command(Console_Command_Argument *args)
@@ -170,6 +181,28 @@ namespace minecraft {
             thread_safe_push_line(console, block_name);
         }
 
+        return true;
+    }
+
+    bool set_time_command(Console_Command_Argument *args)
+    {
+        Game_State *game_state = (Game_State*)console_commands_get_user_pointer();
+        u32 hours   = args[0].uint32;
+        if (hours > 23)
+        {
+            return false;
+        }
+        u32 minutes = args[1].uint32;
+        if (minutes > 59)
+        {
+            return false;
+        }
+        u32 seconds = args[2].uint32;
+        if (seconds > 59)
+        {
+            return false;
+        }
+        game_state->world->game_time = real_time_to_game_time(hours, minutes, seconds);
         return true;
     }
 }

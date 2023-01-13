@@ -217,13 +217,13 @@ namespace minecraft {
         }
 
         game_state->world = ArenaPushAlignedZero(&game_memory->transient_arena, World);
-        World *game_world = game_state->world;
+        World *world = game_state->world;
 
         const char *world_name = "harlequin";
         String8 world_path = push_formatted_string8_null_terminated(&game_memory->transient_arena,
                                                                     "../assets/worlds/%s",
                                                                     world_name);
-        initialize_world(game_world, world_path);
+        initialize_world(world, world_path);
 
         if (!initialize_inventory(inventory, &game_state->assets))
         {
@@ -232,7 +232,7 @@ namespace minecraft {
         }
         deserialize_inventory(inventory, world_path);
 
-        if (!Job_System::initialize(game_world, &game_memory->permanent_arena))
+        if (!Job_System::initialize(world, &game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize job system\n");
             return false;
@@ -417,24 +417,25 @@ namespace minecraft {
                                      Inventory *inventory,
                                      f32 delta_time)
     {
-        if (!select_query->ray_cast_result.hit)
+        if (!is_block_query_valid(select_query->block_facing_normal_query))
         {
             return;
         }
 
-        // todo(harlequin): we should check all entities not just the player baka
-        bool is_block_facing_normal_colliding_with_player = false;
+        bool is_block_facing_normal_colliding_with_an_entity = false;
 
-        Entity player = registry->find_entity_by_tag(EntityTag_Player);
+        Registry_View view = get_view< Transform, Rigid_Body >(registry);
 
-        if (player && is_block_query_valid(select_query->block_facing_normal_query))
+        for (Entity entity = view.begin();
+             entity != view.end() && !is_block_facing_normal_colliding_with_an_entity;
+             entity = view.next(entity))
         {
-            auto player_transform    = registry->get_component< Transform >(player);
-            auto player_box_collider = registry->get_component< Box_Collider >(player);
+            Transform *entity_transform       = registry->get_component< Transform >(entity);
+            Box_Collider *entity_box_collider = registry->get_component< Box_Collider >(entity);
 
-            Transform block_transform   = {};
-            block_transform.position    = get_block_position(select_query->block_facing_normal_query.chunk,
-                                                             select_query->block_facing_normal_query.block_coords);
+            Transform block_transform = {};
+            block_transform.position  = get_block_position(select_query->block_facing_normal_query.chunk,
+                                                           select_query->block_facing_normal_query.block_coords);
 
             block_transform.scale       = { 1.0f, 1.0f, 1.0f };
             block_transform.orientation = { 0.0f, 0.0f, 0.0f };
@@ -442,15 +443,16 @@ namespace minecraft {
             Box_Collider block_collider = {};
             block_collider.size         = { 0.9f, 0.9f, 0.9f };
 
-            is_block_facing_normal_colliding_with_player = Physics::box_vs_box(block_transform,
-                                                                               block_collider,
-                                                                              *player_transform,
-                                                                              *player_box_collider);
+            is_block_facing_normal_colliding_with_an_entity =
+                Physics::box_vs_box(block_transform,
+                                    block_collider,
+                                    *entity_transform,
+                                    *entity_box_collider);
         }
 
         bool can_place_block = is_block_query_valid(select_query->block_facing_normal_query) &&
                                select_query->block_facing_normal_query.block->id == BlockId_Air &&
-                              !is_block_facing_normal_colliding_with_player;
+                              !is_block_facing_normal_colliding_with_an_entity;
 
         if (is_button_pressed(input, MC_MOUSE_BUTTON_RIGHT) && can_place_block)
         {
@@ -511,11 +513,9 @@ namespace minecraft {
 
         Camera *camera = &game_state->camera;
 
-        if (is_block_query_valid(select_query->block_query))
+        if (is_block_query_valid(select_query->block_query) &&
+            is_block_query_valid(select_query->block_facing_normal_query))
         {
-            glm::ivec2 chunk_coords = select_query->block_facing_normal_query.chunk->world_coords;
-            glm::ivec3 block_coords = select_query->block_facing_normal_query.block_coords;
-
             glm::vec3 abs_normal  = glm::abs(select_query->normal);
             glm::vec4 debug_color = { abs_normal.x, abs_normal.y, abs_normal.z, 1.0f };
 
@@ -526,6 +526,9 @@ namespace minecraft {
             opengl_debug_renderer_push_line(select_query->block_position,
                                             select_query->block_position + select_query->normal * 1.5f,
                                             debug_color);
+
+            glm::ivec2 chunk_coords = select_query->block_facing_normal_query.chunk->world_coords;
+            glm::ivec3 block_coords = select_query->block_facing_normal_query.block_coords;
 
             const char *back_facing_normal_label = "";
 
@@ -769,7 +772,7 @@ namespace minecraft {
         Input            *input           = &game_state->input;
         Input            *gameplay_input  = &game_state->gameplay_input;
         Input            *inventory_input = &game_state->inventory_input;
-        World            *game_world      = game_state->world;
+        World            *world           = game_state->world;
         Inventory        *inventory       = &game_state->inventory;
         Game_Debug_State *debug_state     = &game_state->debug_state;
         Dropdown_Console *console         = &game_state->console;
@@ -800,18 +803,18 @@ namespace minecraft {
                 }
             }
 
-            update_world_time(game_world, game_state->delta_time);
+            update_world_time(world, game_state->delta_time);
             glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera->position);
-            game_world->active_region_bounds = get_world_bounds_from_chunk_coords(game_config->chunk_radius,
+            world->active_region_bounds = get_world_bounds_from_chunk_coords(game_config->chunk_radius,
                                                                                   active_chunk_coords);
-            load_chunks_at_region(game_world, game_world->active_region_bounds);
-            schedule_chunk_lighting_jobs(game_world, game_world->active_region_bounds);
-            free_chunks_out_of_region(game_world, game_world->active_region_bounds);
+            load_chunks_at_region(world, world->active_region_bounds);
+            schedule_chunk_lighting_jobs(world, world->active_region_bounds);
+            free_chunks_out_of_region(world, world->active_region_bounds);
 
             update_entities(&registry, gameplay_input, camera, game_state->delta_time);
 
             Physics::simulate(game_state->delta_time,
-                              game_world,
+                              world,
                               &registry);
 
             Entity player = registry.find_entity_by_tag(EntityTag_Player);
@@ -834,7 +837,7 @@ namespace minecraft {
             update_camera(camera);
 
             u32 max_block_select_dist_in_cube_units = 5;
-            Select_Block_Result select_query = select_block(game_world,
+            Select_Block_Result select_query = select_block(world,
                                                             camera->position,
                                                             camera->forward,
                                                             max_block_select_dist_in_cube_units);
@@ -846,7 +849,7 @@ namespace minecraft {
                                  game_state->delta_time);
 
             bool is_under_water  = false;
-            auto block_at_camera = query_block(game_world, camera->position);
+            auto block_at_camera = query_block(world, camera->position);
 
             if (is_block_query_valid(block_at_camera))
             {
@@ -858,7 +861,7 @@ namespace minecraft {
 
             f32 normalize_color_factor = 1.0f / 255.0f;
             glm::vec4 sky_color = { 135.0f, 206.0f, 235.0f, 255.0f };
-            glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)game_world->sky_light_level / 15.0f);
+            glm::vec4 clear_color = sky_color * normalize_color_factor * ((f32)world->sky_light_level / 15.0f);
 
             glm::vec4 tint_color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
@@ -872,13 +875,13 @@ namespace minecraft {
                                         tint_color,
                                         camera);
 
-            opengl_renderer_render_chunks_at_region(game_world,
-                                                    game_world->active_region_bounds,
+            opengl_renderer_render_chunks_at_region(world,
+                                                    world->active_region_bounds,
                                                     camera);
 
             opengl_renderer_end_frame(&game_state->assets,
                                       game_config->chunk_radius,
-                                      game_world->sky_light_level,
+                                      world->sky_light_level,
                                       &select_query.block_query);
 
             glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
@@ -901,11 +904,11 @@ namespace minecraft {
             {
                 calculate_slot_positions_and_sizes(inventory, frame_buffer_size);
                 handle_inventory_input(inventory, inventory_input);
-                draw_inventory(inventory, game_world, inventory_input, &frame_arena);
+                draw_inventory(inventory, world, inventory_input, &frame_arena);
             }
 
             handle_hotbar_input(inventory, gameplay_input);
-            draw_hotbar(inventory, game_world, frame_buffer_size, &frame_arena);
+            draw_hotbar(inventory, world, frame_buffer_size, &frame_arena);
 
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
             Opengl_Texture *cursor_texture = get_texture(&game_state->assets.gameplay_crosshair);
@@ -917,7 +920,7 @@ namespace minecraft {
             }
 
             // cursor_ui
-            glm::vec2 cursor_size = { cursor_texture->width  * 0.5f, cursor_texture->height * 0.5f };
+            glm::vec2 cursor_size = { cursor_texture->width * 0.5f, cursor_texture->height * 0.5f };
 
             opengl_2d_renderer_push_quad(cursor,
                                          cursor_size,

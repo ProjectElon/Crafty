@@ -318,7 +318,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius              = 30;
+        static constexpr i64 max_chunk_radius              = 28;
         static constexpr i64 pending_free_chunk_radius     = 2;
         static constexpr i64 chunk_capacity                = 4 * (max_chunk_radius + pending_free_chunk_radius) * (max_chunk_radius + pending_free_chunk_radius);
 

@@ -16,4 +16,5 @@ namespace minecraft {
     bool set_chunk_radius_command(Console_Command_Argument *args);
     bool list_commands_command(Console_Command_Argument *args);
     bool list_blocks_command(Console_Command_Argument *args);
+    bool set_time_command(Console_Command_Argument *args);
 }
