@@ -20,3 +20,4 @@ What I've Learned:
 - Basic Physics System to handle Raycasting and collisions with voxels.
 
 ![day_screenshot](https://github.com/ProjectElon/Crafty/blob/main/screenshots/day_screenshot.png)
+![night_screenshot](https://github.com/ProjectElon/Crafty/blob/main/screenshots/night_screenshot.png)
