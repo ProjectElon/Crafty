@@ -60,7 +60,8 @@ namespace minecraft {
                                      const glm::vec4  &input_text_cursor_color,
                                      const glm::vec4  &scroll_bar_background_color,
                                      const glm::vec4  &scroll_bar_color,
-                                     const glm::vec4  &command_color)
+                                     const glm::vec4  &command_succeeded_color,
+                                     const glm::vec4  &command_failed_color)
     {
 
         console->state              = ConsoleState_Closed;
@@ -79,7 +80,8 @@ namespace minecraft {
         console->scroll_bar_background_color = scroll_bar_background_color;
         console->scroll_bar_color            = scroll_bar_color;
 
-        console->command_color  = command_color;
+        console->command_succeeded_color = command_succeeded_color;
+        console->command_failed_color    = command_failed_color;
 
         console->input_text_cursor_color      = input_text_cursor_color;
         console->cursor_current_cooldown_time = 0.0f;
@@ -187,28 +189,40 @@ namespace minecraft {
         }
     }
 
-    void push_line(Dropdown_Console *console, String8 line /*= Str8("")*/, bool is_command /*= false*/)
+    Dropdown_Console_Line_Info& push_line(Dropdown_Console *console,
+                                          String8 line /*= Str8("")*/,
+                                          bool is_command /*= false*/,
+                                          bool is_command_succeeded /*= false*/)
     {
         char *str = ArenaPushArrayAligned(&console->string_arena, char, line.count);
         memcpy(str, line.data, sizeof(char) * line.count);
 
-        Dropdown_Console_Line_Info *line_info = ArenaPushAligned(&console->line_arena, Dropdown_Console_Line_Info);
+        Dropdown_Console_Line_Info *line_info = ArenaPushAligned(&console->line_arena,
+                                                                 Dropdown_Console_Line_Info);
         line_info->str.data                   = str;
         line_info->str.count                  = line.count;
         line_info->is_command                 = is_command;
+        line_info->is_command_succeeded       = is_command_succeeded;
+
         if (!console->lines)
         {
             console->lines = line_info;
         }
 
         console->line_count++;
+
+        return *line_info;
     }
 
-    void thread_safe_push_line(Dropdown_Console *console, String8 line /*= Str8("")*/, bool is_command /*= false*/)
+    Dropdown_Console_Line_Info& thread_safe_push_line(Dropdown_Console *console,
+                                                      String8 line /*= Str8("")*/,
+                                                      bool is_command /*= false*/,
+                                                      bool is_command_succeeded /*= false*/)
     {
         console->push_line_mutex->lock();
-        push_line(console, line, is_command);
+        Dropdown_Console_Line_Info& line_info = push_line(console, line, is_command, is_command_succeeded);
         console->push_line_mutex->unlock();
+        return line_info;
     }
 
     void draw_dropdown_console(Dropdown_Console *console, f32 dt)
@@ -229,7 +243,9 @@ namespace minecraft {
         auto& input_text_color             = console->input_text_color;
         auto& input_text_cursor_size       = console->input_text_cursor_size;
         auto& input_text_cursor_color      = console->input_text_cursor_color;
-        auto& command_color                = console->command_color;
+
+        auto& command_succeeded_color      = console->command_succeeded_color;
+        auto& command_failed_color         = console->command_failed_color;
 
         auto& cursor_opacity               = console->cursor_opacity;
         auto& cursor_opacity_limit         = console->cursor_opacity_limit;
@@ -270,11 +286,25 @@ namespace minecraft {
 
             if (cursor.y <= frame_buffer_size.y * y_extent - 2.0f * line_height)
             {
+                glm::vec4 color = input_text_color;
+
+                if (line_info->is_command)
+                {
+                    if (line_info->is_command_succeeded)
+                    {
+                        color = command_succeeded_color;
+                    }
+                    else
+                    {
+                        color = command_failed_color;
+                    }
+                }
+
                 opengl_2d_renderer_push_string(font,
                                                line_str,
                                                text_size,
                                                cursor + text_size * 0.5f,
-                                               line_info->is_command ? command_color : input_text_color);
+                                               color);
             }
         }
 
@@ -397,7 +427,7 @@ namespace minecraft {
             else
             {
                 bool is_command = true;
-                push_line(console, current_text, is_command);
+                Dropdown_Console_Line_Info &info = push_line(console, current_text, is_command);
                 ConsoleCommandExecutionResult result = console_commands_execute_command(current_text);
                 switch (result)
                 {
@@ -418,10 +448,12 @@ namespace minecraft {
 
                     case ConsoleCommandExecutionResult_Error:
                     {
+                        info.is_command_succeeded = false;
                     } break;
 
                     case ConsoleCommandExecutionResult_Success:
                     {
+                        info.is_command_succeeded = true;
                     } break;
                 }
             }

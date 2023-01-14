@@ -187,9 +187,9 @@ namespace minecraft {
                         NULL,
                         buffer_flags);
         renderer->base_vertex = (Sub_Chunk_Vertex*)glMapBufferRange(GL_ARRAY_BUFFER,
-                                                                        0,
-                                                                        World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
-                                                                        buffer_flags);
+                                                                    0,
+                                                                    World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
+                                                                    buffer_flags);
 
         glEnableVertexAttribArray(0);
         glVertexAttribIPointer(0,
@@ -210,7 +210,9 @@ namespace minecraft {
         glGenBuffers(1, &renderer->chunk_instance_buffer_id);
         glBindBuffer(GL_ARRAY_BUFFER, renderer->chunk_instance_buffer_id);
         glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), NULL, buffer_flags);
-        renderer->base_instance = (Sub_Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER, 0, World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), buffer_flags);
+        renderer->base_instance = (Sub_Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER,
+                                                                        0,
+                                                                        World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), buffer_flags);
 
         glEnableVertexAttribArray(2);
         glVertexAttribIPointer(2,
@@ -322,7 +324,6 @@ namespace minecraft {
 
         glBindVertexArray(0);
 
-        // todo(harlequin): config file
         renderer->enable_fxaa = true;
 
         // todo(harlequin): temprary

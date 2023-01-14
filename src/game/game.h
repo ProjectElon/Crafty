@@ -15,6 +15,7 @@
 #include "game/world.h"
 #include "game/inventory.h"
 #include "game/game_assets.h"
+#include "game/visual_debugging.h"
 
 #include "ui/dropdown_console.h"
 
@@ -32,30 +33,6 @@ namespace minecraft {
 
         Memory_Arena permanent_arena;
         Memory_Arena transient_arena;
-    };
-
-    struct Game_Debug_State
-    {
-        String8 frames_per_second_text;
-        String8 frame_time_text;
-        String8 vertex_count_text;
-        String8 face_count_text;
-        String8 sub_chunk_bucket_capacity_text;
-        String8 sub_chunk_bucket_count_text;
-        String8 sub_chunk_bucket_total_memory_text;
-        String8 sub_chunk_bucket_allocated_memory_text;
-        String8 sub_chunk_bucket_used_memory_text;
-        String8 player_position_text;
-        String8 player_chunk_coords_text;
-        String8 chunk_radius_text;
-        String8 game_time_text;
-        String8 global_sky_light_level_text;
-        String8 block_facing_normal_chunk_coords_text;
-        String8 block_facing_normal_block_coords_text;
-        String8 block_facing_normal_face_text;
-        String8 block_facing_normal_sky_light_level_text;
-        String8 block_facing_normal_light_source_level_text;
-        String8 block_facing_normal_light_level_text;
     };
 
     struct Game_State

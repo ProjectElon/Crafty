@@ -175,7 +175,7 @@ namespace minecraft {
 
     struct Sub_Chunk_Render_Data
     {
-        std::atomic<i32> bucket_index;
+        std::atomic< i32 > bucket_index;
         Sub_Chunk_Bucket opaque_buckets[2];
         Sub_Chunk_Bucket transparent_buckets[2];
 
@@ -184,8 +184,8 @@ namespace minecraft {
 
         AABB aabb[2];
 
-        std::atomic<bool> uploaded_to_gpu;
-        std::atomic<bool> pending_for_update;
+        std::atomic< bool > uploaded_to_gpu;
+        std::atomic< bool > pending_for_update;
 
         i32 face_count;
     };
@@ -223,18 +223,18 @@ namespace minecraft {
         Chunk*      neighbours[ChunkNeighbour_Count];
 
         // todo(harlequin): make this an enum
-        std::atomic<bool> pending_for_load;
-        std::atomic<bool> loaded;
-        std::atomic<bool> neighbours_loaded;
-        std::atomic<bool> pending_for_lighting;
-        std::atomic<bool> in_light_propagation_queue;
-        std::atomic<bool> in_light_calculation_queue;
-        std::atomic<bool> light_propagated;
-        std::atomic<bool> light_calculated;
-        std::atomic<bool> pending_for_update;
-        std::atomic<bool> pending_for_save;
-        std::atomic<bool> unload;
-        std::atomic<bool> freed;
+        std::atomic< bool > pending_for_load;
+        std::atomic< bool > loaded;
+        std::atomic< bool > neighbours_loaded;
+        std::atomic< bool > pending_for_lighting;
+        std::atomic< bool > in_light_propagation_queue;
+        std::atomic< bool > in_light_calculation_queue;
+        std::atomic< bool > light_propagated;
+        std::atomic< bool > light_calculated;
+        std::atomic< bool > pending_for_update;
+        std::atomic< bool > pending_for_save;
+        std::atomic< bool > unload;
+        std::atomic< bool > freed;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];

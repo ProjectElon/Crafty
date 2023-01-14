@@ -1,4 +1,5 @@
-﻿  game_console_commands.cpp
+﻿  opengl_renderer.cpp
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(380,78): warning C4267: 'argument': conversion from 'size_t' to 'GLsizei', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

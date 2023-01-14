@@ -24,6 +24,7 @@ namespace minecraft {
     {
         String8 str;
         bool    is_command;
+        bool    is_command_succeeded;
     };
 
     struct Dropdown_Console
@@ -55,7 +56,8 @@ namespace minecraft {
         glm::vec4 scroll_bar_background_color;
         glm::vec4 scroll_bar_color;
 
-        glm::vec4 command_color;
+        glm::vec4 command_succeeded_color;
+        glm::vec4 command_failed_color;
 
         String8 current_text;
 
@@ -91,7 +93,8 @@ namespace minecraft {
                                      const glm::vec4  &input_text_cursor_color,
                                      const glm::vec4  &scroll_bar_background_color,
                                      const glm::vec4  &scroll_bar_color,
-                                     const glm::vec4  &command_color);
+                                     const glm::vec4  &command_succeeded_color,
+                                     const glm::vec4  &command_failed_color);
 
     void shutdown_dropdown_console(Dropdown_Console *console);
     void toggle_dropdown_console(Dropdown_Console *console);
@@ -104,6 +107,13 @@ namespace minecraft {
 
     void draw_dropdown_console(Dropdown_Console *console, f32 delta_time);
 
-    void push_line(Dropdown_Console *console, String8 line = Str8(""), bool is_command = false);
-    void thread_safe_push_line(Dropdown_Console *console, String8 line = Str8(""), bool is_command = false);
+    Dropdown_Console_Line_Info& push_line(Dropdown_Console *console,
+                                          String8 line = Str8(""),
+                                          bool is_command = false,
+                                          bool is_command_succeeded = false);
+
+    Dropdown_Console_Line_Info& thread_safe_push_line(Dropdown_Console *console,
+                                                      String8 line = Str8(""),
+                                                      bool is_command = false,
+                                                      bool is_command_succeeded = false);
 }
