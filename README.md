@@ -18,3 +18,5 @@ What I've Learned:
 - Loading/Saving Voxel Meshes (Chunks) from/to disk with the help of the job system.
 - Dropdown Console where you can type commands while playing the game.
 - Basic Physics System to handle Raycasting and collisions with voxels.
+
+![day_screenshot](https://github.com/[ProjectElon]/[Crafy]/blob/[main]/screenshots/day_screenshot.png?raw=true)
