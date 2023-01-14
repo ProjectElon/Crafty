@@ -19,7 +19,7 @@ What I've Learned:
 - Dropdown Console where you can type commands while playing the game.
 - Basic Physics System to handle Raycasting and collisions with voxels.
 
+Gameplay: https://www.youtube.com/watch?v=hxJ3dPDtsFE
+
 ![day_screenshot](https://github.com/ProjectElon/Crafty/blob/main/screenshots/day_screenshot.png)
 ![night_screenshot](https://github.com/ProjectElon/Crafty/blob/main/screenshots/night_screenshot.png)
-
-https://www.youtube.com/watch?v=hxJ3dPDtsFE
