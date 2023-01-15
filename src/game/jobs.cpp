@@ -16,15 +16,19 @@ namespace minecraft {
         World* world = data->world;
         Chunk* chunk = data->chunk;
 
+        String8 chunk_file_path = get_chunk_file_path(world, chunk, temp_arena);
+
         generate_chunk(chunk, world->seed);
 
-        if (File_System::exists(chunk->file_path))
+        if (File_System::exists(chunk_file_path.data))
         {
-            deserialize_chunk(chunk);
+            deserialize_chunk(world, chunk, temp_arena);
         }
 
         chunk->loaded           = true;
         chunk->pending_for_load = false;
+
+        chunk->state = ChunkState_Loaded;
     }
 
     void Update_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -42,7 +46,9 @@ namespace minecraft {
                 render_data.pending_for_update = false;
             }
         }
+
         chunk->pending_for_update = false;
+        // chunk->state = ChunkState_Triangulated;
     }
 
     void Serialize_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -50,8 +56,9 @@ namespace minecraft {
         Serialize_Chunk_Job* data = (Serialize_Chunk_Job*)job_data;
         World *world = data->world;
         Chunk *chunk = data->chunk;
-        serialize_chunk(chunk, world->seed, world->path, temp_arena);
+        serialize_chunk(world, chunk, world->seed, temp_arena);
         chunk->pending_for_save = false;
+        chunk->state            = ChunkState_Saved;
     }
 
     void Serialize_And_Free_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -68,8 +75,10 @@ namespace minecraft {
                 opengl_renderer_free_sub_chunk(chunk, sub_chunk_index);
             }
         }
-        serialize_chunk(chunk, world->seed, world->path, temp_arena);
+        serialize_chunk(world, chunk, world->seed, temp_arena);
         chunk->pending_for_save = false;
         chunk->unload = true;
+
+        chunk->state = ChunkState_Saved;
     }
 }

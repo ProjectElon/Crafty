@@ -215,12 +215,27 @@ namespace minecraft {
 
     std::array< glm::ivec2, ChunkNeighbour_Count > get_chunk_neighbour_directions();
 
+    enum ChunkState : u8
+    {
+        ChunkState_Initialized = 0,
+        ChunkState_Loaded = 1,
+        ChunkState_NeighboursLoaded = 2,
+        ChunkState_PendingForLightPropagation = 3,
+        ChunkState_LightPropagated = 4,
+        ChunkState_PendingForLightCalculation = 5,
+        ChunkState_LightCalculated = 6,
+        ChunkState_Triangulated = 7,
+        ChunkState_PendingForSave = 8,
+        ChunkState_Saved = 9,
+        ChunkState_Freed = 10
+    };
+
     struct Chunk
     {
-        glm::ivec2  world_coords;
-        glm::vec3   position;
-        char        file_path[256];
-        Chunk*      neighbours[ChunkNeighbour_Count];
+        glm::ivec2 world_coords;
+        glm::vec3  position;
+
+        Chunk*  neighbours[ChunkNeighbour_Count];
 
         // todo(harlequin): make this an enum
         std::atomic< bool > pending_for_load;
@@ -235,6 +250,8 @@ namespace minecraft {
         std::atomic< bool > pending_for_save;
         std::atomic< bool > unload;
         std::atomic< bool > freed;
+
+        std::atomic< ChunkState > state;
 
         Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
         Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
@@ -252,8 +269,7 @@ namespace minecraft {
     };
 
     bool initialize_chunk(Chunk *chunk,
-                          const glm::ivec2 &world_coords,
-                          String8 world_path);
+                          const glm::ivec2 &world_coords);
 
     void generate_chunk(Chunk *chunk, i32 seed);
 
@@ -265,11 +281,14 @@ namespace minecraft {
                             Chunk *chunk,
                             Circular_FIFO_Queue< struct Block_Query_Result > *queue);
 
-    void serialize_chunk(Chunk *chunk,
+    void serialize_chunk(World *world,
+                         Chunk *chunk,
                          i32 seed,
-                         String8 world_path,
                          Temprary_Memory_Arena *temp_arena);
-    void deserialize_chunk(Chunk *chunk);
+
+    void deserialize_chunk(World *world,
+                           Chunk *chunk,
+                           Temprary_Memory_Arena *temp_arena);
 
     i32 get_block_index(const glm::ivec3& block_coords);
     glm::vec3 get_block_position(Chunk *chunk, const glm::ivec3& block_coords);
@@ -318,7 +337,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
         static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
 
-        static constexpr i64 max_chunk_radius              = 28;
+        static constexpr i64 max_chunk_radius              = 30;
         static constexpr i64 pending_free_chunk_radius     = 2;
         static constexpr i64 chunk_capacity                = 4 * (max_chunk_radius + pending_free_chunk_radius) * (max_chunk_radius + pending_free_chunk_radius);
 
@@ -412,6 +431,8 @@ namespace minecraft {
     Block_Query_Result query_neighbour_block_from_back(Chunk *chunk,  const glm::ivec3& block_coords);
 
     std::array< Block_Query_Result, 6 > query_neighbours(Chunk *chunk, const glm::ivec3& block_coords);
+
+    String8 get_chunk_file_path(World *world, Chunk *chunk, Temprary_Memory_Arena *temp_arena);
 
     struct Select_Block_Result
     {

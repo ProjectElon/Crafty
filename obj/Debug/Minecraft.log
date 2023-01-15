@@ -1,21 +1,5 @@
-﻿  game.cpp
+﻿  world.cpp
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(100,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\game.cpp(244): message : see reference to function template instantiation 'T *minecraft::Registry::add_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
-C:\dev\cpp\Crafty\src\game\ecs.h(119,41): warning C4244: 'argument': conversion from 'minecraft::Entity' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\game\ecs.h(125): message : see reference to function template instantiation 'T *minecraft::Registry::get_component<minecraft::Transform>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
-C:\dev\cpp\Crafty\src\game\game.cpp(340): message : see reference to function template instantiation 'std::tuple<T *,minecraft::Rigid_Body *,minecraft::Character_Controller *> minecraft::Registry::get_components<minecraft::Transform,minecraft::Rigid_Body,minecraft::Character_Controller>(minecraft::Entity)' being compiled
-          with
-          [
-              T=minecraft::Transform
-          ]
+  LINK : ..\bin\Minecraft.exe not found or not built by the last incremental link; performing full link
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

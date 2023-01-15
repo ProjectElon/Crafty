@@ -37,7 +37,6 @@ namespace minecraft {
         u8 *asset_arena_memory = ArenaPushArrayAlignedZero(arena, u8, asset_arena_size);
         state->asset_arena     = create_memory_arena(asset_arena_memory, asset_arena_size);
 
-        // todo(harlequin): need to copy the array
         String8 texture_extensions[] = {
             Str8("png")
         };

@@ -2,11 +2,6 @@
 
 #include "core/common.h"
 
-/*
-    todo(harlequin): impelement thread safe profiling right now we are profiling
-    the top level functions and the main thread
-*/
-
 namespace minecraft {
 
     struct Profile

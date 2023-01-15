@@ -1526,7 +1526,8 @@ namespace minecraft {
             Chunk* chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
-            if (!chunk->pending_for_load && chunk->loaded)
+            // !chunk->pending_for_load && chunk->loaded
+            if (chunk->state >= ChunkState_Loaded)
             {
                 for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
                 {

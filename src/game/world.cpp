@@ -64,7 +64,7 @@ namespace minecraft {
         return { glm::floor(position.x * one_over_16), glm::floor(position.z * one_over_16) };
     }
 
-    bool initialize_chunk(Chunk *chunk, const glm::ivec2& world_coords, String8 world_path)
+    bool initialize_chunk(Chunk *chunk, const glm::ivec2& world_coords)
     {
         chunk->world_coords = world_coords;
         chunk->position = { world_coords.x * MC_CHUNK_WIDTH, 0.0f, world_coords.y * MC_CHUNK_DEPTH };
@@ -108,16 +108,12 @@ namespace minecraft {
         chunk->unload               = false;
         chunk->freed                = false;
 
+        chunk->state                = ChunkState_Initialized;
+
         for (i32 i = 0; i < ChunkNeighbour_Count; i++)
         {
             chunk->neighbours[i] = nullptr;
         }
-
-        sprintf(chunk->file_path,
-                "%s/chunk_%d_%d.pkg",
-                world_path.data,
-                chunk->world_coords.x,
-                chunk->world_coords.y);
 
         return true;
     }
@@ -297,12 +293,15 @@ namespace minecraft {
         u16 block_id;
     };
 
-    void serialize_chunk(Chunk *chunk, i32 seed, String8 world_path, Temprary_Memory_Arena *temp_arena)
+    void serialize_chunk(World *world,
+                         Chunk *chunk,
+                         i32 seed,
+                         Temprary_Memory_Arena *temp_arena)
     {
         Assert(chunk->loaded);
 
         Chunk *original_chunk = ArenaPushZero(temp_arena, Chunk);
-        initialize_chunk(original_chunk, chunk->world_coords, world_path);
+        initialize_chunk(original_chunk, chunk->world_coords);
         generate_chunk(original_chunk, seed);
 
         u32 block_count = 0;
@@ -385,15 +384,19 @@ namespace minecraft {
             }
         }
 
+        String8 chunk_file_path = get_chunk_file_path(world, chunk, temp_arena);
+
         u32 serialized_block_count = block_count + front_edge_count + back_edge_count + left_edge_count + right_edge_count;
 
         if (serialized_block_count)
         {
-            FILE *file = fopen(chunk->file_path, "wb");
+            FILE *file = fopen(chunk_file_path.data, "wb");
 
             if (file == NULL)
             {
-                fprintf(stderr, "[ERROR]: failed to open file %s for writing: %s\n", chunk->file_path, strerror(errno));
+                fprintf(stderr,
+                        "[ERROR]: failed to open file %.*s for writing: %s\n",
+                        (i32)chunk_file_path.count, chunk_file_path.data, strerror(errno));
                 return;
             }
 
@@ -435,24 +438,33 @@ namespace minecraft {
         }
         else
         {
-            if (File_System::exists(chunk->file_path))
+            if (File_System::exists(chunk_file_path.data))
             {
-                if (!File_System::delete_file(chunk->file_path))
+                if (!File_System::delete_file(chunk_file_path.data))
                 {
-                    fprintf(stderr, "[ERROR]: failed to delete file: %s\n", chunk->file_path);
+                    fprintf(stderr,
+                            "[ERROR]: failed to delete file: %.*s\n",
+                            (i32)chunk_file_path.count,
+                            chunk_file_path.data);
                 }
             }
         }
     }
 
-    void deserialize_chunk(Chunk *chunk)
+    void deserialize_chunk(World *world,
+                           Chunk *chunk,
+                           Temprary_Memory_Arena *temp_arena)
     {
         Assert(!chunk->loaded);
-
-        FILE *file = fopen(chunk->file_path, "rb");
+        String8 chunk_file_path = get_chunk_file_path(world, chunk, temp_arena);
+        FILE *file = fopen(chunk_file_path.data, "rb");
         if (file == NULL)
         {
-            fprintf(stderr, "[ERROR]: failed to open file %s for reading: %s\n", chunk->file_path, strerror(errno));
+            fprintf(stderr,
+                    "[ERROR]: failed to open file %.*s for reading: %s\n",
+                    (i32)chunk_file_path.count,
+                    chunk_file_path.data,
+                    strerror(errno));
             return;
         }
 
@@ -1019,51 +1031,18 @@ namespace minecraft {
         {
             for (i32 x = region_bounds.min.x - 1; x <= region_bounds.max.x + 1; ++x)
             {
-                // glm::ivec2 chunk_coords = { x, z };
-                // auto it = world->loaded_chunks.find(chunk_coords);
-
-                // if (it == world->loaded_chunks.end())
-                // {
-                //     Chunk* chunk = allocate_chunk(world);
-                //     initialize_chunk(chunk, chunk_coords, world->path);
-
-                //     world->loaded_chunks.emplace(chunk_coords, chunk); // emplace
-
-                //     Load_Chunk_Job load_chunk_job = {};
-                //     load_chunk_job.world          = world;
-                //     load_chunk_job.chunk          = chunk;
-                //     Job_System::schedule(load_chunk_job);
-                // }
-
                 glm::ivec2 chunk_coords = { x, z };
                 Chunk* chunk = get_chunk(world, chunk_coords);
                 if (!chunk)
                 {
                     chunk = allocate_chunk(world);
-                    initialize_chunk(chunk, chunk_coords, world->path);
+                    initialize_chunk(chunk, chunk_coords);
                     insert_chunk(world, chunk);
                     Load_Chunk_Job load_chunk_job = {};
                     load_chunk_job.world = world;
                     load_chunk_job.chunk = chunk;
                     Job_System::schedule(load_chunk_job);
                 }
-
-                // Chunk* chunk            = allocate_chunk(world);
-                // chunk->world_coords     = chunk_coords;
-                // bool inserted           = insert_chunk(world, chunk);
-                // if (inserted)
-                // {
-                //     initialize_chunk(chunk, chunk_coords, world->path);
-                //     Load_Chunk_Job load_chunk_job = {};
-                //     load_chunk_job.world = world;
-                //     load_chunk_job.chunk = chunk;
-                //     Job_System::schedule(load_chunk_job);
-
-                // }
-                // else
-                // {
-                //     free_chunk(world, chunk);
-                // }
             }
         }
 
@@ -1086,21 +1065,14 @@ namespace minecraft {
             Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
-            // auto it = world->loaded_chunks.find(chunk_coords);
-            // assert(it != world->loaded_chunks.end());
-            // Chunk *chunk = it->second;
-
             bool all_neighbours_loaded = true;
 
             for (i32 i = 0; i < ChunkNeighbour_Count; i++)
             {
                 glm::ivec2 neighbour_chunk_coords = chunk_coords + dirs[i];
 
-                // auto neighbour_it = world->loaded_chunks.find(neighbour_chunk_coords);
-                // assert(neighbour_it != world->loaded_chunks.end());
-                // Chunk *neighbour_chunk = neighbour_it->second;
-                // chunk->neighbours[i]   = neighbour_chunk;
                 Chunk *neighbour_chunk = chunk->neighbours[i];
+
                 if (!neighbour_chunk)
                 {
                     neighbour_chunk = get_chunk(world, neighbour_chunk_coords);
@@ -1117,6 +1089,11 @@ namespace minecraft {
             if (all_neighbours_loaded && !chunk->neighbours_loaded)
             {
                 chunk->neighbours_loaded = true;
+            }
+
+            if (all_neighbours_loaded && chunk->state == ChunkState_Loaded)
+            {
+                chunk->state = ChunkState_NeighboursLoaded;
             }
         }
     }
@@ -1136,6 +1113,7 @@ namespace minecraft {
                                  chunk_coords.x > region_bounds.max.x + World::pending_free_chunk_radius ||
                                  chunk_coords.y < region_bounds.min.y - World::pending_free_chunk_radius ||
                                  chunk_coords.y > region_bounds.max.y + World::pending_free_chunk_radius;
+            /*
             if (out_of_bounds &&
                 !chunk->pending_for_load &&
                  chunk->loaded &&
@@ -1144,8 +1122,12 @@ namespace minecraft {
                 !chunk->in_light_calculation_queue &&
                 !chunk->pending_for_update &&
                 !chunk->pending_for_save)
+            */
+            if (out_of_bounds &&
+                (chunk->state == ChunkState_Loaded || chunk->state == ChunkState_NeighboursLoaded || chunk->state == ChunkState_LightCalculated))
             {
                 chunk->pending_for_save = true;
+                chunk->state = ChunkState_PendingForSave;
 
                 Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
                 serialize_and_free_chunk_job.world = world;
@@ -1159,10 +1141,12 @@ namespace minecraft {
         for (u32 i = 0; i < World::chunk_capacity; i++)
         {
             Chunk* chunk = &world->chunk_nodes[i].chunk;
-            if (chunk->unload && !chunk->freed)
+            // if (chunk->unload && !chunk->freed)
+            if (chunk->state == ChunkState_Saved)
             {
+                chunk->state = ChunkState_Freed;
+                // chunk->freed = true;
                 free_chunk(world, chunk);
-                chunk->freed = true;
             }
         }
     }
@@ -1175,9 +1159,11 @@ namespace minecraft {
         {
             render_data.pending_for_update = true;
 
+            // if (!chunk->pending_for_update)
             if (!chunk->pending_for_update)
             {
                 chunk->pending_for_update = true;
+                // chunk->state = ChunkState_PendingForTriangulation;
 
                 Update_Chunk_Job job;
                 job.chunk = chunk;
@@ -1192,10 +1178,15 @@ namespace minecraft {
         chunk->light_propagated = false;
         chunk->light_calculated = false;
 
+        chunk->state = ChunkState_NeighboursLoaded;
+
         for (i32 i = 0; i < ChunkNeighbour_Count; i++)
         {
             Chunk* neighbour = chunk->neighbours[i];
             Assert(neighbour);
+
+            neighbour->state = ChunkState_NeighboursLoaded;
+
             neighbour->pending_for_lighting = true;
             neighbour->light_propagated = false;
             neighbour->light_calculated = false;
@@ -1337,17 +1328,6 @@ namespace minecraft {
             queue_update_sub_chunk_job(world->update_chunk_jobs_queue, chunk, sub_chunk_index - 1);
         }
     }
-
-    // Chunk* get_chunk(World *world, const glm::ivec2& chunk_coords)
-    // {
-    //     auto it = world->loaded_chunks.find({ chunk_coords.x, chunk_coords.y });
-    //     Chunk *chunk = nullptr;
-    //     if (it != world->loaded_chunks.end())
-    //     {
-    //         chunk = it->second;
-    //     }
-    //     return chunk;
-    // }
 
     Block* get_block(World *world, const glm::vec3& position)
     {
@@ -1493,45 +1473,51 @@ namespace minecraft {
             Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
-            if (chunk->loaded &&
-                chunk->neighbours_loaded)
-            {
-                if (chunk->pending_for_lighting && !chunk->light_propagated && !chunk->in_light_propagation_queue)
-                {
-                    chunk->pending_for_lighting = false;
-                    chunk->in_light_propagation_queue = true;
+            // if (chunk->loaded &&
+            //     chunk->neighbours_loaded)
 
-                    Calculate_Chunk_Light_Propagation_Job job;
-                    job.world = world;
-                    job.chunk = chunk;
-                    light_propagation_queue.push(job);
+            if (chunk->state == ChunkState_NeighboursLoaded)
+            {
+                // chunk->pending_for_lighting && !chunk->light_propagated && !chunk->in_light_propagation_queue
+                chunk->pending_for_lighting       = false;
+                chunk->in_light_propagation_queue = true;
+
+                chunk->state = ChunkState_PendingForLightPropagation;
+
+                Calculate_Chunk_Light_Propagation_Job job;
+                job.world = world;
+                job.chunk = chunk;
+                light_propagation_queue.push(job);
+            }
+            // // chunk->light_propagated
+            else if (chunk->state == ChunkState_LightPropagated)
+            {
+                bool all_neighbours_light_propagated = true;
+
+                for (i32 i = 0; i < ChunkNeighbour_Count; i++)
+                {
+                    Chunk *neighbour_chunk = chunk->neighbours[i];
+
+                    // !neighbour_chunk->light_propagated
+                    if (neighbour_chunk->state < ChunkState_LightPropagated)
+                    {
+                        all_neighbours_light_propagated = false;
+                        break;
+                    }
                 }
 
-                if (chunk->light_propagated)
+                // all_neighbours_light_propagated && !chunk->light_calculated
+                if (all_neighbours_light_propagated)
                 {
-                    bool all_neighbours_light_propagated = true;
+                    chunk->light_calculated = true;
+                    chunk->in_light_calculation_queue = true;
 
-                    for (i32 i = 0; i < ChunkNeighbour_Count; i++)
-                    {
-                        Chunk *neighbour_chunk = chunk->neighbours[i];
+                    chunk->state = ChunkState_PendingForLightCalculation;
 
-                        if (!neighbour_chunk->light_propagated)
-                        {
-                            all_neighbours_light_propagated = false;
-                            break;
-                        }
-                    }
-
-                    if (all_neighbours_light_propagated && !chunk->light_calculated)
-                    {
-                        chunk->light_calculated = true;
-                        chunk->in_light_calculation_queue = true;
-
-                        Calculate_Chunk_Lighting_Job job;
-                        job.world = world;
-                        job.chunk = chunk;
-                        calculate_chunk_lighting_queue.push(job);
-                    }
+                    Calculate_Chunk_Lighting_Job job;
+                    job.world = world;
+                    job.chunk = chunk;
+                    calculate_chunk_lighting_queue.push(job);
                 }
             }
         }
@@ -1549,11 +1535,26 @@ namespace minecraft {
             Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             chunk->pending_for_save = true;
 
+            chunk->state = ChunkState_PendingForSave;
+
             Serialize_Chunk_Job job;
             job.world = world;
             job.chunk = chunk;
             Job_System::schedule(job);
         }
+    }
+
+    String8 get_chunk_file_path(World *world,
+                                Chunk *chunk,
+                                Temprary_Memory_Arena *temp_arena)
+    {
+        String8 chunk_file_path = push_formatted_string8_null_terminated(temp_arena,
+                                                                         "%.*s/chunk_%d_%d.pkg",
+                                                                         (i32)world->path.count,
+                                                                         world->path.data,
+                                                                         chunk->world_coords.x,
+                                                                         chunk->world_coords.y);
+        return chunk_file_path;
     }
 
     std::array< Block_Query_Result, 6 > query_neighbours(Chunk *chunk, const glm::ivec3& block_coords)
@@ -1809,5 +1810,4 @@ namespace minecraft {
     };
 
     Block World::null_block = { BlockId_Air };
-
 }
