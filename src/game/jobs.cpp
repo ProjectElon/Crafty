@@ -6,6 +6,7 @@
 #include "game/world.h"
 #include "game/job_system.h"
 #include "game/game.h"
+#include "ui/dropdown_console.h"
 
 namespace minecraft {
 
@@ -24,9 +25,6 @@ namespace minecraft {
         {
             deserialize_chunk(world, chunk, temp_arena);
         }
-
-        chunk->loaded           = true;
-        chunk->pending_for_load = false;
 
         chunk->state = ChunkState_Loaded;
     }
@@ -47,8 +45,8 @@ namespace minecraft {
             }
         }
 
-        chunk->pending_for_update = false;
-        // chunk->state = ChunkState_Triangulated;
+        chunk->pending_for_tessellation = false;
+        chunk->tessellated              = true;
     }
 
     void Serialize_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -57,8 +55,7 @@ namespace minecraft {
         World *world = data->world;
         Chunk *chunk = data->chunk;
         serialize_chunk(world, chunk, world->seed, temp_arena);
-        chunk->pending_for_save = false;
-        chunk->state            = ChunkState_Saved;
+        chunk->state = ChunkState_Saved;
     }
 
     void Serialize_And_Free_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -76,9 +73,6 @@ namespace minecraft {
             }
         }
         serialize_chunk(world, chunk, world->seed, temp_arena);
-        chunk->pending_for_save = false;
-        chunk->unload = true;
-
         chunk->state = ChunkState_Saved;
     }
 }

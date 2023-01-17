@@ -40,7 +40,7 @@ namespace minecraft {
     bool initialize_opengl_renderer(GLFWwindow   *window,
                                     u32           initial_frame_buffer_width,
                                     u32           initial_frame_buffer_height,
-                                    Memory_Arena *Arena);
+                                    Memory_Arena *arena);
 
     void shutdown_opengl_renderer();
 

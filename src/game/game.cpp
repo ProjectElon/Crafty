@@ -508,15 +508,16 @@ namespace minecraft {
     void run_game(Game_State *game_state)
     {
         Game_Memory      *game_memory     = game_state->game_memory;
+        World            *world           = game_state->world;
         Game_Config      *game_config     = &game_state->game_config;
         Input            *input           = &game_state->input;
         Input            *gameplay_input  = &game_state->gameplay_input;
         Input            *inventory_input = &game_state->inventory_input;
-        World            *world           = game_state->world;
         Inventory        *inventory       = &game_state->inventory;
         Game_Debug_State *debug_state     = &game_state->debug_state;
         Dropdown_Console *console         = &game_state->console;
         Camera           *camera          = &game_state->camera;
+        Game_Assets      *assets          = &game_state->assets;
 
         Registry& registry  = ECS::internal_data.registry;
 
@@ -669,7 +670,7 @@ namespace minecraft {
 
             draw_dropdown_console(console, game_state->delta_time);
 
-            opengl_2d_renderer_draw_quads();
+            opengl_2d_renderer_draw_quads(get_shader(&assets->quad_shader));
             opengl_renderer_swap_buffers(game_state->window);
 
             end_temprary_memory_arena(&frame_arena);

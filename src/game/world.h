@@ -6,30 +6,26 @@
 #include "memory/memory_arena.h"
 #include "game/math.h"
 #include "game/jobs.h"
-#include "game/console_commands.h"
 #include "containers/string.h"
-#include "containers/robin_hood.h"
 #include "containers/queue.h"
 
 #include <glm/glm.hpp>
 
 #include <mutex>
-#include <algorithm>
 #include <array>
-#include <queue>
 #include <atomic>
 
-#define MC_CHUNK_HEIGHT 256
-#define MC_CHUNK_DEPTH  16
-#define MC_CHUNK_WIDTH  16
+#define CHUNK_HEIGHT 256
+#define CHUNK_DEPTH  16
+#define CHUNK_WIDTH  16
 
-#define MC_BLOCK_COUNT_PER_CHUNK MC_CHUNK_WIDTH * MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH
-#define MC_INDEX_COUNT_PER_CHUNK MC_BLOCK_COUNT_PER_CHUNK * 36
+#define BLOCK_COUNT_PER_CHUNK CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH
+#define INDEX_COUNT_PER_CHUNK BLOCK_COUNT_PER_CHUNK * 36
 
-#define MC_SUB_CHUNK_HEIGHT 8
-#define MC_BLOCK_COUNT_PER_SUB_CHUNK  MC_CHUNK_WIDTH * MC_CHUNK_DEPTH * MC_SUB_CHUNK_HEIGHT
-#define MC_VERTEX_COUNT_PER_SUB_CHUNK MC_BLOCK_COUNT_PER_SUB_CHUNK * 24
-#define MC_INDEX_COUNT_PER_SUB_CHUNK  MC_BLOCK_COUNT_PER_SUB_CHUNK * 36
+#define SUB_CHUNK_HEIGHT 8
+#define BLOCK_COUNT_PER_SUB_CHUNK  CHUNK_WIDTH * CHUNK_DEPTH * SUB_CHUNK_HEIGHT
+#define VERTEX_COUNT_PER_SUB_CHUNK BLOCK_COUNT_PER_SUB_CHUNK * 24
+#define INDEX_COUNT_PER_SUB_CHUNK  BLOCK_COUNT_PER_SUB_CHUNK * 36
 
 namespace minecraft {
 
@@ -217,17 +213,16 @@ namespace minecraft {
 
     enum ChunkState : u8
     {
-        ChunkState_Initialized = 0,
-        ChunkState_Loaded = 1,
-        ChunkState_NeighboursLoaded = 2,
+        ChunkState_Initialized                = 0,
+        ChunkState_Loaded                     = 1,
+        ChunkState_NeighboursLoaded           = 2,
         ChunkState_PendingForLightPropagation = 3,
-        ChunkState_LightPropagated = 4,
+        ChunkState_LightPropagated            = 4,
         ChunkState_PendingForLightCalculation = 5,
-        ChunkState_LightCalculated = 6,
-        ChunkState_Triangulated = 7,
-        ChunkState_PendingForSave = 8,
-        ChunkState_Saved = 9,
-        ChunkState_Freed = 10
+        ChunkState_LightCalculated            = 6,
+        ChunkState_PendingForSave             = 8,
+        ChunkState_Saved                      = 9,
+        ChunkState_Freed                      = 10
     };
 
     struct Chunk
@@ -235,37 +230,25 @@ namespace minecraft {
         glm::ivec2 world_coords;
         glm::vec3  position;
 
-        Chunk*  neighbours[ChunkNeighbour_Count];
-
-        // todo(harlequin): make this an enum
-        std::atomic< bool > pending_for_load;
-        std::atomic< bool > loaded;
-        std::atomic< bool > neighbours_loaded;
-        std::atomic< bool > pending_for_lighting;
-        std::atomic< bool > in_light_propagation_queue;
-        std::atomic< bool > in_light_calculation_queue;
-        std::atomic< bool > light_propagated;
-        std::atomic< bool > light_calculated;
-        std::atomic< bool > pending_for_update;
-        std::atomic< bool > pending_for_save;
-        std::atomic< bool > unload;
-        std::atomic< bool > freed;
+        Chunk *neighbours[ChunkNeighbour_Count];
 
         std::atomic< ChunkState > state;
+        std::atomic< bool > pending_for_tessellation;
+        std::atomic< bool > tessellated;
 
-        Block blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
-        Block front_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
-        Block back_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
-        Block left_edge_blocks[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
-        Block right_edge_blocks[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+        Block blocks[CHUNK_HEIGHT * CHUNK_DEPTH * CHUNK_WIDTH];
+        Block front_edge_blocks[CHUNK_HEIGHT * CHUNK_WIDTH];
+        Block back_edge_blocks[CHUNK_HEIGHT  * CHUNK_WIDTH];
+        Block left_edge_blocks[CHUNK_HEIGHT  * CHUNK_DEPTH];
+        Block right_edge_blocks[CHUNK_HEIGHT * CHUNK_DEPTH];
 
-        Block_Light_Info light_map[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH * MC_CHUNK_WIDTH];
-        Block_Light_Info front_edge_light_map[MC_CHUNK_HEIGHT * MC_CHUNK_WIDTH];
-        Block_Light_Info back_edge_light_map[MC_CHUNK_HEIGHT  * MC_CHUNK_WIDTH];
-        Block_Light_Info left_edge_light_map[MC_CHUNK_HEIGHT  * MC_CHUNK_DEPTH];
-        Block_Light_Info right_edge_light_map[MC_CHUNK_HEIGHT * MC_CHUNK_DEPTH];
+        Block_Light_Info light_map[CHUNK_HEIGHT * CHUNK_DEPTH * CHUNK_WIDTH];
+        Block_Light_Info front_edge_light_map[CHUNK_HEIGHT * CHUNK_WIDTH];
+        Block_Light_Info back_edge_light_map[CHUNK_HEIGHT  * CHUNK_WIDTH];
+        Block_Light_Info left_edge_light_map[CHUNK_HEIGHT  * CHUNK_DEPTH];
+        Block_Light_Info right_edge_light_map[CHUNK_HEIGHT * CHUNK_DEPTH];
 
-        Sub_Chunk_Render_Data sub_chunks_render_data[MC_CHUNK_HEIGHT / MC_SUB_CHUNK_HEIGHT];
+        Sub_Chunk_Render_Data sub_chunks_render_data[CHUNK_HEIGHT / SUB_CHUNK_HEIGHT];
     };
 
     bool initialize_chunk(Chunk *chunk,
@@ -333,9 +316,9 @@ namespace minecraft {
 
     struct World
     {
-        static constexpr i64 sub_chunk_height          = MC_SUB_CHUNK_HEIGHT;
-        static constexpr i64 sub_chunk_count_per_chunk = MC_CHUNK_HEIGHT / sub_chunk_height;
-        static_assert(MC_CHUNK_HEIGHT % sub_chunk_height == 0);
+        static constexpr i64 sub_chunk_height          = SUB_CHUNK_HEIGHT;
+        static constexpr i64 sub_chunk_count_per_chunk = CHUNK_HEIGHT / sub_chunk_height;
+        static_assert(CHUNK_HEIGHT % sub_chunk_height == 0);
 
         static constexpr i64 max_chunk_radius              = 30;
         static constexpr i64 pending_free_chunk_radius     = 2;

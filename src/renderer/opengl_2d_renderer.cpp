@@ -44,11 +44,10 @@ namespace minecraft {
         i32 samplers[32];
         i32 texture_slots[32];
 
-        u32 quad_count;
+        u32           quad_count;
         Quad_Instance quad_instances[MAX_QUAD_COUNT];
 
-        Opengl_Texture white_pixel;
-        Opengl_Shader  ui_shader;
+        Opengl_Texture  white_pixel;
     };
 
     static Opengl_2D_Renderer *renderer;
@@ -162,12 +161,6 @@ namespace minecraft {
                                           TextureUsage_UI);
         Assert(success);
 
-        // todo(harlequin): game_assets
-        if (!load_shader(&renderer->ui_shader, "../assets/shaders/quad.glsl"))
-        {
-            return false;
-        }
-
         return true;
     }
 
@@ -175,12 +168,14 @@ namespace minecraft {
     {
     }
 
-    void opengl_2d_renderer_draw_quads()
+    void opengl_2d_renderer_draw_quads(Opengl_Shader *shader)
     {
         if (!renderer->quad_count)
         {
             return;
         }
+
+        Assert(shader);
 
         glm::vec2 frame_buffer_size = opengl_renderer_get_frame_buffer_size();
 
@@ -190,7 +185,6 @@ namespace minecraft {
         f32 top    = frame_buffer_size.y;
         glm::mat4 projection  = glm::ortho(left, right, bottom, top);
 
-        Opengl_Shader *shader = &renderer->ui_shader;
         bind_shader(shader);
         set_uniform_mat4(shader, "u_projection", glm::value_ptr(projection));
         set_uniform_i32_array(shader, "u_textures", renderer->samplers, 32);

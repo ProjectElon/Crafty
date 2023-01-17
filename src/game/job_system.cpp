@@ -75,8 +75,6 @@ namespace minecraft {
                 Calculate_Chunk_Light_Propagation_Job job = light_propagation_queue.pop();
                 Chunk *chunk = job.chunk;
                 propagate_sky_light(world, chunk, &light_queue);
-                chunk->light_propagated = true;
-                chunk->in_light_propagation_queue = false;
                 chunk->state = ChunkState_LightPropagated;
             }
 
@@ -85,7 +83,6 @@ namespace minecraft {
                 Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
                 Chunk *chunk = job.chunk;
                 calculate_lighting(world, chunk, &light_queue);
-                chunk->in_light_calculation_queue = false;
                 chunk->state = ChunkState_LightCalculated;
             }
 

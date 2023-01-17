@@ -14,8 +14,9 @@ namespace minecraft {
 
     #define MAX_QUAD_COUNT 65536
 
-    struct Memory_Arena;
+    struct Opengl_Shader;
     struct Bitmap_Font;
+    struct Memory_Arena;
 
     bool initialize_opengl_2d_renderer(Memory_Arena *arena);
     void shutdown_opengl_2d_renderer();
@@ -34,5 +35,5 @@ namespace minecraft {
                                         const glm::vec2& position,
                                         const glm::vec4& color);
 
-    void opengl_2d_renderer_draw_quads();
+    void opengl_2d_renderer_draw_quads(Opengl_Shader *shader);
 }

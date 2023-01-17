@@ -18,6 +18,7 @@
 
 #include <stb/stb_image.h>
 #include <mutex>
+#include <algorithm>
 
 // todo(harlequin): to be removed
 #include <fstream>
@@ -78,10 +79,10 @@ namespace minecraft {
         Sub_Chunk_Vertex   *base_vertex;
         Sub_Chunk_Instance *base_instance;
 
-        std::mutex         *free_buckets_mutex;
+        std::mutex         free_buckets_mutex;
         std::vector< i32 > free_buckets; // todo(harlequin): remove
 
-        std::mutex         *free_instances_mutex;
+        std::mutex         free_instances_mutex;
         std::vector< i32 > free_instances; // todo(harlequin): remove
 
         u32 opaque_command_buffer_id;
@@ -116,14 +117,14 @@ namespace minecraft {
     bool initialize_opengl_renderer(GLFWwindow   *window,
                                     u32           initial_frame_buffer_width,
                                     u32           initial_frame_buffer_height,
-                                    Memory_Arena *Arena)
+                                    Memory_Arena *arena)
     {
         if (renderer)
         {
             return false;
         }
 
-        renderer = ArenaPushAlignedZero(Arena, Opengl_Renderer);
+        renderer = ArenaPushAlignedZero(arena, Opengl_Renderer);
         Assert(renderer);
 
         if (!Platform::opengl_initialize(window))
@@ -225,12 +226,12 @@ namespace minecraft {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
 
-        renderer->free_buckets_mutex = new std::mutex();
-        renderer->free_buckets = std::vector< i32 >();
+        new (&renderer->free_buckets_mutex) std::mutex;
+        new (&renderer->free_buckets) std::vector< i32 >;
         renderer->free_buckets.resize(World::sub_chunk_bucket_capacity);
 
-        renderer->free_instances_mutex = new std::mutex();
-        renderer->free_instances = std::vector< i32 >();
+        new (&renderer->free_instances_mutex) std::mutex;
+        new (&renderer->free_instances) std::vector< i32 >;
         renderer->free_instances.resize(World::sub_chunk_bucket_capacity);
 
         for (i32 i = 0; i < World::sub_chunk_bucket_capacity; ++i)
@@ -239,14 +240,14 @@ namespace minecraft {
             renderer->free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
         }
 
-        // todo(harlequin): memory system
-        u32 *chunk_indicies = new u32[MC_INDEX_COUNT_PER_SUB_CHUNK];
-        defer { delete[] chunk_indicies; };
+        Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(arena);
+
+        u32 *chunk_indicies = ArenaPushArrayAligned(&temp_arena, u32, INDEX_COUNT_PER_SUB_CHUNK);
 
         u32 element_index = 0;
         u32 vertex_index  = 0;
 
-        for (u32 i = 0; i < MC_BLOCK_COUNT_PER_SUB_CHUNK * 6; i++)
+        for (u32 i = 0; i < BLOCK_COUNT_PER_SUB_CHUNK * 6; i++)
         {
             chunk_indicies[element_index + 0] = vertex_index + 3;
             chunk_indicies[element_index + 1] = vertex_index + 1;
@@ -265,7 +266,7 @@ namespace minecraft {
 
         glBufferData(
             GL_ELEMENT_ARRAY_BUFFER,
-            MC_INDEX_COUNT_PER_SUB_CHUNK * sizeof(u32),
+            INDEX_COUNT_PER_SUB_CHUNK * sizeof(u32),
             chunk_indicies,
             GL_STATIC_DRAW);
 
@@ -301,11 +302,11 @@ namespace minecraft {
         // positions uvs
         float quad_vertices[] =
         {
-             1.0f, 1.0f,  0.0f, 1.0f, 1.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
              1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-             1.0f, 1.0f,  0.0f, 1.0f, 1.0f,
-            -1.0f, 1.0f,  0.0f, 0.0f, 1.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
             -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
         };
 
@@ -327,17 +328,18 @@ namespace minecraft {
         renderer->enable_fxaa = true;
 
         // todo(harlequin): temprary
-        u8 white_block_texture[32 * 32 * 4];
+        u8 *magenta_block_texture = ArenaPushArrayAligned(&temp_arena, u8, 32 * 32 * 4);
+
         for (u32 i = 0; i < 32 * 32 * 4; i += 4)
         {
-            u8 *R = white_block_texture + i + 0;
-            u8 *G = white_block_texture + i + 1;
-            u8 *B = white_block_texture + i + 2;
-            u8 *A = white_block_texture + i + 3;
-            *R = 255;
-            *G = 0;
-            *B = 255;
-            *A = 255;
+            u8 *R = magenta_block_texture + i + 0;
+            u8 *G = magenta_block_texture + i + 1;
+            u8 *B = magenta_block_texture + i + 2;
+            u8 *A = magenta_block_texture + i + 3;
+            *R    = 255;
+            *G    = 0;
+            *B    = 255;
+            *A    = 255;
         }
 
         // todo(harlequin): temprary
@@ -401,7 +403,7 @@ namespace minecraft {
                             32, 32, 1,
                             GL_RGBA,
                             GL_UNSIGNED_BYTE,
-                            (width == 32 && height == 32) ? data : white_block_texture);
+                            (width == 32 && height == 32) ? data : magenta_block_texture);
 
             stbi_image_free(data);
             texture_id++;
@@ -424,6 +426,8 @@ namespace minecraft {
         glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
 
         glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+
+        end_temprary_memory_arena(&temp_arena);
 
         return true;
     }
@@ -534,10 +538,10 @@ namespace minecraft {
     void opengl_renderer_allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
         Assert(renderer->free_buckets.size());
-        renderer->free_buckets_mutex->lock();
+        renderer->free_buckets_mutex.lock();
         bucket->memory_id = renderer->free_buckets.back();
         renderer->free_buckets.pop_back();
-        renderer->free_buckets_mutex->unlock();
+        renderer->free_buckets_mutex.unlock();
         bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
         bucket->face_count = 0;
     }
@@ -552,9 +556,9 @@ namespace minecraft {
     void opengl_renderer_free_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
-        renderer->free_buckets_mutex->lock();
+        renderer->free_buckets_mutex.lock();
         renderer->free_buckets.push_back(bucket->memory_id);
-        renderer->free_buckets_mutex->unlock();
+        renderer->free_buckets_mutex.unlock();
         bucket->memory_id = -1;
         bucket->current_vertex = nullptr;
         bucket->face_count = 0;
@@ -563,18 +567,18 @@ namespace minecraft {
     i32 opengl_renderer_allocate_sub_chunk_instance()
     {
         Assert(renderer->free_buckets.size());
-        renderer->free_instances_mutex->lock();
+        renderer->free_instances_mutex.lock();
         i32 instance_memory_id = renderer->free_instances.back();
         renderer->free_instances.pop_back();
-        renderer->free_instances_mutex->unlock();
+        renderer->free_instances_mutex.unlock();
         return instance_memory_id;
     }
 
     void opengl_renderer_free_sub_chunk_instance(i32 instance_memory_id)
     {
-        renderer->free_instances_mutex->lock();
+        renderer->free_instances_mutex.lock();
         renderer->free_instances.push_back(instance_memory_id);
-        renderer->free_instances_mutex->unlock();
+        renderer->free_instances_mutex.unlock();
     }
 
     void opengl_renderer_free_sub_chunk(Chunk* chunk, u32 sub_chunk_index)
@@ -1325,7 +1329,7 @@ namespace minecraft {
 
         if (block_coords.x == 0)
         {
-            left_block = &(chunk->left_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z]);
+            left_block = &(chunk->left_edge_blocks[block_coords.y * CHUNK_DEPTH + block_coords.z]);
         }
         else
         {
@@ -1347,9 +1351,9 @@ namespace minecraft {
 
         Block* right_block = nullptr;
 
-        if (block_coords.x == MC_CHUNK_WIDTH - 1)
+        if (block_coords.x == CHUNK_WIDTH - 1)
         {
-            right_block = &(chunk->right_edge_blocks[block_coords.y * MC_CHUNK_DEPTH + block_coords.z]);
+            right_block = &(chunk->right_edge_blocks[block_coords.y * CHUNK_DEPTH + block_coords.z]);
         }
         else
         {
@@ -1372,7 +1376,7 @@ namespace minecraft {
 
         if (block_coords.z == 0)
         {
-            front_block = &(chunk->front_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
+            front_block = &(chunk->front_edge_blocks[block_coords.y * CHUNK_WIDTH + block_coords.x]);
         }
         else
         {
@@ -1395,9 +1399,9 @@ namespace minecraft {
 
         Block* back_block = nullptr;
 
-        if (block_coords.z == MC_CHUNK_DEPTH - 1)
+        if (block_coords.z == CHUNK_DEPTH - 1)
         {
-            back_block = &(chunk->back_edge_blocks[block_coords.y * MC_CHUNK_WIDTH + block_coords.x]);
+            back_block = &(chunk->back_edge_blocks[block_coords.y * CHUNK_WIDTH + block_coords.x]);
         }
         else
         {
@@ -1436,9 +1440,9 @@ namespace minecraft {
 
         for (i32 y = sub_chunk_start_y; y < sub_chunk_end_y; ++y)
         {
-            for (i32 z = 0; z < MC_CHUNK_DEPTH; ++z)
+            for (i32 z = 0; z < CHUNK_DEPTH; ++z)
             {
-                for (i32 x = 0; x < MC_CHUNK_WIDTH; ++x)
+                for (i32 x = 0; x < CHUNK_WIDTH; ++x)
                 {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = get_block(chunk, block_coords);
@@ -1942,7 +1946,7 @@ namespace minecraft {
         fprintf(stderr, "[%s]: %s\n", type_cstring, message);
 
 #ifndef OPENGL_TRACE_DEBUG_MESSAGE
-        MC_DebugBreak();
+        DebugBreak();
 #endif
     }
 
