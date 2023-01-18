@@ -1,15 +1,25 @@
 #include "event.h"
 
 #include "platform.h"
+#include "memory/memory_arena.h"
 #include "input.h"
 
 namespace minecraft {
 
-    bool initialize_event_system(Event_System *event_system, bool is_logging_enabled)
+    bool initialize_event_system(Event_System *event_system,
+                                 Memory_Arena *arena,
+                                 bool is_logging_enabled)
     {
         event_system->is_logging_enabled = is_logging_enabled;
-        event_system->registry->entries  = std::vector< Event_Entry >(); // todo(harlequin): remove std::vector
-        event_system->registry->entries.reserve(128);
+
+        for (i32 i = 0; i < EventType_Count; i++)
+        {
+            Event_Registry &registry = event_system->registry[i];
+            registry.entry_count = 0;
+            registry.entries     = ArenaPushArrayAlignedZero(arena,
+                                                             Event_Entry,
+                                                             MAX_EVENT_ENTRY_COUNT_PER_TYPE);
+        }
         return true;
     }
 
@@ -22,50 +32,75 @@ namespace minecraft {
                         on_event_fn on_event,
                         void *sender)
     {
-        for (auto& event_entry : event_system->registry[event_type].entries)
+        Event_Registry &registry = event_system->registry[event_type];
+
+        for (i32 i = 0; i < registry.entry_count; i++)
         {
-            if (event_entry.sender == sender && event_entry.on_event == on_event)
+            Event_Entry &entry = registry.entries[i];
+            if (entry.sender == sender && entry.on_event == on_event)
             {
-                fprintf(stderr, "[WARNING]: %s event is already registered with sender %p\n", convert_event_type_to_string(event_type), sender);
+                fprintf(stderr,
+                        "[WARNING]: %s event is already registered with sender %p\n",
+                        convert_event_type_to_string(event_type),
+                        sender);
                 return false;
             }
         }
 
-        Event_Entry event_entry;
-        event_entry.on_event = on_event;
-        event_entry.sender   = sender;
-        event_system->registry[event_type].entries.emplace_back(event_entry);
-        fprintf(stderr, "[TRACE]: %s event registered with sender %p\n", convert_event_type_to_string(event_type), sender);
+        Assert(registry.entry_count < MAX_EVENT_ENTRY_COUNT_PER_TYPE);
+        Event_Entry entry;
+        entry.on_event = on_event;
+        entry.sender   = sender;
+        registry.entries[registry.entry_count++] = entry;
+        fprintf(stderr,
+                "[TRACE]: %s event registered with sender %p\n",
+                convert_event_type_to_string(event_type),
+                sender);
         return true;
     }
 
     bool unregister_event(Event_System *event_system, EventType event_type, void *sender)
     {
-        auto& entries = event_system->registry[event_type].entries;
+        Event_Registry &registry = event_system->registry[event_type];
 
-        u32 count = entries.size();
-
-        for (u32 i = 0; i < count; i++)
+        for (u32 i = 0; i < registry.entry_count; i++)
         {
-            if (entries[i].sender == sender)
+            if (registry.entries[i].sender == sender)
             {
-                entries.erase(entries.begin() + i);
-                fprintf(stderr, "[TRACE]: %s event unregistered with sender %p\n", convert_event_type_to_string(event_type), sender);
+                for (u32 j = i + 1; j < registry.entry_count; ++j)
+                {
+                    Event_Entry temp = registry.entries[j];
+                    registry.entries[j] = registry.entries[j - 1];
+                    registry.entries[j - 1] = temp;
+                }
+
+                registry.entry_count--;
+
+                fprintf(stderr,
+                        "[TRACE]: %s event unregistered with sender %p\n",
+                        convert_event_type_to_string(event_type),
+                        sender);
+
                 return true;
             }
         }
 
-        fprintf(stderr, "[WARNING]: %s event is not registered with sender %p\n", convert_event_type_to_string(event_type), sender);
+        fprintf(stderr,
+                "[WARNING]: %s event is not registered with sender %p\n",
+                convert_event_type_to_string(event_type),
+                sender);
+
         return false;
     }
 
     void fire_event(Event_System *event_system, EventType event_type, const Event *event)
     {
-        i32 count = event_system->registry[event_type].entries.size();
-        for (i32 i = count - 1; i >= 0; i--)
+        Event_Registry &registry = event_system->registry[event_type];
+
+        for (i32 i = (i32)registry.entry_count - 1; i >= 0; i--)
         {
-            Event_Entry &event_entry = event_system->registry[event_type].entries[i];
-            bool handled             = event_entry.on_event(event, event_entry.sender);
+            Event_Entry &entry = registry.entries[i];
+            bool handled       = entry.on_event(event, entry.sender);
 
             if (event_system->is_logging_enabled)
             {
@@ -73,7 +108,7 @@ namespace minecraft {
                 fprintf(stderr,
                         "[TRACE]: %s event fired with sender %p\n",
                         event_string,
-                        event_entry.sender);
+                        entry.sender);
             }
 
             if (handled)
@@ -83,29 +118,105 @@ namespace minecraft {
         }
     }
 
+    Event make_resize_event(u32 width, u32 height)
+    {
+        Event event;
+        event.data_u32_array[0] = width;
+        event.data_u32_array[1] = height;
+        return event;
+    }
+
     void parse_resize_event(const Event *event, u32 *out_width, u32 *out_height)
     {
         *out_width  = event->data_u32_array[0];
         *out_height = event->data_u32_array[1];
     }
 
+    Event make_key_pressed_event(u16 key)
+    {
+        Event event;
+        event.data_u16 = key;
+        return event;
+    }
+
+    Event make_key_released_event(u16 key)
+    {
+        Event event;
+        event.data_u16 = key;
+        return event;
+    }
+
+    Event make_key_held_event(u16 key)
+    {
+        Event event;
+        event.data_u16 = key;
+        return event;
+    }
+
     void parse_key_code(const Event *event, u16 *out_key)
     {
         *out_key = event->data_u16;
     }
+
+    Event make_mouse_move_event(f32 mouse_x, f32 mouse_y)
+    {
+        Event event;
+        event.data_f32_array[0] = mouse_x;
+        event.data_f32_array[1] = mouse_y;
+        return event;
+    }
+
     void parse_mouse_move(const Event *event, f32 *out_mouse_x, f32 *out_mouse_y)
     {
         *out_mouse_x = event->data_f32_array[0];
         *out_mouse_y = event->data_f32_array[1];
     }
+
+    Event make_button_pressed_event(u8 button)
+    {
+        Event event;
+        event.data_u8 = button;
+        return event;
+    }
+
+    Event make_button_released_event(u8 button)
+    {
+        Event event;
+        event.data_u8 = button;
+        return event;
+    }
+
+    Event make_button_held_event(u8 button)
+    {
+        Event event;
+        event.data_u8 = button;
+        return event;
+    }
+
     void parse_button_code(const Event *event, u8 *out_button)
     {
         *out_button = event->data_u8;
     }
+
+    Event make_mouse_wheel_event(f32 xoffset, f32 yoffset)
+    {
+        Event event;
+        event.data_f32_array[0] = xoffset;
+        event.data_f32_array[1] = yoffset;
+        return event;
+    }
+
     void parse_mouse_wheel(const Event *event, f32 *out_xoffset, f32 *out_yoffset)
     {
         *out_xoffset = event->data_f32_array[0];
         *out_yoffset = event->data_f32_array[1];
+    }
+
+    Event make_char_event(char code_point)
+    {
+        Event event;
+        event.data_u8 = code_point;
+        return event;
     }
 
     void parse_char(const Event *event, char *out_code_point)

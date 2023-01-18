@@ -1,9 +1,12 @@
 #pragma once
 
 #include "common.h"
-#include <vector>
+
+#define MAX_EVENT_ENTRY_COUNT_PER_TYPE 1024
 
 namespace minecraft {
+
+    struct Memory_Arena;
 
     enum EventType
     {
@@ -67,16 +70,19 @@ namespace minecraft {
 
     struct Event_Registry
     {
-        std::vector<Event_Entry> entries; // todo(harlequin): data structures
+        u32          entry_count;
+        Event_Entry *entries;
     };
 
     struct Event_System
     {
-        bool           is_logging_enabled;
+        Memory_Arena   *arena;
         Event_Registry registry[EventType_Count];
+        bool           is_logging_enabled;
     };
 
     bool initialize_event_system(Event_System *event_system,
+                                 Memory_Arena *arena,
                                  bool is_logging_enabled);
 
     void shutdown_event_system(Event_System *event_system);
@@ -93,6 +99,17 @@ namespace minecraft {
     void fire_event(Event_System *event_system,
                     EventType event_type,
                     const Event *event);
+
+    Event make_resize_event(u32 width, u32 height);
+    Event make_key_pressed_event(u16 key);
+    Event make_key_released_event(u16 key);
+    Event make_key_held_event(u16 key);
+    Event make_mouse_move_event(f32 mouse_x, f32 mouse_y);
+    Event make_button_pressed_event(u8 button);
+    Event make_button_released_event(u8 button);
+    Event make_button_held_event(u8 button);
+    Event make_mouse_wheel_event(f32 xoffset, f32 yoffset);
+    Event make_char_event(char code_point);
 
     void parse_resize_event(const Event *event,
                             u32 *out_width,

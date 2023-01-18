@@ -10,10 +10,7 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_u32_array[0] = width;
-        event.data_u32_array[1] = height;
-
+        Event event = make_resize_event(width, height);
         fire_event(event_system, EventType_Resize, &event);
     }
 
@@ -45,18 +42,19 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_u16 = key;
         if (action == GLFW_PRESS)
         {
+            Event event = make_key_pressed_event(key);
             fire_event(event_system, EventType_KeyPress, &event);
         }
         else if (action == GLFW_REPEAT)
         {
+            Event event = make_key_held_event(key);
             fire_event(event_system, EventType_KeyHeld, &event);
         }
         else
         {
+            Event event = make_key_released_event(key);
             fire_event(event_system, EventType_KeyRelease, &event);
         }
     }
@@ -65,9 +63,7 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_f32_array[0] = (f32)mouse_x;
-        event.data_f32_array[1] = (f32)mouse_y;
+        Event event = make_mouse_move_event((f32)mouse_x, (f32)mouse_y);
         fire_event(event_system, EventType_MouseMove, &event);
     }
 
@@ -75,19 +71,19 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_u8 = button;
-
         if (action == GLFW_PRESS)
         {
+            Event event = make_button_pressed_event(button);
             fire_event(event_system, EventType_MouseButtonPress, &event);
         }
         else if (action == GLFW_REPEAT)
         {
+            Event event = make_button_held_event(button);
             fire_event(event_system, EventType_MouseButtonHeld, &event);
         }
         else
         {
+            Event event = make_button_released_event(button);
             fire_event(event_system, EventType_MouseButtonRelease, &event);
         }
     }
@@ -96,9 +92,7 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_f32_array[0] = (f32)xoffset;
-        event.data_f32_array[1] = (f32)yoffset;
+        Event event = make_mouse_wheel_event((f32)xoffset, (f32)yoffset);
         fire_event(event_system, EventType_MouseWheel, &event);
     }
 
@@ -106,8 +100,7 @@ namespace minecraft {
     {
         Event_System *event_system = (Event_System*)Platform::get_window_user_pointer(window);
 
-        Event event;
-        event.data_u8 = code_point;
+        Event event = make_char_event(code_point);
         fire_event(event_system, EventType_Char, &event);
     }
 

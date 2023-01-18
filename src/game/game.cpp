@@ -74,7 +74,9 @@ namespace minecraft {
         Platform::set_window_user_pointer(game_state->window, event_system);
 
         bool is_tracing_events = false;
-        if (!initialize_event_system(event_system, is_tracing_events))
+        if (!initialize_event_system(event_system,
+                                     &game_memory->permanent_arena,
+                                     is_tracing_events))
         {
             fprintf(stderr, "[ERROR]: failed to initialize event system\n");
             return false;
