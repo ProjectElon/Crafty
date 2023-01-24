@@ -108,12 +108,12 @@ namespace minecraft {
     void draw_dropdown_console(Dropdown_Console *console, f32 delta_time);
 
     Dropdown_Console_Line_Info& push_line(Dropdown_Console *console,
-                                          String8 line = Str8(""),
+                                          String8 line = String8FromCString(""),
                                           bool is_command = false,
                                           bool is_command_succeeded = false);
 
     Dropdown_Console_Line_Info& thread_safe_push_line(Dropdown_Console *console,
-                                                      String8 line = Str8(""),
+                                                      String8 line = String8FromCString(""),
                                                       bool is_command = false,
                                                       bool is_command_succeeded = false);
 }

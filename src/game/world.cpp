@@ -3,6 +3,7 @@
 #include "renderer/opengl_renderer.h"
 #include "game/job_system.h"
 #include "game/jobs.h"
+#include "memory/memory_arena.h"
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/noise.hpp>
@@ -29,8 +30,26 @@ namespace minecraft {
         return directions;
     }
 
+    bool initialize_sub_chunk_bucket(Sub_Chunk_Bucket *sub_chunk_bucket)
+    {
+        sub_chunk_bucket->memory_id      = -1;
+        sub_chunk_bucket->current_vertex = nullptr;
+        sub_chunk_bucket->face_count     = 0;
+        return true;
+    }
+
+    bool is_sub_chunk_bucket_allocated(const Sub_Chunk_Bucket *sub_chunk_bucket)
+    {
+        return sub_chunk_bucket->memory_id != -1 &&
+               sub_chunk_bucket->current_vertex != nullptr;
+    }
+
     i32 get_block_index(const glm::ivec3& block_coords)
     {
+        Assert(block_coords.x >= 0 && block_coords.x < CHUNK_WIDTH &&
+               block_coords.y >= 0 && block_coords.y < CHUNK_HEIGHT &&
+               block_coords.z >= 0 && block_coords.z < CHUNK_DEPTH);
+
         return block_coords.y * CHUNK_WIDTH * CHUNK_DEPTH + block_coords.z * CHUNK_WIDTH + block_coords.x;
     }
 
@@ -41,19 +60,14 @@ namespace minecraft {
 
     Block* get_block(Chunk *chunk, const glm::ivec3& block_coords)
     {
-        Assert(block_coords.x >= 0 && block_coords.x < CHUNK_WIDTH &&
-               block_coords.y >= 0 && block_coords.y < CHUNK_HEIGHT &&
-               block_coords.z >= 0 && block_coords.z < CHUNK_DEPTH);
-
+        // Assert(chunk);
         i32 block_index = get_block_index(block_coords);
         return chunk->blocks + block_index;
     }
 
     Block_Light_Info* get_block_light_info(Chunk *chunk, const glm::ivec3& block_coords)
     {
-        Assert(block_coords.x >= 0 && block_coords.x < CHUNK_WIDTH &&
-               block_coords.y >= 0 && block_coords.y < CHUNK_HEIGHT &&
-               block_coords.z >= 0 && block_coords.z < CHUNK_DEPTH);
+        // Assert(chunk);
         i32 block_index = get_block_index(block_coords);
         return chunk->light_map + block_index;
     }
@@ -79,25 +93,20 @@ namespace minecraft {
 
             for (i32 j = 0; j < 2; j++)
             {
-                render_data.opaque_buckets[j].memory_id       = -1;
-                render_data.opaque_buckets[j].current_vertex = nullptr;
-                render_data.opaque_buckets[j].face_count     = 0;
+                initialize_sub_chunk_bucket(&render_data.opaque_buckets[j]);
+                initialize_sub_chunk_bucket(&render_data.transparent_buckets[j]);
 
-                render_data.transparent_buckets[j].memory_id      = -1;
-                render_data.transparent_buckets[j].current_vertex = nullptr;
-                render_data.transparent_buckets[j].face_count     = 0;
-
-                constexpr f32 infinity = std::numeric_limits<f32>::max();
-                render_data.aabb[j] = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
+                constexpr f32 inf = std::numeric_limits< f32 >::max();
+                render_data.aabb[j] = { { inf, inf, inf }, { -inf, -inf, -inf } };
             }
 
-            render_data.uploaded_to_gpu    = false;
-            render_data.pending_for_update = false;
+            render_data.tessellated    = false;
+            render_data.pending_for_tessellation = false;
         }
 
+        chunk->state                    = ChunkState_Initialized;
         chunk->pending_for_tessellation = false;
         chunk->tessellated              = false;
-        chunk->state                    = ChunkState_Initialized;
 
         for (i32 i = 0; i < ChunkNeighbour_Count; i++)
         {
@@ -190,7 +199,7 @@ namespace minecraft {
                 glm::ivec2 block_xz_coords = { x, z };
                 glm::vec2 sample = get_sample(seed, chunk->world_coords, block_xz_coords);
                 f32 noise = get_noise01(sample);
-                assert(noise >= 0.0f && noise <= 1.0f);
+                Assert(noise >= 0.0f && noise <= 1.0f);
                 height_map[z][x] = get_height_from_noise01(min_biome_height, max_biome_height, noise);
             }
         }
@@ -599,7 +608,7 @@ namespace minecraft {
         return neighbours;
     }
 
-    void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue<Block_Query_Result> *queue)
+    void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue< Block_Query_Result > *queue)
     {
         for (i32 z = 0; z < CHUNK_DEPTH; z++)
         {
@@ -665,8 +674,10 @@ namespace minecraft {
                             auto& neighbour_query = neighbours_query[direction];
                             Block *neighbour = neighbour_query.block;
                             const Block_Info* neighbour_info       = get_block_info(world, neighbour);
-                            Block_Light_Info *neighbour_light_info = get_block_light_info(neighbour_query.chunk, neighbour_query.block_coords);
-                            if (neighbour_light_info->sky_light_level != 15 && is_block_transparent(neighbour_info))
+                            Block_Light_Info *neighbour_light_info = get_block_light_info(neighbour_query.chunk,
+                                                                                          neighbour_query.block_coords);
+                            if (neighbour_light_info->sky_light_level != 15 &&
+                                is_block_transparent(neighbour_info))
                             {
                                 Block_Query_Result query = {};
                                 query.block              = block;
@@ -720,7 +731,7 @@ namespace minecraft {
         return block_coords.y / World::sub_chunk_height;
     }
 
-    bool initialize_world(World *world, String8 world_path)
+    bool initialize_world(World *world, String8 world_path, Temprary_Memory_Arena *temp_arena)
     {
         namespace fs = std::filesystem;
 
@@ -731,11 +742,12 @@ namespace minecraft {
 
         world->path = world_path;
 
-        // @todo(harlequin): Temprary
-        char meta_file_path[256];
-        sprintf(meta_file_path, "%s/meta", world_path.data);
+        String8 meta_file_path = push_string8(temp_arena,
+                                              "%.*s/meta",
+                                              (i32)world_path.count,
+                                              world_path.data);
 
-        FILE* meta_file = fopen(meta_file_path, "rb");
+        FILE* meta_file = fopen(meta_file_path.data, "rb");
 
         if (meta_file)
         {
@@ -745,7 +757,7 @@ namespace minecraft {
         {
             srand((u32)time(nullptr));
             world->seed = (i32)(((f32)rand() / (f32)RAND_MAX) * 1000000.0f);
-            meta_file = fopen(meta_file_path, "wb");
+            meta_file = fopen(meta_file_path.data, "wb");
             fprintf(meta_file, "%d", world->seed);
         }
 
@@ -1130,9 +1142,9 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        if (!render_data.pending_for_update)
+        if (!render_data.pending_for_tessellation)
         {
-            render_data.pending_for_update = true;
+            render_data.pending_for_tessellation = true;
 
             if (!chunk->pending_for_tessellation)
             {
@@ -1499,12 +1511,12 @@ namespace minecraft {
                                 Chunk *chunk,
                                 Temprary_Memory_Arena *temp_arena)
     {
-        String8 chunk_file_path = push_formatted_string8_null_terminated(temp_arena,
-                                                                         "%.*s/chunk_%d_%d.pkg",
-                                                                         (i32)world->path.count,
-                                                                         world->path.data,
-                                                                         chunk->world_coords.x,
-                                                                         chunk->world_coords.y);
+        String8 chunk_file_path = push_string8(temp_arena,
+                                               "%.*s/chunk_%d_%d.pkg",
+                                               (i32)world->path.count,
+                                               world->path.data,
+                                               chunk->world_coords.x,
+                                               chunk->world_coords.y);
         return chunk_file_path;
     }
 

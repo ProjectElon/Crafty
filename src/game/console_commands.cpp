@@ -195,7 +195,7 @@ namespace minecraft {
 
             for (u32 i = 0; i < command->arg_count; i++, token = token->next)
             {
-                String8 token_str_nt = push_formatted_string8_null_terminated(&temp_arena,
+                String8 token_str_nt = push_string8(&temp_arena,
                                                                               "%.*s",
                                                                               token->str.count,
                                                                               token->str.data);
@@ -207,11 +207,11 @@ namespace minecraft {
                 {
                     case ConsoleCommandArgumentType_Boolean:
                     {
-                        if (equal(&token->str, &Str8("true")) || equal(&token->str, &Str8("1")))
+                        if (equal(&token->str, &String8FromCString("true")) || equal(&token->str, &String8FromCString("1")))
                         {
                             argument->boolean = true;
                         }
-                        else if (equal(&token->str, &Str8("false")) || equal(&token->str, &Str8("0")))
+                        else if (equal(&token->str, &String8FromCString("false")) || equal(&token->str, &String8FromCString("0")))
                         {
                             argument->boolean = false;
                         }

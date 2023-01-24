@@ -38,17 +38,17 @@ namespace minecraft {
         state->asset_arena     = create_memory_arena(asset_arena_memory, asset_arena_size);
 
         String8 texture_extensions[] = {
-            Str8("png")
+            String8FromCString("png")
         };
         set_asset_extensions(GameAssetType_Texture, texture_extensions, ArrayCount(texture_extensions));
 
         String8 shader_extensions[] = {
-            Str8("glsl")
+            String8FromCString("glsl")
         };
         set_asset_extensions(GameAssetType_Shader, shader_extensions, ArrayCount(shader_extensions));
 
         String8 font_extensions[] = {
-            Str8("ttf")
+            String8FromCString("ttf")
         };
         set_asset_extensions(GameAssetType_Font, font_extensions, ArrayCount(font_extensions));
 
@@ -73,8 +73,8 @@ namespace minecraft {
                     path.data);
             return asset;
         }
-        // todo(harlequin): String8 substring concept
-        String8 asset_extension  = { path.data + dot_index + 1, path.count - dot_index - 1 };
+
+        String8 asset_extension  = sub_str(&path, dot_index + 1);
         GameAssetType asset_type = GameAssetType_None;
 
         for (u32 i = 1; i < GameAssetType_Count; i++)
@@ -152,34 +152,34 @@ namespace minecraft {
 
     void load_game_assets(Game_Assets *assets)
     {
-        assets->blocks_sprite_sheet = load_asset(Str8("../assets/textures/block_spritesheet.png"));
+        assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
         Opengl_Texture *block_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
         set_texture_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
-        assets->hud_sprite = load_asset(Str8("../assets/textures/hudSprites.png"));
+        assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(&assets->hud_sprite);
         set_texture_usage(hud_sprite_texture, TextureUsage_UI);
 
-        assets->gameplay_crosshair  = load_asset(Str8("../assets/textures/crosshair/crosshair001.png"));
+        assets->gameplay_crosshair  = load_asset(String8FromCString("../assets/textures/crosshair/crosshair001.png"));
         Opengl_Texture *gameplay_crosshair_texture = get_texture(&assets->gameplay_crosshair);
         set_texture_usage(gameplay_crosshair_texture, TextureUsage_UI);
 
-        assets->inventory_crosshair = load_asset(Str8("../assets/textures/crosshair/crosshair022.png"));
+        assets->inventory_crosshair = load_asset(String8FromCString("../assets/textures/crosshair/crosshair022.png"));
         Opengl_Texture *inventory_crosshair_texture = get_texture(&assets->inventory_crosshair);
         set_texture_usage(inventory_crosshair_texture, TextureUsage_UI);
 
-        assets->basic_shader = load_asset(Str8("../assets/shaders/basic.glsl"));
-        assets->block_shader = load_asset(Str8("../assets/shaders/block.glsl"));
-        assets->composite_shader = load_asset(Str8("../assets/shaders/composite.glsl"));
-        assets->line_shader = load_asset(Str8("../assets/shaders/line.glsl"));
-        assets->opaque_chunk_shader = load_asset(Str8("../assets/shaders/opaque_chunk.glsl"));
-        assets->transparent_chunk_shader = load_asset(Str8("../assets/shaders/transparent_chunk.glsl"));
-        assets->screen_shader = load_asset(Str8("../assets/shaders/screen.glsl"));
-        assets->quad_shader = load_asset(Str8("../assets/shaders/quad.glsl"));
+        assets->basic_shader = load_asset(String8FromCString("../assets/shaders/basic.glsl"));
+        assets->block_shader = load_asset(String8FromCString("../assets/shaders/block.glsl"));
+        assets->composite_shader = load_asset(String8FromCString("../assets/shaders/composite.glsl"));
+        assets->line_shader = load_asset(String8FromCString("../assets/shaders/line.glsl"));
+        assets->opaque_chunk_shader = load_asset(String8FromCString("../assets/shaders/opaque_chunk.glsl"));
+        assets->transparent_chunk_shader = load_asset(String8FromCString("../assets/shaders/transparent_chunk.glsl"));
+        assets->screen_shader = load_asset(String8FromCString("../assets/shaders/screen.glsl"));
+        assets->quad_shader = load_asset(String8FromCString("../assets/shaders/quad.glsl"));
 
-        assets->fira_code_font       = load_asset(Str8("../assets/fonts/FiraCode-Regular.ttf"));
-        assets->noto_mono_font       = load_asset(Str8("../assets/fonts/NotoMono-Regular.ttf"));
-        assets->consolas_mono_font   = load_asset(Str8("../assets/fonts/Consolas.ttf"));
-        assets->liberation_mono_font = load_asset(Str8("../assets/fonts/liberation-mono.ttf"));
+        assets->fira_code_font       = load_asset(String8FromCString("../assets/fonts/FiraCode-Regular.ttf"));
+        assets->noto_mono_font       = load_asset(String8FromCString("../assets/fonts/NotoMono-Regular.ttf"));
+        assets->consolas_mono_font   = load_asset(String8FromCString("../assets/fonts/Consolas.ttf"));
+        assets->liberation_mono_font = load_asset(String8FromCString("../assets/fonts/liberation-mono.ttf"));
     }
 }

@@ -70,7 +70,7 @@ namespace minecraft {
     bool initialize_inventory(Inventory          *inventory,
                               struct Game_Assets *assets);
 
-    void shutdown_inventory(Inventory *inventory, String8 path);
+    void shutdown_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena);
 
     bool add_block_to_inventory(Inventory *inventory, u16 block_id);
 
@@ -87,6 +87,6 @@ namespace minecraft {
                      const glm::vec2& frame_buffer_size,
                      Temprary_Memory_Arena *temp_arena);
 
-    void serialize_inventory(Inventory *inventory, String8 path);
-    void deserialize_inventory(Inventory *inventory, String8 path);
+    void serialize_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena);
+    void deserialize_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena);
 }

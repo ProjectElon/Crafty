@@ -15,13 +15,14 @@ namespace minecraft {
     {
         // todo(harlequin): file api
         FILE *file_handle = fopen(file_path, "rb");
-        defer { fclose(file_handle); };
 
         if (!file_handle)
         {
             fprintf(stderr, "[ERROR]: failed to open font file: %s\n", file_path);
             return false;
         }
+
+        defer { fclose(file_handle); };
 
         fseek(file_handle, 0, SEEK_END);
         u32 file_size = ftell(file_handle);
@@ -86,7 +87,7 @@ namespace minecraft {
         f32 scale = stbtt_ScaleForPixelHeight(&font_info, size_in_pixels);
         font->char_height = (i32)(ascent * scale);
         font->size_in_pixels = size_in_pixels;
-        
+
         char first_char    = ' ';
         char last_char     = '~';
         i32 char_count     = last_char - first_char + 1;

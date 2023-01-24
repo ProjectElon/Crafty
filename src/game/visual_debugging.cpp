@@ -74,18 +74,18 @@ namespace minecraft {
             }
 
             debug_state->block_facing_normal_face_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "block face: %s",
                                                        back_facing_normal_label);
 
             debug_state->block_facing_normal_chunk_coords_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "chunk: (%d, %d)",
                                                        chunk_coords.x,
                                                        chunk_coords.y);
 
             debug_state->block_facing_normal_block_coords_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "block: (%d, %d, %d)",
                                                         block_coords.x,
                                                         block_coords.y,
@@ -97,17 +97,17 @@ namespace minecraft {
             i32 sky_light_level = get_sky_light_level(world, light_info);
 
             debug_state->block_facing_normal_sky_light_level_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "sky light level: %d",
                                                        sky_light_level);
 
             debug_state->block_facing_normal_light_source_level_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "light source level: %d",
                                                        (i32)light_info->light_source_level);
 
             debug_state->block_facing_normal_light_level_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "light level: %d",
                                                        glm::max(sky_light_level, (i32)light_info->light_source_level));
 
@@ -116,33 +116,33 @@ namespace minecraft {
         const Opengl_Renderer_Stats *stats = opengl_renderer_get_stats();
 
         debug_state->frames_per_second_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "FPS: %d",
                                                    game_state->frames_per_second);
 
         debug_state->frame_time_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "frame time: %.2f ms",
                                                    game_state->delta_time * 1000.0f);
 
         debug_state->vertex_count_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "vertex count: %d",
                                                    stats->per_frame.face_count * 4);
 
         debug_state->face_count_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "face count: %u",
                                                    stats->per_frame.face_count);
 
         debug_state->sub_chunk_bucket_capacity_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "sub chunk bucket capacity: %llu",
                                                    World::sub_chunk_bucket_capacity);
 
         i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - opengl_renderer_get_free_chunk_bucket_count();
         debug_state->sub_chunk_bucket_count_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "sub chunk buckets: %llu",
                                                    sub_chunk_bucket_count);
 
@@ -151,7 +151,7 @@ namespace minecraft {
                 (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
 
             debug_state->sub_chunk_bucket_total_memory_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "buckets total memory: %.2f",
                                                        total_size);
         }
@@ -160,7 +160,7 @@ namespace minecraft {
             f64 total_size =
                 (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
             debug_state->sub_chunk_bucket_allocated_memory_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "buckets allocated memory: %.2f",
                                                        total_size);
         }
@@ -169,13 +169,13 @@ namespace minecraft {
             f64 total_size =
                 stats->persistent.sub_chunk_used_memory / (1024.0 * 1024.0);
             debug_state->sub_chunk_bucket_used_memory_text =
-                push_formatted_string8_null_terminated(frame_arena,
+                push_string8(frame_arena,
                                                        "buckets used memory: %.2f",
                                                        total_size);
         }
 
         debug_state->player_position_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "position: (%.2f, %.2f, %.2f)",
                                                    camera->position.x,
                                                    camera->position.y,
@@ -184,18 +184,18 @@ namespace minecraft {
         glm::vec2 active_chunk_coords = world_position_to_chunk_coords(camera->position);
 
         debug_state->player_chunk_coords_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "chunk coords: (%d, %d)",
                                                    (i32)active_chunk_coords.x,
                                                    (i32)active_chunk_coords.y);
 
         debug_state->chunk_radius_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "chunk radius: %d",
                                                    game_config->chunk_radius);
 
         debug_state->global_sky_light_level_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "global sky light level: %d",
                                                    (u32)world->sky_light_level);
 
@@ -204,7 +204,7 @@ namespace minecraft {
         u32 seconds;
         game_time_to_real_time(world->game_time, &hours, &minutes, &seconds);
         debug_state->game_time_text =
-            push_formatted_string8_null_terminated(frame_arena,
+            push_string8(frame_arena,
                                                    "game time: %d:%d:%d",
                                                    hours,
                                                    minutes,
@@ -228,7 +228,7 @@ namespace minecraft {
         UI::text(debug_state->player_position_text);
         UI::text(debug_state->chunk_radius_text);
 
-        String8 empty = Str8("");
+        String8 empty = String8FromCString("");
         UI::text(empty);
 
         UI::text(debug_state->frames_per_second_text);
@@ -248,7 +248,7 @@ namespace minecraft {
 
         UI::text(empty);
 
-        String8 debug_block_label = Str8("debug block");
+        String8 debug_block_label = String8FromCString("debug block");
         UI::text(debug_block_label);
         UI::text(debug_state->block_facing_normal_chunk_coords_text);
         UI::text(debug_state->block_facing_normal_block_coords_text);
@@ -263,11 +263,11 @@ namespace minecraft {
         String8 fxaa_label = {};
         if (fxaa_enabled)
         {
-            fxaa_label = Str8("FXAA: ON");
+            fxaa_label = String8FromCString("FXAA: ON");
         }
         else
         {
-            fxaa_label = Str8("FXAA: OFF");
+            fxaa_label = String8FromCString("FXAA: OFF");
         }
         UI::text(fxaa_label);
         UI::end();

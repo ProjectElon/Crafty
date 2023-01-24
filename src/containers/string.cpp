@@ -7,7 +7,7 @@
 
 namespace minecraft {
 
-    String8 push_formatted_string8_null_terminated(Memory_Arena *arena, const char *format, ...)
+    String8 push_string8(Memory_Arena *arena, const char *format, ...)
     {
         String8 result = {};
 
@@ -30,7 +30,7 @@ namespace minecraft {
         return result;
     }
 
-    String8 push_formatted_string8_null_terminated(Temprary_Memory_Arena *temp_arena, const char *format, ...)
+    String8 push_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...)
     {
         String8 result = {};
 
@@ -54,62 +54,15 @@ namespace minecraft {
         return result;
     }
 
-    String8 push_formatted_string8(Memory_Arena *arena, const char *format, ...)
+    bool equal(String8 *A, String8 *B)
     {
-        String8 result = {};
-
-        va_list args;
-        va_start(args, format);
-
-        char* buffer = (char*)arena->base + arena->allocated;
-
-        i32 count = 0;
-        if ((count = vsprintf(buffer, format, args)) >= 0)
-        {
-            if (arena->allocated + count <= arena->size)
-            {
-                result.data       = buffer;
-                result.count      = (u32)count;
-                arena->allocated += (u32)count;
-            }
-        }
-        va_end(args);
-        return result;
-    }
-
-    String8 push_formatted_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...)
-    {
-        String8 result = {};
-
-        va_list args;
-        va_start(args, format);
-
-        Memory_Arena *arena = temp_arena->arena;
-        char* buffer = (char*)arena->base + arena->allocated;
-
-        i32 count = 0;
-        if ((count = vsprintf(buffer, format, args)) >= 0)
-        {
-            if (arena->allocated + count <= arena->size)
-            {
-                result.data       = buffer;
-                result.count      = (u32)count;
-                arena->allocated += (u32)count;
-            }
-        }
-        va_end(args);
-        return result;
-    }
-
-    bool equal(String8 *str0, String8 *str1)
-    {
-        if (str0->count != str1->count)
+        if (A->count != B->count)
         {
             return false;
         }
-        for (i32 i = 0; i < str0->count; i++)
+        for (i32 i = 0; i < A->count; i++)
         {
-            if (str0->data[i] != str1->data[i])
+            if (A->data[i] != B->data[i])
             {
                 return false;
             }
@@ -153,5 +106,60 @@ namespace minecraft {
         }
 
         return index;
+    }
+
+    String8 sub_str(String8 *str, u64 start_index)
+    {
+        Assert(start_index < str->count);
+        String8 result = { str->data + start_index, str->count - start_index };
+        return result;
+    }
+
+    String8 sub_str(String8 *str, u64 start_index, u64 end_index)
+    {
+        Assert(start_index < end_index);
+        Assert(end_index < str->count);
+        String8 result = { str->data + start_index, end_index - start_index + 1 };
+        return result;
+    }
+
+    String_Builder begin_string_builder(Temprary_Memory_Arena *temp_arena)
+    {
+        Assert(temp_arena);
+        String_Builder builder = {};
+        builder.temp_arena = temp_arena;
+        builder.start = temp_arena->arena->allocated;
+        builder.count = 0;
+        return builder;
+    }
+
+    void push_string8(String_Builder *builder, const char *format, ...)
+    {
+        va_list args;
+        va_start(args, format);
+
+        Memory_Arena *arena = builder->temp_arena->arena;
+        char* buffer = (char*)arena->base + arena->allocated;
+
+        i32 count = 0;
+        if ((count = vsprintf(buffer, format, args)) >= 0)
+        {
+            Assert(arena->allocated + count + 1 <= arena->size);
+            arena->allocated += (u64)count;
+            builder->count   += (u64)count;
+        }
+
+        va_end(args);
+    }
+
+    String8 end_string_builder(String_Builder *builder)
+    {
+        Memory_Arena *arena = builder->temp_arena->arena;
+
+        String8 result = {};
+        result.data  = (char *)arena->base + builder->start;
+        result.count = builder->count;
+        builder->temp_arena->allocated = builder->start;
+        return result;
     }
 }

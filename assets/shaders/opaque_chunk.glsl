@@ -52,7 +52,6 @@ vec2 uv_look_up[4] = vec2[](
 );
 
 uniform vec4 u_biome_color;
-uniform samplerBuffer u_uvs;
 
 #define Top_Face_ID    0
 #define Bottom_Face_ID 1
@@ -65,7 +64,6 @@ uniform samplerBuffer u_uvs;
 #define BlockFaceCorner_BottomLeft   1
 #define BlockFaceCorner_TopLeft      2
 #define BlockFaceCorner_TopRight     3
-
 
 #define BlockFlags_Is_Solid 1
 #define BlockFlags_Is_Transparent 2
@@ -94,16 +92,8 @@ void main()
     float distance_relative_to_camera = length(u_camera_position - position);
     a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
-    int uv_index = int(in_data1 >> 10);
-    // float u = texelFetch(u_uvs, uv_index).r;
-    // float v = texelFetch(u_uvs, uv_index + 1).r;
-    // a_uv = vec2(u, v);
-
     a_uv         = uv_look_up[face_corner_id];
-    a_texture_id = uv_index / 8;
-
-    // a_data0 = in_data0;
-    // a_data1 = in_data1;
+    a_texture_id = int(in_data1 >> 10);
 
     float sky_light_level = float(in_data1 & SKY_LIGHT_LEVEL_MASK);
     float sky_light_factor = u_sky_light_level - 15.0f;
@@ -179,7 +169,6 @@ in float a_light_level;
 uniform vec4 u_sky_color;
 uniform vec4 u_tint_color;
 
-uniform sampler2D u_block_sprite_sheet;
 uniform sampler2DArray u_block_array_texture;
 
 #define BLOCK_X_MASK 15
@@ -219,8 +208,6 @@ void main()
     // uint flags = a_data0 >> 24;
     // vec3 normal = face_normal[face_id];
 
-    // vec4 color = texture(u_block_sprite_sheet, a_uv, 0) * a_biome_color * a_highlight_color;
-    // out_color = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor) * u_tint_color;
     vec4 color = texture(u_block_array_texture, vec3(a_uv.x, a_uv.y, a_texture_id)) * a_biome_color * a_highlight_color;
     out_color  = mix(vec4(color.rgb * a_light_level, color.a), u_sky_color, a_fog_factor) * u_tint_color;
 }

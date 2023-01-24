@@ -97,7 +97,7 @@ namespace minecraft {
 
                 for (i32 d = 0; d < 6; d++)
                 {
-                    auto& neighbour_query = neighbours_query[d];
+                    auto &neighbour_query = neighbours_query[d];
 
                     if (is_block_query_valid(neighbour_query) &&
                         is_block_query_in_world_region(neighbour_query, world->active_region_bounds))

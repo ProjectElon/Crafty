@@ -146,46 +146,6 @@ namespace minecraft {
         return block_info->flags & BlockFlags_ColorBottomByBiome;
     }
 
-    struct Sub_Chunk_Vertex
-    {
-        u32 data0;
-        u32 data1;
-    };
-
-    struct Sub_Chunk_Instance
-    {
-        glm::ivec2 chunk_coords;
-    };
-
-    struct Sub_Chunk_Bucket
-    {
-        i32               memory_id;
-        Sub_Chunk_Vertex *current_vertex;
-        i32               face_count;
-    };
-
-    inline bool is_sub_chunk_bucket_allocated(const Sub_Chunk_Bucket* sub_chunk_bucket)
-    {
-        return sub_chunk_bucket->memory_id != -1 && sub_chunk_bucket->current_vertex != nullptr;
-    }
-
-    struct Sub_Chunk_Render_Data
-    {
-        std::atomic< i32 > bucket_index;
-        Sub_Chunk_Bucket opaque_buckets[2];
-        Sub_Chunk_Bucket transparent_buckets[2];
-
-        i32                 instance_memory_id;
-        Sub_Chunk_Instance *base_instance;
-
-        AABB aabb[2];
-
-        std::atomic< bool > uploaded_to_gpu;
-        std::atomic< bool > pending_for_update;
-
-        i32 face_count;
-    };
-
     enum BlockNeighbour
     {
         BlockNeighbour_Up    = 0,
@@ -223,6 +183,44 @@ namespace minecraft {
         ChunkState_PendingForSave             = 8,
         ChunkState_Saved                      = 9,
         ChunkState_Freed                      = 10
+    };
+
+    struct Sub_Chunk_Vertex
+    {
+        u32 packed_vertex_attributes0;
+        u32 packed_vertex_attributes1;
+    };
+
+    struct Sub_Chunk_Instance
+    {
+        glm::ivec2 chunk_coords;
+    };
+
+    struct Sub_Chunk_Bucket
+    {
+        i32               memory_id;
+        Sub_Chunk_Vertex *current_vertex;
+        i32               face_count;
+    };
+
+    bool initialize_sub_chunk_bucket(Sub_Chunk_Bucket *sub_chunk_bucket);
+    bool is_sub_chunk_bucket_allocated(const Sub_Chunk_Bucket *sub_chunk_bucket);
+
+    struct Sub_Chunk_Render_Data
+    {
+        i32                 instance_memory_id;
+        Sub_Chunk_Instance *base_instance;
+
+        AABB aabb[2];
+
+        std::atomic< i32 > bucket_index;
+        Sub_Chunk_Bucket opaque_buckets[2];
+        Sub_Chunk_Bucket transparent_buckets[2];
+
+        std::atomic< bool > pending_for_tessellation;
+        std::atomic< bool > tessellated;
+
+        i32 face_count;
     };
 
     struct Chunk
@@ -359,7 +357,7 @@ namespace minecraft {
         Circular_FIFO_Queue< Calculate_Chunk_Lighting_Job > calculate_chunk_lighting_queue;
     };
 
-    bool initialize_world(World *world, String8 path);
+    bool initialize_world(World *world, String8 path, Temprary_Memory_Arena *temp_arena);
     void shutdown_world(World *world);
 
     void update_world_time(World *world, f32 delta_time);

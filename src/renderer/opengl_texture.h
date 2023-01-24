@@ -17,6 +17,16 @@ namespace minecraft {
         TextureUsage_Font
     };
 
+    enum AnisotropicFiltering : u8
+    {
+        AnisotropicFiltering_None,
+        AnisotropicFiltering_1X,
+        AnisotropicFiltering_2X,
+        AnisotropicFiltering_4X,
+        AnisotropicFiltering_8X,
+        AnisotropicFiltering_16X
+    };
+
     struct Opengl_Texture
     {
         u32           id;
@@ -42,4 +52,7 @@ namespace minecraft {
     void set_texture_usage(Opengl_Texture *texture, TextureUsage usage);
 
     void bind_texture(Opengl_Texture *texture, u32 texture_slot);
+
+    u32 texture_format_to_opengl_texture_format(TextureFormat format);
+    u32 texture_format_to_opengl_internal_format(TextureFormat format);
 }

@@ -218,17 +218,22 @@ namespace minecraft {
         World *world = game_state->world;
 
         const char *world_name = "harlequin";
-        String8 world_path = push_formatted_string8_null_terminated(&game_memory->transient_arena,
+        String8 world_path = push_string8(&game_memory->transient_arena,
                                                                     "../assets/worlds/%s",
-                                                                    world_name);
-        initialize_world(world, world_path);
+                                                                        world_name);
+        Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(&game_memory->transient_arena);
+        initialize_world(world, world_path, &temp_arena);
+        end_temprary_memory_arena(&temp_arena);
 
         if (!initialize_inventory(inventory, &game_state->assets))
         {
             fprintf(stderr, "[ERROR]: failed to initialize inventory\n");
             return false;
         }
-        deserialize_inventory(inventory, world_path);
+
+        temp_arena = begin_temprary_memory_arena(&game_memory->transient_arena);
+        deserialize_inventory(inventory, world_path, &temp_arena);
+        end_temprary_memory_arena(&temp_arena);
 
         if (!Job_System::initialize(world, &game_memory->permanent_arena))
         {
@@ -290,7 +295,9 @@ namespace minecraft {
         shutdown_dropdown_console(&game_state->console);
         UI::shutdown();
 
-        shutdown_inventory(&game_state->inventory, game_state->world->path);
+        Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(&game_state->game_memory->transient_arena);
+        shutdown_inventory(&game_state->inventory, game_state->world->path, &temp_arena);
+        end_temprary_memory_arena(&temp_arena);
 
         shutdown_opengl_2d_renderer();
         shutdown_opengl_debug_renderer();

@@ -8,49 +8,49 @@ namespace minecraft {
 
     void register_game_console_commands()
     {
-        console_commands_register_command(Str8("commands"),      &list_commands_command);
-        console_commands_register_command(Str8("list_commands"), &list_commands_command);
-        console_commands_register_command(Str8("clear"),         &clear_command);
-        console_commands_register_command(Str8("cls"),           &clear_command);
+        console_commands_register_command(String8FromCString("commands"),      &list_commands_command);
+        console_commands_register_command(String8FromCString("list_commands"), &list_commands_command);
+        console_commands_register_command(String8FromCString("clear"),         &clear_command);
+        console_commands_register_command(String8FromCString("cls"),           &clear_command);
 
         Console_Command_Argument_Info echo_command_args[] = {
-            { ConsoleCommandArgumentType_String, Str8("text") }
+            { ConsoleCommandArgumentType_String, String8FromCString("text") }
         };
-        console_commands_register_command(Str8("echo"),        &echo_command, echo_command_args, ArrayCount(echo_command_args));
-        console_commands_register_command(Str8("print"),       &echo_command, echo_command_args, ArrayCount(echo_command_args));
-        console_commands_register_command(Str8("exit"),        &quit_command);
-        console_commands_register_command(Str8("quit"),        &quit_command);
-        console_commands_register_command(Str8("list_blocks"), &list_blocks_command);
-        console_commands_register_command(Str8("blocks"),      &list_blocks_command);
+        console_commands_register_command(String8FromCString("echo"),        &echo_command, echo_command_args, ArrayCount(echo_command_args));
+        console_commands_register_command(String8FromCString("print"),       &echo_command, echo_command_args, ArrayCount(echo_command_args));
+        console_commands_register_command(String8FromCString("exit"),        &quit_command);
+        console_commands_register_command(String8FromCString("quit"),        &quit_command);
+        console_commands_register_command(String8FromCString("list_blocks"), &list_blocks_command);
+        console_commands_register_command(String8FromCString("blocks"),      &list_blocks_command);
 
         Console_Command_Argument_Info add_block_to_inventory_command_args[] = {
-            { ConsoleCommandArgumentType_String, Str8("block_name") }
+            { ConsoleCommandArgumentType_String, String8FromCString("block_name") }
         };
 
-        console_commands_register_command(Str8("add_block"),
+        console_commands_register_command(String8FromCString("add_block"),
                                           &add_block_to_inventory_command,
                                           add_block_to_inventory_command_args,
                                           ArrayCount(add_block_to_inventory_command_args));
 
 
-        console_commands_register_command(Str8("toggle_fxaa"),
+        console_commands_register_command(String8FromCString("toggle_fxaa"),
                                           &toggle_fxaa_command);
 
         Console_Command_Argument_Info set_chunk_radius_command_args[] = {
-            { ConsoleCommandArgumentType_UInt32, Str8("chunk_radius") }
+            { ConsoleCommandArgumentType_UInt32, String8FromCString("chunk_radius") }
         };
-        console_commands_register_command(Str8("set_chunk_radius"),
+        console_commands_register_command(String8FromCString("set_chunk_radius"),
                                           &set_chunk_radius_command,
                                           set_chunk_radius_command_args,
                                           ArrayCount(set_chunk_radius_command_args));
 
         Console_Command_Argument_Info set_time_command_args[] = {
-            { ConsoleCommandArgumentType_UInt32, Str8("hours") },
-            { ConsoleCommandArgumentType_UInt32, Str8("minutes") },
-            { ConsoleCommandArgumentType_UInt32, Str8("seconds") },
+            { ConsoleCommandArgumentType_UInt32, String8FromCString("hours") },
+            { ConsoleCommandArgumentType_UInt32, String8FromCString("minutes") },
+            { ConsoleCommandArgumentType_UInt32, String8FromCString("seconds") },
         };
 
-        console_commands_register_command(Str8("set_time"),
+        console_commands_register_command(String8FromCString("set_time"),
                                           &set_time_command,
                                           set_time_command_args,
                                           ArrayCount(set_time_command_args));
@@ -103,7 +103,7 @@ namespace minecraft {
 
         if (block_id == -1)
         {
-            push_line(console, Str8("invalid block name"));
+            push_line(console, String8FromCString("invalid block name"));
             return false;
         }
 
@@ -140,10 +140,12 @@ namespace minecraft {
 
         while (command)
         {
-            String8 str = push_formatted_string8(&temp_arena,
-                                                 "%.*s",
-                                                 command->name.count,
-                                                 command->name.data);
+            String_Builder builder = begin_string_builder(&temp_arena);
+
+            push_string8(&builder,
+                        "%.*s",
+                        command->name.count,
+                        command->name.data);
 
             for (u32 i = 0; i < command->arg_count; i++)
             {
@@ -152,13 +154,14 @@ namespace minecraft {
                 ConsoleCommandArgumentType type = info->type;
                 String8                    name = info->name;
 
-                String8 arg_str  = push_formatted_string8(&temp_arena,
-                                                          " [%.*s: %s]",
-                                                          name.count,
-                                                          name.data,
-                                                          convert_console_command_argument_type_to_cstring(type));
-                str.count += arg_str.count;
+                push_string8(&builder,
+                            " [%.*s: %s]",
+                            name.count,
+                            name.data,
+                            convert_console_command_argument_type_to_cstring(type));
             }
+
+            String8 str = end_string_builder(&builder);
 
             push_line(console, str);
             command = console_commands_next_command(command);

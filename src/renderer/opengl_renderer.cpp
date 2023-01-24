@@ -6,6 +6,7 @@
 #include "memory/memory_arena.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
+#include "opengl_array_texture.h"
 #include "core/file_system.h"
 
 #include <glad/glad.h>
@@ -95,11 +96,6 @@ namespace minecraft {
 
         GLsync command_buffer_sync_object;
 
-        u32 uv_buffer_id;
-        u32 uv_texture_id;
-
-        u32 uv_uniform_buffer_id;
-
         glm::vec4 sky_color;
         glm::vec4 tint_color;
 
@@ -109,7 +105,7 @@ namespace minecraft {
 
         bool enable_fxaa;
 
-        u32 block_sprite_sheet_array_texture;
+        Opengl_Array_Texture block_array_texture;
     };
 
     static Opengl_Renderer *renderer;
@@ -159,21 +155,6 @@ namespace minecraft {
         // fireframe mode
         // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
-        glGenTextures(1, &renderer->uv_texture_id);
-        glBindTexture(GL_TEXTURE_BUFFER, renderer->uv_texture_id);
-
-        glGenBuffers(1, &renderer->uv_buffer_id);
-        glBindBuffer(GL_TEXTURE_BUFFER, renderer->uv_buffer_id);
-        glBufferData(GL_TEXTURE_BUFFER,
-                     MC_PACKED_TEXTURE_COUNT * 8 * sizeof(f32),
-                     texture_uv_rects,
-                     GL_STATIC_DRAW);
-
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_R32F, renderer->uv_buffer_id);
-
-        glBindTexture(GL_TEXTURE_BUFFER, 0);
-        glBindBuffer(GL_TEXTURE_BUFFER, 0);
-
         glGenVertexArrays(1, &renderer->chunk_vertex_array_id);
         glBindVertexArray(renderer->chunk_vertex_array_id);
 
@@ -197,14 +178,14 @@ namespace minecraft {
                                1,
                                GL_UNSIGNED_INT,
                                sizeof(Sub_Chunk_Vertex),
-                               (const void*)offsetof(Sub_Chunk_Vertex, data0));
+                               (const void*)offsetof(Sub_Chunk_Vertex, packed_vertex_attributes0));
 
         glEnableVertexAttribArray(1);
         glVertexAttribIPointer(1,
                                1,
                                GL_UNSIGNED_INT,
                                sizeof(Sub_Chunk_Vertex),
-                               (const void*)offsetof(Sub_Chunk_Vertex, data1));
+                               (const void*)offsetof(Sub_Chunk_Vertex, packed_vertex_attributes1));
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -375,11 +356,13 @@ namespace minecraft {
 
         std::sort(std::begin(paths), std::end(paths), compare);
 
-        renderer->block_sprite_sheet_array_texture = 0;
-        glGenTextures(1, &renderer->block_sprite_sheet_array_texture);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
-        // 6 -> 32 16 8 4 2 1
-        glTexStorage3D(GL_TEXTURE_2D_ARRAY, 6, GL_RGBA8, 32, 32, paths.size());
+        bool mipmapping = true;
+        initialize_array_texture(&renderer->block_array_texture,
+                                 32,
+                                 32,
+                                 paths.size(),
+                                 TextureFormat_RGBA,
+                                 mipmapping);
 
         u32 texture_id = 0;
 
@@ -397,35 +380,18 @@ namespace minecraft {
                 continue;
             }
 
-            glTexSubImage3D(GL_TEXTURE_2D_ARRAY,
-                            0,
-                            0, 0, texture_id,
-                            32, 32, 1,
-                            GL_RGBA,
-                            GL_UNSIGNED_BYTE,
-                            (width == 32 && height == 32) ? data : magenta_block_texture);
+            set_image_at(&renderer->block_array_texture,
+                         (width == 32 && height == 32) ? data : magenta_block_texture,
+                         texture_id);
 
             stbi_image_free(data);
             texture_id++;
         }
 
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        set_anisotropic_filtering_level(&renderer->block_array_texture,
+                                        AnisotropicFiltering_16X);
 
-        f32 max_anisotropy = 0.0f;
-        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &max_anisotropy);
-
-        f32 anisotropy = 16.0f;
-        if (anisotropy > max_anisotropy)
-        {
-            anisotropy = max_anisotropy;
-        }
-        glTexParameterf(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
-        glGenerateMipmap(GL_TEXTURE_2D_ARRAY);
-
-        glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+        generate_mipmaps(&renderer->block_array_texture);
 
         end_temprary_memory_arena(&temp_arena);
 
@@ -510,7 +476,7 @@ namespace minecraft {
         out_flags             = (vertex >> 24);
     }
 
-    static u32 compress_vertex1(u32 texture_uv_id,
+    static u32 compress_vertex1(u32 texture_id,
                                 u32 sky_light_level,
                                 u32 light_source_level,
                                 u32 ambient_occlusion_level)
@@ -519,12 +485,12 @@ namespace minecraft {
         result |= sky_light_level;
         result |= light_source_level << 4;
         result |= ambient_occlusion_level << 8;
-        result |= texture_uv_id << 10;
+        result |= texture_id << 10;
         return result;
     }
 
     static void extract_vertex1(u32 vertex,
-                                u32 &out_texture_uv_id,
+                                u32 &out_texture_id,
                                 u32 &out_sky_light_level,
                                 u32 &out_light_source_level,
                                 u32 &out_ambient_occlusion_level)
@@ -532,7 +498,7 @@ namespace minecraft {
         out_sky_light_level         = vertex        & SKY_LIGHT_LEVEL_MASK;
         out_light_source_level      = (vertex >> 4) & LIGHT_SOURCE_LEVEL_MASK;
         out_ambient_occlusion_level = (vertex >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK;
-        out_texture_uv_id           = (vertex >> 10);
+        out_texture_id              = (vertex >> 10);
     }
 
     void opengl_renderer_allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
@@ -611,7 +577,7 @@ namespace minecraft {
         }
 
         render_data.face_count = 0;
-        render_data.uploaded_to_gpu = false;
+        render_data.tessellated = false;
     }
 
     void opengl_renderer_update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index)
@@ -636,7 +602,7 @@ namespace minecraft {
             renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
 
-        render_data.uploaded_to_gpu = false;
+        render_data.tessellated = false;
 
         opengl_renderer_upload_sub_chunk_to_gpu(world, chunk, sub_chunk_index);
 
@@ -1153,9 +1119,12 @@ namespace minecraft {
                                                            Block *block,
                                                            Block *block_facing_normal,
                                                            const glm::ivec3& block_coords,
-                                                           u16 texture_uv_rect_id,
+                                                           u16 texture_id,
                                                            u16 face,
-                                                           u32 p0, u32 p1, u32 p2, u32 p3)
+                                                           u32 p0,
+                                                           u32 p1,
+                                                           u32 p2,
+                                                           u32 p3)
     {
         const Block_Info* block_info               = get_block_info(world, block);
         const Block_Info* block_facing_normal_info = get_block_info(world, block_facing_normal);
@@ -1245,10 +1214,10 @@ namespace minecraft {
                 }
             }
 
-            u32 data10 = compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCorner_BottomRight * 2, sky_light_levels[0], light_source_levels[0], ambient_occlusions[0]);
-            u32 data11 = compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCorner_BottomLeft  * 2, sky_light_levels[1], light_source_levels[1], ambient_occlusions[1]);
-            u32 data12 = compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCorner_TopLeft     * 2, sky_light_levels[2], light_source_levels[2], ambient_occlusions[2]);
-            u32 data13 = compress_vertex1(texture_uv_rect_id * 8 + BlockFaceCorner_TopRight    * 2, sky_light_levels[3], light_source_levels[3], ambient_occlusions[3]);
+            u32 data10 = compress_vertex1(texture_id, sky_light_levels[0], light_source_levels[0], ambient_occlusions[0]);
+            u32 data11 = compress_vertex1(texture_id, sky_light_levels[1], light_source_levels[1], ambient_occlusions[1]);
+            u32 data12 = compress_vertex1(texture_id, sky_light_levels[2], light_source_levels[2], ambient_occlusions[2]);
+            u32 data13 = compress_vertex1(texture_id, sky_light_levels[3], light_source_levels[3], ambient_occlusions[3]);
 
             *bucket->current_vertex++ = { data00, data10 };
             *bucket->current_vertex++ = { data01, data11 };
@@ -1473,7 +1442,7 @@ namespace minecraft {
             renderer->stats.persistent.sub_chunk_used_memory += transparent_bucket.face_count * 4 * sizeof(Sub_Chunk_Vertex);
         }
 
-        render_data.uploaded_to_gpu = true;
+        render_data.tessellated = true;
     }
 
     void opengl_renderer_render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index)
@@ -1601,6 +1570,8 @@ namespace minecraft {
             chunk_coords = selected_block_query->chunk->world_coords;
         }
 
+        bind_texture(&renderer->block_array_texture, 1);
+
         // opaque pass
         glEnable(GL_CULL_FACE);
         glEnable(GL_DEPTH_TEST);
@@ -1632,20 +1603,8 @@ namespace minecraft {
         set_uniform_ivec3(opaque_shader, "u_highlighted_block_coords", block_coords.x, block_coords.y, block_coords.z);
         set_uniform_ivec2(opaque_shader, "u_highlighted_block_chunk_coords", chunk_coords.x, chunk_coords.y);
 
-        Opengl_Texture *blocks_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
-
-        set_uniform_i32(opaque_shader, "u_block_sprite_sheet", 0);
-        bind_texture(blocks_sprite_sheet, 0);
-
-        set_uniform_i32(opaque_shader, "u_uvs", 1);
         set_uniform_f32(opaque_shader, "u_sky_light_level", (f32)sky_light_level);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_BUFFER, renderer->uv_texture_id);
-
-        set_uniform_i32(opaque_shader, "u_block_array_texture", 2);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
+        set_uniform_i32(opaque_shader, "u_block_array_texture", 1);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->opaque_command_count, renderer->opaque_command_buffer);
@@ -1695,20 +1654,14 @@ namespace minecraft {
                           chunk_coords.x,
                           chunk_coords.y);
 
-        set_uniform_i32(transparent_shader,
-                        "u_block_sprite_sheet",
-                        0);
-
-        set_uniform_i32(transparent_shader, "u_uvs", 1);
         set_uniform_f32(transparent_shader, "u_sky_light_level", sky_light_level);
-
-        set_uniform_i32(transparent_shader, "u_block_array_texture", 2);
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D_ARRAY, renderer->block_sprite_sheet_array_texture);
+        set_uniform_i32(transparent_shader, "u_block_array_texture", 1);
 
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->transparent_command_count, renderer->transparent_command_buffer);
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
+
+        signal_gpu_for_work();
 
         glDepthFunc(GL_ALWAYS);
         glEnable(GL_BLEND);
@@ -1756,8 +1709,6 @@ namespace minecraft {
 
         glBindVertexArray(renderer->quad_vertex_array_id); // todo(harlequin): temprary
         glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        signal_gpu_for_work();
     }
 
     void opengl_renderer_swap_buffers(struct GLFWwindow *window)

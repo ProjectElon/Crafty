@@ -190,6 +190,7 @@ namespace minecraft {
         glUniformMatrix4fv(location, 1, GL_FALSE, matrix);
     }
 
+    // todo(harlequin): rewrite load_shader to use String8 and memory arena
     bool load_shader(Opengl_Shader *shader,
                      const char *file_name)
     {

@@ -45,9 +45,9 @@ namespace minecraft {
         return true;
     }
 
-    void shutdown_inventory(Inventory *inventory, String8 path)
+    void shutdown_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena)
     {
-        serialize_inventory(inventory, path);
+        serialize_inventory(inventory, path, temp_arena);
     }
 
     bool add_block_to_inventory(Inventory *inventory, u16 block_id)
@@ -290,7 +290,7 @@ namespace minecraft {
                                          side_texture_uv_rect.bottom_left);
 
             Bitmap_Font* font   = inventory->font;
-            String8 slot_text   = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
+            String8 slot_text   = push_string8(temp_arena, "%d", (u32)slot.count);
             glm::vec2 text_size = get_string_size(font, slot_text);
 
             opengl_2d_renderer_push_string(font,
@@ -393,7 +393,7 @@ namespace minecraft {
 
 
                 Bitmap_Font* font = inventory->font;
-                String8 slot_text = push_formatted_string8_null_terminated(temp_arena, "%d", (u32)slot.count);
+                String8 slot_text = push_string8(temp_arena, "%d", (u32)slot.count);
                 auto text_size    = get_string_size(font, slot_text);
                 opengl_2d_renderer_push_string(font,
                                                 slot_text,
@@ -412,37 +412,45 @@ namespace minecraft {
         }
     }
 
-    void serialize_inventory(Inventory *inventory, String8 path)
+    void serialize_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena)
     {
-        // @todo(harlequin): Temparary
-        char inventory_file_path[256];
-        sprintf(inventory_file_path, "%s/inventory", path.data);
+        String8 inventory_file_path = push_string8(temp_arena,
+                                                   "%.*s/inventory",
+                                                   (i32)path.count,
+                                                   path.data);
 
-        FILE* file = fopen(inventory_file_path, "wb");
+        FILE* file = fopen(inventory_file_path.data, "wb");
         if (!file)
         {
-            fprintf(stderr, "[ERROR]: failed to open file: %s for writing\n", inventory_file_path);
+            fprintf(stderr,
+                    "[ERROR]: failed to open file: %.*s for writing\n",
+                    (i32)inventory_file_path.count,
+                    inventory_file_path.data);
             return;
         }
         fwrite(inventory->slots, sizeof(inventory->slots), 1, file);
         fclose(file);
     }
 
-    void deserialize_inventory(Inventory *inventory, String8 path)
+    void deserialize_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena)
     {
-        // @todo(harlequin): Temparary
-        char inventory_file_path[256];
-        sprintf(inventory_file_path, "%s/inventory", path.data);
+        String8 inventory_file_path = push_string8(temp_arena,
+                                                   "%.*s/inventory",
+                                                   (i32)path.count,
+                                                   path.data);
 
-        if (!File_System::exists(inventory_file_path))
+        if (!File_System::exists(inventory_file_path.data))
         {
             return;
         }
 
-        FILE* file = fopen(inventory_file_path, "rb");
+        FILE* file = fopen(inventory_file_path.data, "rb");
         if (!file)
         {
-            fprintf(stderr, "[ERROR]: failed to open file: %s for reading\n", inventory_file_path);
+            fprintf(stderr,
+                    "[ERROR]: failed to open file: %.*s for reading\n",
+                    (i32)inventory_file_path.count,
+                    inventory_file_path.data);
             return;
         }
         fread(inventory->slots, sizeof(inventory->slots), 1, file);

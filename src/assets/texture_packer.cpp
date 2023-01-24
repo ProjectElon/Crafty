@@ -109,7 +109,7 @@ namespace minecraft {
                 {
                     i32 cursor_x = x + current_x;
                     i32 cursor_y = y + current_y;
-                    Pixel *current_pixel = &pixels[cursor_y * output_width + cursor_x];
+                    Pixel *current_pixel  = &pixels[cursor_y * output_width + cursor_x];
                     u8* current_row_pixel = &data[(y * width + x) * 4];
                     current_pixel->r = *current_row_pixel;
                     current_pixel->g = *(current_row_pixel + 1);
@@ -189,22 +189,23 @@ namespace minecraft {
         header_file_stream << "#define MC_PACKED_TEXTURE_COUNT " << texture_count << "\n";
         header_file_stream << "namespace minecraft {\n\n";
         header_file_stream << R"(struct Texture_Rect
-{
-    uint32_t x;
-    uint32_t y;
-    uint32_t width;
-    uint32_t height;
-};
-)";
+                                {
+                                    uint32_t x;
+                                    uint32_t y;
+                                    uint32_t width;
+                                    uint32_t height;
+                                };
+                                )";
 
         header_file_stream << R"(struct UV_Rect
-{
-    glm::vec2 bottom_right;
-    glm::vec2 bottom_left;
-    glm::vec2 top_left;
-    glm::vec2 top_right;
-};
-)";
+                                {
+                                    glm::vec2 bottom_right;
+                                    glm::vec2 bottom_left;
+                                    glm::vec2 top_left;
+                                    glm::vec2 top_right;
+                                };
+                                )";
+
         header_file_stream << "enum Texture_Id : uint16_t\n{\n";
         header_file_stream << texture_enum_stream.str();
         header_file_stream << "};\n";

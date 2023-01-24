@@ -38,10 +38,10 @@ namespace minecraft {
         for (i32 sub_chunk_index = World::sub_chunk_count_per_chunk - 1; sub_chunk_index >= 0; sub_chunk_index--)
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            if (render_data.pending_for_update)
+            if (render_data.pending_for_tessellation)
             {
                 opengl_renderer_update_sub_chunk(world, chunk, sub_chunk_index);
-                render_data.pending_for_update = false;
+                render_data.pending_for_tessellation = false;
             }
         }
 
@@ -67,7 +67,7 @@ namespace minecraft {
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-            if (!render_data.pending_for_update && render_data.uploaded_to_gpu)
+            if (!render_data.pending_for_tessellation && render_data.tessellated)
             {
                 opengl_renderer_free_sub_chunk(chunk, sub_chunk_index);
             }

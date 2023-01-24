@@ -422,7 +422,7 @@ namespace minecraft {
 
             if (!current_text.count)
             {
-                push_line(console, Str8(""));
+                push_line(console, String8FromCString(""));
             }
             else
             {
@@ -438,12 +438,12 @@ namespace minecraft {
 
                     case ConsoleCommandExecutionResult_CommandNotFound:
                     {
-                        push_line(console, Str8("Command Not Found"));
+                        push_line(console, String8FromCString("Command Not Found"));
                     } break;
 
                     case ConsoleCommandExecutionResult_ArgumentMismatch:
                     {
-                        push_line(console, Str8("Argument Mismatch"));
+                        push_line(console, String8FromCString("Argument Mismatch"));
                     } break;
 
                     case ConsoleCommandExecutionResult_Error:

@@ -7,42 +7,6 @@
 
 namespace minecraft {
 
-    static u32 texture_format_to_opengl_texture_format(TextureFormat format)
-    {
-        switch (format)
-        {
-        case TextureFormat_RGB:
-            return GL_RGB;
-            break;
-        case TextureFormat_RGBA:
-            return GL_RGBA;
-            break;
-        default:
-            Assert(false && "unsupported texture format");
-            break;
-        }
-
-        return 0;
-    }
-
-    static u32 texture_format_to_opengl_internal_format(TextureFormat format)
-    {
-        switch (format)
-        {
-        case TextureFormat_RGB:
-            return GL_RGB8;
-            break;
-        case TextureFormat_RGBA:
-            return GL_RGBA8;
-            break;
-        default:
-            Assert(false && "unsupported internal format");
-            break;
-        }
-
-        return 0;
-    }
-
     bool initialize_texture(Opengl_Texture *texture,
                             u8             *data,
                             u32             width,
@@ -167,5 +131,41 @@ namespace minecraft {
     {
         glActiveTexture(GL_TEXTURE0 + texture_slot);
         glBindTexture(GL_TEXTURE_2D, texture->id);
+    }
+
+    u32 texture_format_to_opengl_texture_format(TextureFormat format)
+    {
+        switch (format)
+        {
+        case TextureFormat_RGB:
+            return GL_RGB;
+            break;
+        case TextureFormat_RGBA:
+            return GL_RGBA;
+            break;
+        default:
+            Assert(false && "unsupported texture format");
+            break;
+        }
+
+        return 0;
+    }
+
+    u32 texture_format_to_opengl_internal_format(TextureFormat format)
+    {
+        switch (format)
+        {
+        case TextureFormat_RGB:
+            return GL_RGB8;
+            break;
+        case TextureFormat_RGBA:
+            return GL_RGBA8;
+            break;
+        default:
+            Assert(false && "unsupported internal format");
+            break;
+        }
+
+        return 0;
     }
 }

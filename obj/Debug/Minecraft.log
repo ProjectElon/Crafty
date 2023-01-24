@@ -1,5 +1,2 @@
-﻿  world.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-  LINK : ..\bin\Minecraft.exe not found or not built by the last incremental link; performing full link
+﻿  opengl_array_texture.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
