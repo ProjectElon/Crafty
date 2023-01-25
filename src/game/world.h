@@ -185,22 +185,22 @@ namespace minecraft {
         ChunkState_Freed                      = 10
     };
 
-    struct Sub_Chunk_Vertex
+    struct Block_Face_Vertex
     {
         u32 packed_vertex_attributes0;
         u32 packed_vertex_attributes1;
     };
 
-    struct Sub_Chunk_Instance
+    struct Chunk_Instance
     {
         glm::ivec2 chunk_coords;
     };
 
     struct Sub_Chunk_Bucket
     {
-        i32               memory_id;
-        Sub_Chunk_Vertex *current_vertex;
-        i32               face_count;
+        i32                memory_id;
+        Block_Face_Vertex *current_vertex;
+        i32                face_count;
     };
 
     bool initialize_sub_chunk_bucket(Sub_Chunk_Bucket *sub_chunk_bucket);
@@ -208,8 +208,8 @@ namespace minecraft {
 
     struct Sub_Chunk_Render_Data
     {
-        i32                 instance_memory_id;
-        Sub_Chunk_Instance *base_instance;
+        i32             instance_memory_id;
+        Chunk_Instance *base_instance;
 
         AABB aabb[2];
 
@@ -325,7 +325,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_bucket_capacity     = 4 * chunk_capacity;
         static constexpr i64 sub_chunk_bucket_face_count   = 1024;
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
-        static constexpr i64 sub_chunk_bucket_size         = sub_chunk_bucket_vertex_count * sizeof(Sub_Chunk_Vertex);
+        static constexpr i64 sub_chunk_bucket_size         = sub_chunk_bucket_vertex_count * sizeof(Block_Face_Vertex);
 
         f32 game_time_rate;
         f32 game_timer;

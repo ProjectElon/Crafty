@@ -77,8 +77,8 @@ namespace minecraft {
         u32 chunk_instance_buffer_id;
         u32 chunk_index_buffer_id;
 
-        Sub_Chunk_Vertex   *base_vertex;
-        Sub_Chunk_Instance *base_instance;
+        Block_Face_Vertex *base_vertex;
+        Chunk_Instance    *base_instance;
 
         std::mutex         free_buckets_mutex;
         std::vector< i32 > free_buckets; // todo(harlequin): remove
@@ -168,40 +168,40 @@ namespace minecraft {
                         World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
                         NULL,
                         buffer_flags);
-        renderer->base_vertex = (Sub_Chunk_Vertex*)glMapBufferRange(GL_ARRAY_BUFFER,
-                                                                    0,
-                                                                    World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
-                                                                    buffer_flags);
+        renderer->base_vertex = (Block_Face_Vertex *)glMapBufferRange(GL_ARRAY_BUFFER,
+                                                                      0,
+                                                                      World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
+                                                                      buffer_flags);
 
         glEnableVertexAttribArray(0);
         glVertexAttribIPointer(0,
                                1,
                                GL_UNSIGNED_INT,
-                               sizeof(Sub_Chunk_Vertex),
-                               (const void*)offsetof(Sub_Chunk_Vertex, packed_vertex_attributes0));
+                               sizeof(Block_Face_Vertex),
+                               (const void*)offsetof(Block_Face_Vertex, packed_vertex_attributes0));
 
         glEnableVertexAttribArray(1);
         glVertexAttribIPointer(1,
                                1,
                                GL_UNSIGNED_INT,
-                               sizeof(Sub_Chunk_Vertex),
-                               (const void*)offsetof(Sub_Chunk_Vertex, packed_vertex_attributes1));
+                               sizeof(Block_Face_Vertex),
+                               (const void*)offsetof(Block_Face_Vertex, packed_vertex_attributes1));
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         glGenBuffers(1, &renderer->chunk_instance_buffer_id);
         glBindBuffer(GL_ARRAY_BUFFER, renderer->chunk_instance_buffer_id);
-        glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), NULL, buffer_flags);
-        renderer->base_instance = (Sub_Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER,
-                                                                        0,
-                                                                        World::sub_chunk_bucket_capacity * sizeof(Sub_Chunk_Instance), buffer_flags);
+        glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * sizeof(Chunk_Instance), NULL, buffer_flags);
+        renderer->base_instance = (Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER,
+                                                                    0,
+                                                                    World::sub_chunk_bucket_capacity * sizeof(Chunk_Instance), buffer_flags);
 
         glEnableVertexAttribArray(2);
         glVertexAttribIPointer(2,
                                2,
                                GL_INT,
-                               sizeof(Sub_Chunk_Instance),
-                               (const void*)offsetof(Sub_Chunk_Instance, chunk_coords));
+                               sizeof(Chunk_Instance),
+                               (const void*)offsetof(Chunk_Instance, chunk_coords));
         glVertexAttribDivisor(2, 1);
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -562,13 +562,13 @@ namespace minecraft {
         {
             if (render_data.opaque_buckets[i].memory_id != -1)
             {
-                renderer->stats.persistent.sub_chunk_used_memory -= render_data.opaque_buckets[i].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+                renderer->stats.persistent.sub_chunk_used_memory -= render_data.opaque_buckets[i].face_count * 4 * sizeof(Block_Face_Vertex);
                 opengl_renderer_free_sub_chunk_bucket(&render_data.opaque_buckets[i]);
             }
 
             if (render_data.transparent_buckets[i].memory_id != -1)
             {
-                renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[i].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+                renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[i].face_count * 4 * sizeof(Block_Face_Vertex);
                 opengl_renderer_free_sub_chunk_bucket(&render_data.transparent_buckets[i]);
             }
 
@@ -593,13 +593,13 @@ namespace minecraft {
         if (is_sub_chunk_bucket_allocated(&render_data.opaque_buckets[bucket_index]))
         {
             opengl_renderer_reset_sub_chunk_bucket(&render_data.opaque_buckets[bucket_index]);
-            renderer->stats.persistent.sub_chunk_used_memory -= render_data.opaque_buckets[bucket_index].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+            renderer->stats.persistent.sub_chunk_used_memory -= render_data.opaque_buckets[bucket_index].face_count * 4 * sizeof(Block_Face_Vertex);
         }
 
         if (is_sub_chunk_bucket_allocated(&render_data.transparent_buckets[bucket_index]))
         {
             opengl_renderer_reset_sub_chunk_bucket(&render_data.transparent_buckets[bucket_index]);
-            renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Sub_Chunk_Vertex);
+            renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Block_Face_Vertex);
         }
 
         render_data.tessellated = false;
@@ -1438,8 +1438,8 @@ namespace minecraft {
             Sub_Chunk_Bucket& opqaue_bucket = render_data.opaque_buckets[bucket_index];
             Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[bucket_index];
 
-            renderer->stats.persistent.sub_chunk_used_memory += opqaue_bucket.face_count * 4 * sizeof(Sub_Chunk_Vertex);
-            renderer->stats.persistent.sub_chunk_used_memory += transparent_bucket.face_count * 4 * sizeof(Sub_Chunk_Vertex);
+            renderer->stats.persistent.sub_chunk_used_memory += opqaue_bucket.face_count * 4 * sizeof(Block_Face_Vertex);
+            renderer->stats.persistent.sub_chunk_used_memory += transparent_bucket.face_count * 4 * sizeof(Block_Face_Vertex);
         }
 
         render_data.tessellated = true;
