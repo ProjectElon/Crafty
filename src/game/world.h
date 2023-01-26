@@ -327,6 +327,7 @@ namespace minecraft {
         static constexpr i64 sub_chunk_bucket_vertex_count = 4 * sub_chunk_bucket_face_count;
         static constexpr i64 sub_chunk_bucket_size         = sub_chunk_bucket_vertex_count * sizeof(Block_Face_Vertex);
 
+
         f32 game_time_rate;
         f32 game_timer;
         u32 game_time;

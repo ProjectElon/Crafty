@@ -164,11 +164,35 @@ namespace minecraft {
         }
     }
 
-    Opengl_Vertex_Array begin_vertex_array()
+    static bool is_vertex_attribute_integer(VertexAttributeType type)
+    {
+        switch (type)
+        {
+            case VertexAttributeType_U8:
+            case VertexAttributeType_U16:
+            case VertexAttributeType_U32:
+            case VertexAttributeType_U64:
+            case VertexAttributeType_I8:
+            case VertexAttributeType_I16:
+            case VertexAttributeType_I32:
+            case VertexAttributeType_I64:
+            case VertexAttributeType_IV2:
+            case VertexAttributeType_IV3:
+            case VertexAttributeType_IV4:
+            {
+                return true;
+            } break;
+        }
+
+        return false;
+    }
+
+    Opengl_Vertex_Array begin_vertex_array(Memory_Arena *arena)
     {
         Opengl_Vertex_Array vertex_array = {};
         glCreateVertexArrays(1, &vertex_array.handle);
         Assert(vertex_array.handle);
+        vertex_array.arena = arena;
         return vertex_array;
     }
 
@@ -186,15 +210,19 @@ namespace minecraft {
         glNamedBufferStorage(vertex_buffer.handle, size, vertices, flags);
         bool is_persistent = flags & GL_MAP_PERSISTENT_BIT;
         bool is_coherent   = flags & GL_MAP_COHERENT_BIT;
+        bool read  = flags & GL_MAP_READ_BIT;
+        bool write = flags & GL_MAP_WRITE_BIT;
 
-        if (is_persistent && !(flags & GL_MAP_READ_BIT))
+        if (is_persistent && !(read || write))
         {
-            Assert(false); // read docs: https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            // read docs KID ! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            Assert(false);
         }
 
         if (is_coherent && !is_persistent)
         {
-            Assert(false); // read docs: https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            // read docs KID ! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            Assert(false);
         }
 
         vertex_buffer.vertex_size  = vertex_size;
@@ -207,9 +235,21 @@ namespace minecraft {
         }
 
         u32 binding_index = vertex_array->vertex_buffer_count++;
-        glVertexArrayVertexBuffer(vertex_array->handle, binding_index, vertex_buffer.handle, 0, vertex_buffer.vertex_size);
+        glVertexArrayVertexBuffer(vertex_array->handle,
+                                  binding_index,
+                                  vertex_buffer.handle,
+                                  0,
+                                  vertex_buffer.vertex_size);
         vertex_buffer.binding_index = binding_index;
         return vertex_buffer;
+    }
+
+    void set_buffer_data(Opengl_Vertex_Buffer *buffer,
+                         void *data,
+                         u64 size,
+                         u64 offset)
+    {
+        glNamedBufferSubData(buffer->handle, offset, size, data);
     }
 
     void push_vertex_attribute(Opengl_Vertex_Array  *vertex_array,
@@ -217,27 +257,53 @@ namespace minecraft {
                                const char           *name,
                                VertexAttributeType   type,
                                u32                   offset,
-                               Memory_Arena         *arena)
+                               bool                  per_instance /* = false*/)
     {
         u32 vertex_attribute_index = vertex_array->vertex_attribute_count++;
+
         glEnableVertexArrayAttrib(vertex_array->handle, vertex_attribute_index);
         glVertexArrayAttribBinding(vertex_array->handle,
                                    vertex_attribute_index,
                                    vertex_buffer->binding_index);
+
         u32 component_count = get_component_count(type);
         u32 opengl_type     = get_opengl_attribute_type(type);
-        glVertexArrayAttribFormat(vertex_array->handle,
-                                  vertex_attribute_index,
-                                  component_count,
-                                  opengl_type,
-                                  GL_FALSE,
-                                  offset);
+        bool is_integer     = is_vertex_attribute_integer(type);
 
-        // todo(harlequin): add vertex_attribute_info to vertex_array.vertex_attributes
-        Vertex_Attribute_Info vertex_attribute_info = {};
-        vertex_attribute_info.name   = name;
-        vertex_attribute_info.type   = type;
-        vertex_attribute_info.offset = offset;
+        if (is_integer)
+        {
+            glVertexArrayAttribIFormat(vertex_array->handle,
+                                       vertex_attribute_index,
+                                       component_count,
+                                       opengl_type,
+                                       offset);
+        }
+        else
+        {
+            glVertexArrayAttribFormat(vertex_array->handle,
+                                      vertex_attribute_index,
+                                      component_count,
+                                      opengl_type,
+                                      GL_FALSE,
+                                      offset);
+        }
+
+        if (per_instance)
+        {
+            glVertexArrayBindingDivisor(vertex_array->handle, vertex_buffer->binding_index, 1);
+        }
+
+        Vertex_Attribute_Info *vertex_attribute_info = ArenaPushAlignedZero(vertex_array->arena,
+                                                                            Vertex_Attribute_Info);
+        vertex_attribute_info->name   = name;
+        vertex_attribute_info->type   = type;
+        vertex_attribute_info->offset = offset;
+
+        // todo(harlequin): extend memory arena to handle dynamic arrays
+        if (!vertex_array->vertex_attributes)
+        {
+            vertex_array->vertex_attributes = vertex_attribute_info;
+        }
     }
 
     void end_vertex_buffer(Opengl_Vertex_Array  *vertex_array,
@@ -246,7 +312,36 @@ namespace minecraft {
         Assert((vertex_array->vertex_buffer_count - 1) == vertex_buffer->binding_index);
     }
 
+    Opengl_Index_Buffer push_index_buffer(Opengl_Vertex_Array *vertex_array, u32 *indicies, u32 index_count)
+    {
+        Opengl_Index_Buffer index_buffer = {};
+        glCreateBuffers(1, &index_buffer.handle);
+        Assert(index_buffer.handle);
+        glNamedBufferStorage(index_buffer.handle, sizeof(u32) * index_count, indicies, 0);
+        glVertexArrayElementBuffer(vertex_array->handle, index_buffer.handle);
+        index_buffer.index_count = index_count;
+        index_buffer.type = GL_UNSIGNED_INT;
+        return index_buffer;
+    }
+
+    Opengl_Index_Buffer push_index_buffer(Opengl_Vertex_Array *vertex_array, u16 *indicies, u16 index_count)
+    {
+        Opengl_Index_Buffer index_buffer = {};
+        glCreateBuffers(1, &index_buffer.handle);
+        Assert(index_buffer.handle);
+        glNamedBufferStorage(index_buffer.handle, sizeof(u16) * index_count, indicies, 0);
+        glVertexArrayElementBuffer(vertex_array->handle, index_buffer.handle);
+        index_buffer.index_count = index_count;
+        index_buffer.type = GL_UNSIGNED_SHORT;
+        return index_buffer;
+    }
+
     void end_vertex_array(Opengl_Vertex_Array *vertex_array)
     {
+    }
+
+    void bind_vertex_array(Opengl_Vertex_Array *vertex_array)
+    {
+        glBindVertexArray(vertex_array->handle);
     }
 }

@@ -3,10 +3,11 @@
 #include "game/game.h"
 #include "camera.h"
 #include "opengl_debug_renderer.h"
-#include "memory/memory_arena.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
 #include "opengl_array_texture.h"
+#include "opengl_vertex_array.h"
+#include "memory/memory_arena.h"
 #include "core/file_system.h"
 
 #include <glad/glad.h>
@@ -57,6 +58,63 @@ namespace minecraft {
         u32 baseInstance;
     };
 
+    struct Command_Buffer
+    {
+        u32                             handle;
+        u32                             command_count;
+        Draw_Elements_Indirect_Command *commands;
+    };
+
+    static bool initialize_command_buffer(Command_Buffer *command_buffer, u32 max_command_count)
+    {
+        command_buffer->handle = 0;
+        command_buffer->command_count = 0;
+        glCreateBuffers(1, &command_buffer->handle);
+        Assert(command_buffer->handle);
+        GLbitfield flags = GL_MAP_PERSISTENT_BIT |
+                           GL_MAP_WRITE_BIT |
+                           GL_MAP_COHERENT_BIT;
+
+        u64 size = sizeof(Draw_Elements_Indirect_Command) * max_command_count;
+        glNamedBufferStorage(command_buffer->handle,
+                             size,
+                             nullptr,
+                             flags);
+
+        command_buffer->commands =
+            (Draw_Elements_Indirect_Command *)glMapNamedBufferRange(command_buffer->handle,
+                                                                    0,
+                                                                    size,
+                                                                    flags);
+        return true;
+    }
+
+    static void push_sub_chunk_bucket(Command_Buffer *command_buffer, Sub_Chunk_Bucket *bucket, i64 instance_memory_id)
+    {
+        Draw_Elements_Indirect_Command *command = command_buffer->commands + command_buffer->command_count++;
+        command->count         = bucket->face_count * 6;
+        command->firstIndex    = 0;
+        command->instanceCount = 1;
+        command->baseVertex    = bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        command->baseInstance  = instance_memory_id;
+    }
+
+    static void reset_command_buffer(Command_Buffer *command_buffer)
+    {
+        command_buffer->command_count = 0;
+    }
+
+    static void draw_commands(Command_Buffer *command_buffer)
+    {
+        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, command_buffer->handle);
+        glMultiDrawElementsIndirect(GL_TRIANGLES,
+                                    GL_UNSIGNED_INT,
+                                    0,
+                                    command_buffer->command_count,
+                                    sizeof(Draw_Elements_Indirect_Command));
+        reset_command_buffer(command_buffer);
+    }
+
     struct Opengl_Renderer
     {
         glm::vec2 frame_buffer_size;
@@ -72,10 +130,7 @@ namespace minecraft {
         u32 quad_vertex_array_id;
         u32 quad_vertex_buffer_id;
 
-        u32 chunk_vertex_array_id;
-        u32 chunk_vertex_buffer_id;
-        u32 chunk_instance_buffer_id;
-        u32 chunk_index_buffer_id;
+        Opengl_Vertex_Array chunk_vertex_array;
 
         Block_Face_Vertex *base_vertex;
         Chunk_Instance    *base_instance;
@@ -86,6 +141,7 @@ namespace minecraft {
         std::mutex         free_instances_mutex;
         std::vector< i32 > free_instances; // todo(harlequin): remove
 
+#if 0
         u32 opaque_command_buffer_id;
         u32 opaque_command_count;
         Draw_Elements_Indirect_Command opaque_command_buffer[World::sub_chunk_bucket_capacity];
@@ -93,7 +149,10 @@ namespace minecraft {
         u32 transparent_command_buffer_id;
         u32 transparent_command_count;
         Draw_Elements_Indirect_Command transparent_command_buffer[World::sub_chunk_bucket_capacity];
-
+#else
+        Command_Buffer opaque_command_buffer;
+        Command_Buffer transparent_command_buffer;
+#endif
         GLsync command_buffer_sync_object;
 
         glm::vec4 sky_color;
@@ -130,9 +189,9 @@ namespace minecraft {
         }
 
 #if OPENGL_DEBUGGING
-        i32 flags;
-        glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
-        if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
+        i32 debug_flags;
+        glGetIntegerv(GL_CONTEXT_FLAGS, &debug_flags);
+        if (debug_flags & GL_CONTEXT_FLAG_DEBUG_BIT)
         {
             glEnable(GL_DEBUG_OUTPUT);
             glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -155,72 +214,6 @@ namespace minecraft {
         // fireframe mode
         // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
 
-        glGenVertexArrays(1, &renderer->chunk_vertex_array_id);
-        glBindVertexArray(renderer->chunk_vertex_array_id);
-
-        glGenBuffers(1, &renderer->chunk_vertex_buffer_id);
-        glBindBuffer(GL_ARRAY_BUFFER, renderer->chunk_vertex_buffer_id);
-
-        GLbitfield buffer_flags = GL_MAP_PERSISTENT_BIT |
-                                  GL_MAP_WRITE_BIT |
-                                  GL_MAP_COHERENT_BIT;
-        glBufferStorage(GL_ARRAY_BUFFER,
-                        World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
-                        NULL,
-                        buffer_flags);
-        renderer->base_vertex = (Block_Face_Vertex *)glMapBufferRange(GL_ARRAY_BUFFER,
-                                                                      0,
-                                                                      World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size,
-                                                                      buffer_flags);
-
-        glEnableVertexAttribArray(0);
-        glVertexAttribIPointer(0,
-                               1,
-                               GL_UNSIGNED_INT,
-                               sizeof(Block_Face_Vertex),
-                               (const void*)offsetof(Block_Face_Vertex, packed_vertex_attributes0));
-
-        glEnableVertexAttribArray(1);
-        glVertexAttribIPointer(1,
-                               1,
-                               GL_UNSIGNED_INT,
-                               sizeof(Block_Face_Vertex),
-                               (const void*)offsetof(Block_Face_Vertex, packed_vertex_attributes1));
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-        glGenBuffers(1, &renderer->chunk_instance_buffer_id);
-        glBindBuffer(GL_ARRAY_BUFFER, renderer->chunk_instance_buffer_id);
-        glBufferStorage(GL_ARRAY_BUFFER, World::sub_chunk_bucket_capacity * sizeof(Chunk_Instance), NULL, buffer_flags);
-        renderer->base_instance = (Chunk_Instance*)glMapBufferRange(GL_ARRAY_BUFFER,
-                                                                    0,
-                                                                    World::sub_chunk_bucket_capacity * sizeof(Chunk_Instance), buffer_flags);
-
-        glEnableVertexAttribArray(2);
-        glVertexAttribIPointer(2,
-                               2,
-                               GL_INT,
-                               sizeof(Chunk_Instance),
-                               (const void*)offsetof(Chunk_Instance, chunk_coords));
-        glVertexAttribDivisor(2, 1);
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-
-        new (&renderer->free_buckets_mutex) std::mutex;
-        new (&renderer->free_buckets) std::vector< i32 >;
-        renderer->free_buckets.resize(World::sub_chunk_bucket_capacity);
-
-        new (&renderer->free_instances_mutex) std::mutex;
-        new (&renderer->free_instances) std::vector< i32 >;
-        renderer->free_instances.resize(World::sub_chunk_bucket_capacity);
-
-        for (i32 i = 0; i < World::sub_chunk_bucket_capacity; ++i)
-        {
-            renderer->free_buckets[i]   = World::sub_chunk_bucket_capacity - i - 1;
-            renderer->free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
-        }
-
         Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(arena);
 
         u32 *chunk_indicies = ArenaPushArrayAligned(&temp_arena, u32, INDEX_COUNT_PER_SUB_CHUNK);
@@ -242,17 +235,70 @@ namespace minecraft {
             vertex_index  += 4;
         }
 
-        glGenBuffers(1, &renderer->chunk_index_buffer_id);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->chunk_index_buffer_id);
+        Opengl_Vertex_Array chunk_vertex_array = begin_vertex_array(arena);
 
-        glBufferData(
-            GL_ELEMENT_ARRAY_BUFFER,
-            INDEX_COUNT_PER_SUB_CHUNK * sizeof(u32),
-            chunk_indicies,
-            GL_STATIC_DRAW);
+        GLbitfield flags = GL_MAP_PERSISTENT_BIT |
+                           GL_MAP_WRITE_BIT |
+                           GL_MAP_COHERENT_BIT;
 
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        Opengl_Vertex_Buffer chunk_vertex_buffer = push_vertex_buffer(&chunk_vertex_array,
+                                                                      sizeof(Block_Face_Vertex),
+                                                                      World::sub_chunk_bucket_vertex_count * World::sub_chunk_bucket_capacity,
+                                                                      nullptr,
+                                                                      flags);
 
+        // todo(harlequin): rename in_data0 here and in shaders
+        push_vertex_attribute(&chunk_vertex_array,
+                              &chunk_vertex_buffer,
+                              "in_packed_vertex_attributes0",
+                              VertexAttributeType_U32,
+                              offsetof(Block_Face_Vertex, packed_vertex_attributes0));
+
+        push_vertex_attribute(&chunk_vertex_array,
+                              &chunk_vertex_buffer,
+                              "in_packed_vertex_attributes1",
+                              VertexAttributeType_U32,
+                              offsetof(Block_Face_Vertex, packed_vertex_attributes1));
+
+        Opengl_Vertex_Buffer chunk_instance_buffer = push_vertex_buffer(&chunk_vertex_array,
+                                                                        sizeof(Chunk_Instance),
+                                                                        World::sub_chunk_bucket_capacity,
+                                                                        nullptr,
+                                                                        flags);
+
+        bool per_instance = true;
+        push_vertex_attribute(&chunk_vertex_array,
+                              &chunk_instance_buffer,
+                              "in_chunk_coords",
+                              VertexAttributeType_IV2,
+                              offsetof(Chunk_Instance, chunk_coords),
+                              per_instance);
+
+        Opengl_Index_Buffer chunk_index_buffer = push_index_buffer(&chunk_vertex_array,
+                                                                   chunk_indicies,
+                                                                   INDEX_COUNT_PER_SUB_CHUNK);
+
+        end_vertex_array(&chunk_vertex_array);
+
+        renderer->chunk_vertex_array = chunk_vertex_array;
+        renderer->base_vertex        = (Block_Face_Vertex *) chunk_vertex_buffer.data;
+        renderer->base_instance      = (Chunk_Instance *) chunk_instance_buffer.data;
+
+        new (&renderer->free_buckets_mutex) std::mutex;
+        new (&renderer->free_buckets) std::vector< i32 >;
+        renderer->free_buckets.resize(World::sub_chunk_bucket_capacity);
+
+        new (&renderer->free_instances_mutex) std::mutex;
+        new (&renderer->free_instances) std::vector< i32 >;
+        renderer->free_instances.resize(World::sub_chunk_bucket_capacity);
+
+        for (i32 i = 0; i < World::sub_chunk_bucket_capacity; ++i)
+        {
+            renderer->free_buckets[i]   = World::sub_chunk_bucket_capacity - i - 1;
+            renderer->free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
+        }
+
+#if 0
         glGenBuffers(1, &renderer->opaque_command_buffer_id);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
         glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
@@ -262,6 +308,10 @@ namespace minecraft {
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
         glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+#else
+        initialize_command_buffer(&renderer->opaque_command_buffer, World::sub_chunk_bucket_capacity);
+        initialize_command_buffer(&renderer->transparent_command_buffer, World::sub_chunk_bucket_capacity);
+#endif
 
         renderer->frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
 
@@ -1401,8 +1451,8 @@ namespace minecraft {
         i32 bucket_index = render_data.bucket_index + 1;
         if (bucket_index == 2) bucket_index = 0;
 
-        constexpr f32 infinity = std::numeric_limits<f32>::max();
-        render_data.aabb[bucket_index] = { { infinity, infinity, infinity }, { -infinity, -infinity, -infinity } };
+        constexpr f32 inf = std::numeric_limits< f32 >::max();
+        render_data.aabb[bucket_index] = { { inf, inf, inf }, { -inf, -inf, -inf } };
 
         i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
         i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height;
@@ -1449,6 +1499,7 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
+#if 0
         if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
         {
             Draw_Elements_Indirect_Command& command = renderer->opaque_command_buffer[renderer->opaque_command_count];
@@ -1472,7 +1523,21 @@ namespace minecraft {
             command.baseVertex = render_data.transparent_buckets[render_data.bucket_index].memory_id * World::sub_chunk_bucket_vertex_count;
             command.baseInstance = render_data.instance_memory_id;
         }
+#else
+        if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
+        {
+            push_sub_chunk_bucket(&renderer->opaque_command_buffer,
+                                  &render_data.opaque_buckets[render_data.bucket_index],
+                                  render_data.instance_memory_id);
+        }
 
+        if (render_data.transparent_buckets[render_data.bucket_index].face_count > 0)
+        {
+            push_sub_chunk_bucket(&renderer->transparent_command_buffer,
+                                  &render_data.transparent_buckets[render_data.bucket_index],
+                                  render_data.instance_memory_id);
+        }
+#endif
         auto& stats = renderer->stats;
         stats.per_frame.face_count += render_data.opaque_buckets[render_data.bucket_index].face_count + render_data.transparent_buckets[render_data.bucket_index].face_count;
         stats.per_frame.sub_chunk_count++;
@@ -1499,7 +1564,6 @@ namespace minecraft {
             Chunk* chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             Assert(chunk);
 
-            // !chunk->pending_for_load && chunk->loaded
             if (chunk->state >= ChunkState_Loaded)
             {
                 for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
@@ -1532,8 +1596,10 @@ namespace minecraft {
         renderer->tint_color = tint_color;
         renderer->camera = camera;
 
+#if 0
         renderer->opaque_command_count = 0;
         renderer->transparent_command_count = 0;
+#endif
         memset(&renderer->stats.per_frame, 0, sizeof(PerFrame_Stats));
     }
 
@@ -1542,8 +1608,12 @@ namespace minecraft {
                                    f32                 sky_light_level,
                                    Block_Query_Result *selected_block_query)
     {
+    #if 0
         glBindVertexArray(renderer->chunk_vertex_array_id);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->chunk_index_buffer_id);
+    #else
+        bind_vertex_array(&renderer->chunk_vertex_array);
+    #endif
 
         Opengl_Shader *opaque_shader      = get_shader(&assets->opaque_chunk_shader);
         Opengl_Shader *transparent_shader = get_shader(&assets->transparent_chunk_shader);
@@ -1606,10 +1676,16 @@ namespace minecraft {
         set_uniform_f32(opaque_shader, "u_sky_light_level", (f32)sky_light_level);
         set_uniform_i32(opaque_shader, "u_block_array_texture", 1);
 
+#if 0
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->opaque_command_count, renderer->opaque_command_buffer);
 
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
+#else
+        // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer.handle);
+        // glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->opaque_command_buffer.command_count, sizeof(Draw_Elements_Indirect_Command));
+        draw_commands(&renderer->opaque_command_buffer);
+#endif
 
         // transparent pass
         glDepthMask(GL_FALSE);
@@ -1657,10 +1733,16 @@ namespace minecraft {
         set_uniform_f32(transparent_shader, "u_sky_light_level", sky_light_level);
         set_uniform_i32(transparent_shader, "u_block_array_texture", 1);
 
+#if 0
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
         glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->transparent_command_count, renderer->transparent_command_buffer);
         glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
+#else
+        // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer.handle);
+        // glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->transparent_command_buffer.command_count, sizeof(Draw_Elements_Indirect_Command));
 
+        draw_commands(&renderer->transparent_command_buffer);
+#endif
         signal_gpu_for_work();
 
         glDepthFunc(GL_ALWAYS);

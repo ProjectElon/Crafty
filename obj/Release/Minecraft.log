@@ -1,4 +1,6 @@
-﻿  opengl_vertex_array.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_vertex_array.cpp(79): warning C4715: 'minecraft::get_component_count': not all control paths return a value
-C:\dev\cpp\Crafty\src\renderer\opengl_vertex_array.cpp(165): warning C4715: 'minecraft::get_opengl_attribute_type': not all control paths return a value
+﻿  opengl_renderer.cpp
+C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(99,34): warning C4244: '=': conversion from 'i64' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(415,44): warning C4267: 'argument': conversion from 'size_t' to 'u32', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
