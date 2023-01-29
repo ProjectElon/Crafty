@@ -1,6 +1,18 @@
 ﻿  opengl_renderer.cpp
 C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
 C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(99,34): warning C4244: '=': conversion from 'i64' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(415,44): warning C4267: 'argument': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(100,34): warning C4244: '=': conversion from 'i64' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(395,44): warning C4267: 'argument': conversion from 'size_t' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1778,31): warning C4244: '=': conversion from 'u32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1779,31): warning C4244: '=': conversion from 'u32' to 'f32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1796,55): warning C4244: 'argument': conversion from 'f32' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1795,55): warning C4244: 'argument': conversion from 'f32' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1816,55): warning C4244: 'argument': conversion from 'f32' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1815,55): warning C4244: 'argument': conversion from 'f32' to 'u32', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1841,48): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1840,48): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1861,48): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1860,48): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1880,59): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
+C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(1880,38): warning C4244: 'argument': conversion from 'f32' to 'GLsizei', possible loss of data
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

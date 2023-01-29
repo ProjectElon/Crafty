@@ -28,13 +28,17 @@ namespace minecraft {
         return result;
     }
 
-    #define IsPowerOf2(X) !((X) & ((X) - 1))
+    inline static u64 get_alignment_offset(uintptr_t address, u64 alignment)
+    {
+        u64 modulo = address % alignment;
+        return modulo ? alignment - modulo : 0;
+    }
 
     void* arena_allocate_aligned(Memory_Arena *arena, u64 size, u64 alignment)
     {
         u8 *result = arena->base + arena->allocated;
-        u64 modulo = (intptr_t)result & (alignment - 1);
-        u64 byte_count_to_align = modulo != 0 ? alignment - modulo : 0;
+        u64 byte_count_to_align = get_alignment_offset((uintptr_t)result, alignment);
+
         if (arena->allocated + size + byte_count_to_align > arena->size)
         {
             return nullptr;
@@ -88,5 +92,20 @@ namespace minecraft {
     void* arena_allocate_aligned_zero(Temprary_Memory_Arena *temparay_arena, u64 size, u64 alignment)
     {
         return arena_allocate_aligned_zero(temparay_arena->arena, size, alignment);
+    }
+
+    void *begin_array(Memory_Arena *arena, u64 size, u64 alignment)
+    {
+        u8 *result = arena->base + arena->allocated;
+        u64 byte_count_to_align = get_alignment_offset((uintptr_t)result, alignment);
+        result += byte_count_to_align;
+        arena->allocated += byte_count_to_align;
+        return result;
+    }
+
+    u64 end_array(Memory_Arena *arena, u8 *array, u64 size)
+    {
+        u8 *current = (arena->base + arena->allocated);
+        return (current - array) / size;
     }
 }

@@ -7,14 +7,20 @@ namespace minecraft {
     enum TextureFormat : u8
     {
         TextureFormat_RGB,
-        TextureFormat_RGBA
+        TextureFormat_RGBA,
+        TextureFormat_Red,
+        TextureFormat_RGBA16F,
+        TextureFormat_Depth24,
+        TextureFormat_Stencil8,
     };
 
     enum TextureUsage : u8
     {
         TextureUsage_SpriteSheet,
         TextureUsage_UI,
-        TextureUsage_Font
+        TextureUsage_Font,
+        TextureUsage_ColorAttachment,
+        TextureUsage_DepthAttachment
     };
 
     enum AnisotropicFiltering : u8

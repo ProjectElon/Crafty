@@ -119,6 +119,8 @@ namespace minecraft {
             } break;
 
             case TextureUsage_Font:
+            case TextureUsage_ColorAttachment:
+            case TextureUsage_DepthAttachment:
             {
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -137,15 +139,40 @@ namespace minecraft {
     {
         switch (format)
         {
-        case TextureFormat_RGB:
-            return GL_RGB;
-            break;
-        case TextureFormat_RGBA:
-            return GL_RGBA;
-            break;
-        default:
-            Assert(false && "unsupported texture format");
-            break;
+            case TextureFormat_RGB:
+            {
+                return GL_RGB;
+            } break;
+
+            case TextureFormat_RGBA:
+            {
+                return GL_RGBA;
+            } break;
+
+            case TextureFormat_Red:
+            {
+                return GL_RED;
+            } break;
+
+            case TextureFormat_RGBA16F:
+            {
+                return GL_HALF_FLOAT;
+            } break;
+
+            case TextureFormat_Depth24:
+            {
+                return GL_DEPTH_COMPONENT;
+            } break;
+
+            case TextureFormat_Stencil8:
+            {
+                return GL_STENCIL_INDEX;
+            } break;
+
+            default:
+            {
+                Assert(false && "unsupported texture format");
+            } break;
         }
 
         return 0;
@@ -155,15 +182,41 @@ namespace minecraft {
     {
         switch (format)
         {
-        case TextureFormat_RGB:
-            return GL_RGB8;
-            break;
-        case TextureFormat_RGBA:
-            return GL_RGBA8;
-            break;
-        default:
-            Assert(false && "unsupported internal format");
-            break;
+            case TextureFormat_RGB:
+            {
+                return GL_RGB8;
+            } break;
+
+            case TextureFormat_RGBA:
+            {
+                return GL_RGBA8;
+            } break;
+
+            case TextureFormat_Red:
+            {
+                return GL_R8;
+            } break;
+
+            case TextureFormat_RGBA16F:
+            {
+                return GL_RGBA16F;
+            } break;
+
+            case TextureFormat_Depth24:
+            {
+                return GL_DEPTH_COMPONENT24;
+            } break;
+
+            case TextureFormat_Stencil8:
+            {
+                return GL_STENCIL_INDEX8;
+            } break;
+
+            default:
+            {
+                Assert(false && "unsupported internal format");
+            } break;
+
         }
 
         return 0;

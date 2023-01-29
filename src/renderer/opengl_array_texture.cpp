@@ -70,7 +70,6 @@ namespace minecraft {
 
     void bind_texture(Opengl_Array_Texture *array_texture, u32 texture_slot)
     {
-        glActiveTexture(GL_TEXTURE0 + texture_slot);
         glBindTextureUnit(texture_slot, array_texture->handle);
     }
 

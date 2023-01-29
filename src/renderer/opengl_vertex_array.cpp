@@ -193,6 +193,7 @@ namespace minecraft {
         glCreateVertexArrays(1, &vertex_array.handle);
         Assert(vertex_array.handle);
         vertex_array.arena = arena;
+        vertex_array.vertex_attributes = ArenaBeginArray(arena, Vertex_Attribute_Info);
         return vertex_array;
     }
 
@@ -215,13 +216,13 @@ namespace minecraft {
 
         if (is_persistent && !(read || write))
         {
-            // read docs KID ! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            // read docs KID! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
             Assert(false);
         }
 
         if (is_coherent && !is_persistent)
         {
-            // read docs KID ! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
+            // read docs KID! https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBufferStorage.xhtml
             Assert(false);
         }
 
@@ -293,17 +294,11 @@ namespace minecraft {
             glVertexArrayBindingDivisor(vertex_array->handle, vertex_buffer->binding_index, 1);
         }
 
-        Vertex_Attribute_Info *vertex_attribute_info = ArenaPushAlignedZero(vertex_array->arena,
-                                                                            Vertex_Attribute_Info);
+        Vertex_Attribute_Info *vertex_attribute_info = ArenaPushArrayEntry(vertex_array->arena,
+                                                                           vertex_array->vertex_attributes);
         vertex_attribute_info->name   = name;
         vertex_attribute_info->type   = type;
         vertex_attribute_info->offset = offset;
-
-        // todo(harlequin): extend memory arena to handle dynamic arrays
-        if (!vertex_array->vertex_attributes)
-        {
-            vertex_array->vertex_attributes = vertex_attribute_info;
-        }
     }
 
     void end_vertex_buffer(Opengl_Vertex_Array  *vertex_array,
@@ -338,6 +333,7 @@ namespace minecraft {
 
     void end_vertex_array(Opengl_Vertex_Array *vertex_array)
     {
+        // vertex_array->vertex_attribute_count = ArenaEndArray(vertex_array->arena, vertex_array->vertex_attributes);
     }
 
     void bind_vertex_array(Opengl_Vertex_Array *vertex_array)

@@ -65,7 +65,8 @@ namespace minecraft {
         Draw_Elements_Indirect_Command *commands;
     };
 
-    static bool initialize_command_buffer(Command_Buffer *command_buffer, u32 max_command_count)
+    static bool initialize_command_buffer(Command_Buffer *command_buffer,
+                                          u32 max_command_count)
     {
         command_buffer->handle = 0;
         command_buffer->command_count = 0;
@@ -99,11 +100,6 @@ namespace minecraft {
         command->baseInstance  = instance_memory_id;
     }
 
-    static void reset_command_buffer(Command_Buffer *command_buffer)
-    {
-        command_buffer->command_count = 0;
-    }
-
     static void draw_commands(Command_Buffer *command_buffer)
     {
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, command_buffer->handle);
@@ -112,7 +108,7 @@ namespace minecraft {
                                     0,
                                     command_buffer->command_count,
                                     sizeof(Draw_Elements_Indirect_Command));
-        reset_command_buffer(command_buffer);
+        command_buffer->command_count = 0;
     }
 
     struct Opengl_Renderer
@@ -127,44 +123,31 @@ namespace minecraft {
         u32 transparent_frame_buffer_accum_texture_id;
         u32 transparent_frame_buffer_reveal_texture_id;
 
-        u32 quad_vertex_array_id;
-        u32 quad_vertex_buffer_id;
-
         Opengl_Vertex_Array chunk_vertex_array;
+        Opengl_Vertex_Array screen_quad_vertex_array;
+
+        Command_Buffer opaque_command_buffer;
+        Command_Buffer transparent_command_buffer;
+        GLsync command_buffer_sync_object;
+
+        Opengl_Array_Texture block_array_texture;
 
         Block_Face_Vertex *base_vertex;
         Chunk_Instance    *base_instance;
 
         std::mutex         free_buckets_mutex;
-        std::vector< i32 > free_buckets; // todo(harlequin): remove
+        std::vector< i32 > free_buckets; // todo(harlequin): refactor
 
         std::mutex         free_instances_mutex;
-        std::vector< i32 > free_instances; // todo(harlequin): remove
-
-#if 0
-        u32 opaque_command_buffer_id;
-        u32 opaque_command_count;
-        Draw_Elements_Indirect_Command opaque_command_buffer[World::sub_chunk_bucket_capacity];
-
-        u32 transparent_command_buffer_id;
-        u32 transparent_command_count;
-        Draw_Elements_Indirect_Command transparent_command_buffer[World::sub_chunk_bucket_capacity];
-#else
-        Command_Buffer opaque_command_buffer;
-        Command_Buffer transparent_command_buffer;
-#endif
-        GLsync command_buffer_sync_object;
-
-        glm::vec4 sky_color;
-        glm::vec4 tint_color;
-
-        Camera *camera;
-
-        Opengl_Renderer_Stats stats;
+        std::vector< i32 > free_instances; // todo(harlequin): refactor
 
         bool enable_fxaa;
 
-        Opengl_Array_Texture block_array_texture;
+        glm::vec4 sky_color;
+        glm::vec4 tint_color;
+        Camera *camera;
+
+        Opengl_Renderer_Stats stats;
     };
 
     static Opengl_Renderer *renderer;
@@ -247,7 +230,6 @@ namespace minecraft {
                                                                       nullptr,
                                                                       flags);
 
-        // todo(harlequin): rename in_data0 here and in shaders
         push_vertex_attribute(&chunk_vertex_array,
                               &chunk_vertex_buffer,
                               "in_packed_vertex_attributes0",
@@ -298,20 +280,8 @@ namespace minecraft {
             renderer->free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
         }
 
-#if 0
-        glGenBuffers(1, &renderer->opaque_command_buffer_id);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
-        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-
-        glGenBuffers(1, &renderer->transparent_command_buffer_id);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
-        glBufferData(GL_DRAW_INDIRECT_BUFFER, sizeof(Draw_Elements_Indirect_Command) * World::sub_chunk_bucket_capacity, NULL, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-#else
         initialize_command_buffer(&renderer->opaque_command_buffer, World::sub_chunk_bucket_capacity);
         initialize_command_buffer(&renderer->transparent_command_buffer, World::sub_chunk_bucket_capacity);
-#endif
 
         renderer->frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
 
@@ -330,33 +300,43 @@ namespace minecraft {
             return false;
         }
 
-        // positions uvs
-        float quad_vertices[] =
+        struct Screen_Quad_Vertex
         {
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+            glm::vec3 position;
+            glm::vec2 uv;
         };
 
-        glGenVertexArrays(1, &renderer->quad_vertex_array_id);
-        glBindVertexArray(renderer->quad_vertex_array_id);
+        Screen_Quad_Vertex screen_quad_vertices[6] =
+        {
+            { { 1.0f,   1.0f, 0.0f }, { 1.0f, 1.0f } },
+            { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } },
+            { { 1.0f,  -1.0f, 0.0f }, { 1.0f, 0.0f } },
+            { { 1.0f,   1.0f, 0.0f }, { 1.0f, 1.0f } },
+            { { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f } },
+            { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } }
+        };
 
-        glGenBuffers(1, &renderer->quad_vertex_buffer_id);
-        glBindBuffer(GL_ARRAY_BUFFER, renderer->quad_vertex_buffer_id);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
+        Opengl_Vertex_Array screen_quad_vertex_array = begin_vertex_array(arena);
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        Opengl_Vertex_Buffer quad_vertex_buffer = push_vertex_buffer(&screen_quad_vertex_array,
+                                                                     sizeof(Screen_Quad_Vertex),
+                                                                     ArrayCount(screen_quad_vertices),
+                                                                     screen_quad_vertices,
+                                                                     0);
+        push_vertex_attribute(&screen_quad_vertex_array,
+                              &quad_vertex_buffer,
+                              "in_position",
+                              VertexAttributeType_V3,
+                              offsetof(Screen_Quad_Vertex, position));
 
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+        push_vertex_attribute(&screen_quad_vertex_array,
+                              &quad_vertex_buffer,
+                              "in_uv",
+                              VertexAttributeType_V2,
+                              offsetof(Screen_Quad_Vertex, uv));
 
-        glBindVertexArray(0);
-
-        renderer->enable_fxaa = true;
+        end_vertex_array(&screen_quad_vertex_array);
+        renderer->screen_quad_vertex_array = screen_quad_vertex_array;
 
         // todo(harlequin): temprary
         u8 *magenta_block_texture = ArenaPushArrayAligned(&temp_arena, u8, 32 * 32 * 4);
@@ -444,6 +424,8 @@ namespace minecraft {
         generate_mipmaps(&renderer->block_array_texture);
 
         end_temprary_memory_arena(&temp_arena);
+
+        renderer->enable_fxaa = true;
 
         return true;
     }
@@ -1499,31 +1481,6 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-#if 0
-        if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
-        {
-            Draw_Elements_Indirect_Command& command = renderer->opaque_command_buffer[renderer->opaque_command_count];
-            renderer->opaque_command_count++;
-
-            command.count = render_data.opaque_buckets[render_data.bucket_index].face_count * 6;
-            command.firstIndex = 0;
-            command.instanceCount = 1;
-            command.baseVertex = render_data.opaque_buckets[render_data.bucket_index].memory_id * World::sub_chunk_bucket_vertex_count;
-            command.baseInstance = render_data.instance_memory_id;
-        }
-
-        if (render_data.transparent_buckets[render_data.bucket_index].face_count > 0)
-        {
-            Draw_Elements_Indirect_Command& command = renderer->transparent_command_buffer[renderer->transparent_command_count];
-            renderer->transparent_command_count++;
-
-            command.count = render_data.transparent_buckets[render_data.bucket_index].face_count * 6;
-            command.firstIndex = 0;
-            command.instanceCount = 1;
-            command.baseVertex = render_data.transparent_buckets[render_data.bucket_index].memory_id * World::sub_chunk_bucket_vertex_count;
-            command.baseInstance = render_data.instance_memory_id;
-        }
-#else
         if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
         {
             push_sub_chunk_bucket(&renderer->opaque_command_buffer,
@@ -1537,7 +1494,7 @@ namespace minecraft {
                                   &render_data.transparent_buckets[render_data.bucket_index],
                                   render_data.instance_memory_id);
         }
-#endif
+
         auto& stats = renderer->stats;
         stats.per_frame.face_count += render_data.opaque_buckets[render_data.bucket_index].face_count + render_data.transparent_buckets[render_data.bucket_index].face_count;
         stats.per_frame.sub_chunk_count++;
@@ -1608,12 +1565,7 @@ namespace minecraft {
                                    f32                 sky_light_level,
                                    Block_Query_Result *selected_block_query)
     {
-    #if 0
-        glBindVertexArray(renderer->chunk_vertex_array_id);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, renderer->chunk_index_buffer_id);
-    #else
         bind_vertex_array(&renderer->chunk_vertex_array);
-    #endif
 
         Opengl_Shader *opaque_shader      = get_shader(&assets->opaque_chunk_shader);
         Opengl_Shader *transparent_shader = get_shader(&assets->transparent_chunk_shader);
@@ -1634,6 +1586,7 @@ namespace minecraft {
 
         glm::ivec3 block_coords = { -1, -1, -1 };
         glm::ivec2 chunk_coords = { -1, -1 };
+
         if (is_block_query_valid(*selected_block_query))
         {
             block_coords = selected_block_query->block_coords;
@@ -1664,28 +1617,27 @@ namespace minecraft {
         set_uniform_mat4(opaque_shader, "u_projection", glm::value_ptr(camera->projection));
 
         set_uniform_vec4(opaque_shader,
-            "u_biome_color",
-            grass_color.r,
-            grass_color.g,
-            grass_color.b,
-            grass_color.a);
+                         "u_biome_color",
+                         grass_color.r,
+                         grass_color.g,
+                         grass_color.b,
+                         grass_color.a);
 
-        set_uniform_ivec3(opaque_shader, "u_highlighted_block_coords", block_coords.x, block_coords.y, block_coords.z);
-        set_uniform_ivec2(opaque_shader, "u_highlighted_block_chunk_coords", chunk_coords.x, chunk_coords.y);
+        set_uniform_ivec3(opaque_shader,
+                          "u_highlighted_block_coords",
+                          block_coords.x,
+                          block_coords.y,
+                          block_coords.z);
+
+        set_uniform_ivec2(opaque_shader,
+                          "u_highlighted_block_chunk_coords",
+                          chunk_coords.x,
+                          chunk_coords.y);
 
         set_uniform_f32(opaque_shader, "u_sky_light_level", (f32)sky_light_level);
         set_uniform_i32(opaque_shader, "u_block_array_texture", 1);
 
-#if 0
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer_id);
-        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->opaque_command_count, renderer->opaque_command_buffer);
-
-        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->opaque_command_count, sizeof(Draw_Elements_Indirect_Command));
-#else
-        // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->opaque_command_buffer.handle);
-        // glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->opaque_command_buffer.command_count, sizeof(Draw_Elements_Indirect_Command));
         draw_commands(&renderer->opaque_command_buffer);
-#endif
 
         // transparent pass
         glDepthMask(GL_FALSE);
@@ -1733,16 +1685,8 @@ namespace minecraft {
         set_uniform_f32(transparent_shader, "u_sky_light_level", sky_light_level);
         set_uniform_i32(transparent_shader, "u_block_array_texture", 1);
 
-#if 0
-        glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer_id);
-        glBufferSubData(GL_DRAW_INDIRECT_BUFFER, 0, sizeof(Draw_Elements_Indirect_Command) * renderer->transparent_command_count, renderer->transparent_command_buffer);
-        glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->transparent_command_count, sizeof(Draw_Elements_Indirect_Command));
-#else
-        // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, renderer->transparent_command_buffer.handle);
-        // glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0, renderer->transparent_command_buffer.command_count, sizeof(Draw_Elements_Indirect_Command));
-
         draw_commands(&renderer->transparent_command_buffer);
-#endif
+
         signal_gpu_for_work();
 
         glDepthFunc(GL_ALWAYS);
@@ -1762,7 +1706,7 @@ namespace minecraft {
         glActiveTexture(GL_TEXTURE3);
         glBindTexture(GL_TEXTURE_2D, renderer->transparent_frame_buffer_reveal_texture_id);
 
-        glBindVertexArray(renderer->quad_vertex_array_id);
+        bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
         f32 line_thickness = 3.0f;
@@ -1789,13 +1733,159 @@ namespace minecraft {
         glActiveTexture(GL_TEXTURE4);
         glBindTexture(GL_TEXTURE_2D, renderer->opaque_frame_buffer_color_texture_id);
 
-        glBindVertexArray(renderer->quad_vertex_array_id); // todo(harlequin): temprary
+        bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 
     void opengl_renderer_swap_buffers(struct GLFWwindow *window)
     {
         Platform::opengl_swap_buffers(window);
+    }
+
+    struct Opengl_Render_Buffer
+    {
+        u32           handle;
+        u32           width;
+        u32           height;
+        TextureFormat texture_format;
+    };
+
+    struct Opengl_Frame_Buffer
+    {
+        u32 handle;
+        f32 width;
+        f32 height;
+
+        u32             color_attachment_count;
+        Opengl_Texture *color_attachments;
+
+        bool           is_using_depth_texture;
+        Opengl_Texture depth_attachment_texture;
+
+        bool                 is_using_depth_render_buffer;
+        Opengl_Render_Buffer depth_attachment_render_buffer;
+
+        bool                 is_using_stencil_attachment;
+        Opengl_Render_Buffer stencil_attachment;
+    };
+
+    static Opengl_Frame_Buffer begin_frame_buffer(u32 width, u32 height, Memory_Arena *arena)
+    {
+        Assert(width);
+        Assert(height);
+        Assert(arena);
+        Opengl_Frame_Buffer frame_buffer = {};
+        frame_buffer.width  = width;
+        frame_buffer.height = height;
+        glCreateFramebuffers(1, &frame_buffer.handle);
+        Assert(frame_buffer.handle);
+        frame_buffer.color_attachments = ArenaBeginArray(arena, Opengl_Texture);
+        return frame_buffer;
+    }
+
+    static Opengl_Texture* push_color_attachment(Opengl_Frame_Buffer *frame_buffer,
+                                                 TextureFormat texture_format,
+                                                 Memory_Arena *arena)
+    {
+        u32 color_attachment_index = frame_buffer->color_attachment_count++;
+
+        Opengl_Texture *color_attachment = ArenaPushArrayEntry(arena, frame_buffer->color_attachments);
+        bool success = initialize_texture(color_attachment,
+                                          nullptr,
+                                          frame_buffer->width,
+                                          frame_buffer->height,
+                                          texture_format,
+                                          TextureUsage_ColorAttachment);
+        Assert(success);
+        glNamedFramebufferTexture(frame_buffer->handle,
+                                  GL_COLOR_ATTACHMENT0 + color_attachment_index,
+                                  color_attachment->id,
+                                  0);
+
+        return color_attachment;
+    }
+
+    static Opengl_Texture *push_depth_texture_attachment(Opengl_Frame_Buffer *frame_buffer)
+    {
+        Assert(!frame_buffer->is_using_depth_texture && !frame_buffer->is_using_depth_render_buffer);
+
+        Opengl_Texture *depth_attachment = &frame_buffer->depth_attachment_texture;
+        bool success = initialize_texture(depth_attachment,
+                                          nullptr,
+                                          frame_buffer->width,
+                                          frame_buffer->height,
+                                          TextureFormat_Depth24,
+                                          TextureUsage_DepthAttachment);
+        Assert(success);
+        glNamedFramebufferTexture(frame_buffer->handle,
+                                  GL_DEPTH_ATTACHMENT,
+                                  depth_attachment->id,
+                                  0);
+
+        frame_buffer->is_using_depth_texture = true;
+        return depth_attachment;
+    }
+
+    static Opengl_Render_Buffer* push_depth_render_buffer_attachment(Opengl_Frame_Buffer *frame_buffer,
+                                                                     TextureFormat format)
+    {
+        Assert(!frame_buffer->is_using_depth_texture && !frame_buffer->is_using_depth_render_buffer);
+
+        Opengl_Render_Buffer *depth_attachment = &frame_buffer->depth_attachment_render_buffer;
+        glCreateRenderbuffers(1, &depth_attachment->handle);
+        Assert(depth_attachment->handle);
+
+        glNamedRenderbufferStorage(depth_attachment->handle,
+                                   texture_format_to_opengl_internal_format(format),
+                                   frame_buffer->width,
+                                   frame_buffer->height);
+
+        glNamedFramebufferRenderbuffer(frame_buffer->handle,
+                                       GL_DEPTH_ATTACHMENT,
+                                       GL_RENDERBUFFER,
+                                       depth_attachment->handle);
+
+        frame_buffer->is_using_depth_render_buffer = true;
+        return depth_attachment;
+    }
+
+    static Opengl_Render_Buffer* push_stencil_attachment(Opengl_Frame_Buffer *frame_buffer, TextureFormat format)
+    {
+        Opengl_Render_Buffer *stencil_attachment = &frame_buffer->stencil_attachment;
+        glCreateRenderbuffers(1, &stencil_attachment->handle);
+        Assert(stencil_attachment->handle);
+
+        glNamedRenderbufferStorage(stencil_attachment->handle,
+                                   texture_format_to_opengl_internal_format(format),
+                                   frame_buffer->width,
+                                   frame_buffer->height);
+
+        glNamedFramebufferRenderbuffer(frame_buffer->handle,
+                                       GL_STENCIL_ATTACHMENT,
+                                       GL_RENDERBUFFER,
+                                       stencil_attachment->handle);
+
+        frame_buffer->is_using_stencil_attachment = true;
+        return stencil_attachment;
+    }
+
+    static bool end_frame_buffer(Opengl_Frame_Buffer *frame_buffer)
+    {
+        return glCheckNamedFramebufferStatus(frame_buffer->handle, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    }
+
+    static void bind_frame_buffer(Opengl_Frame_Buffer *frame_buffer)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, frame_buffer->handle);
+        glViewport(0, 0, frame_buffer->width, frame_buffer->height);
+    }
+
+    // todo(harlequin): implment this please
+    static bool resize_frame_buffer(Opengl_Frame_Buffer *frame_buffer,
+                                    u32 width,
+                                    u32 height)
+    {
+        return true;
     }
 
     bool opengl_renderer_recreate_frame_buffers()
@@ -1819,7 +1909,6 @@ namespace minecraft {
             glDeleteTextures(1, &renderer->transparent_frame_buffer_accum_texture_id);
             glDeleteTextures(1, &renderer->transparent_frame_buffer_reveal_texture_id);
             glDeleteFramebuffers(1, &renderer->transparent_frame_buffer_id);
-
             renderer->transparent_frame_buffer_accum_texture_id  = 0;
             renderer->transparent_frame_buffer_reveal_texture_id = 0;
             renderer->transparent_frame_buffer_id                = 0;
@@ -1981,27 +2070,5 @@ namespace minecraft {
 #ifndef OPENGL_TRACE_DEBUG_MESSAGE
         DebugBreak();
 #endif
-    }
-
-    void gl_check_error(const char *function_name, const char *file, i32 line)
-    {
-        GLenum error  = 0;
-        bool is_error = false;
-        while ((error = glGetError()) != GL_NO_ERROR)
-        {
-            is_error = true;
-            switch (error)
-            {
-                case GL_INVALID_ENUM: fprintf(stderr, "GL_INVALID_ENUM\n"); break;
-                case GL_INVALID_VALUE: fprintf(stderr, "GL_INVALID_VALUE\n"); break;
-                case GL_INVALID_OPERATION: fprintf(stderr, "GL_INVALID_OPERATION\n"); break;
-                case GL_INVALID_FRAMEBUFFER_OPERATION: fprintf(stderr, "GL_INVALID_FRAMEBUFFER_OPERATION\n"); break;
-                case GL_OUT_OF_MEMORY: fprintf(stderr, "GL_OUT_OF_MEMORY\n"); break;
-                case GL_STACK_UNDERFLOW: fprintf(stderr, "GL_STACK_UNDERFLOW\n"); break;
-                case GL_STACK_OVERFLOW: fprintf(stderr, "GL_STACK_OVERFLOW\n"); break;
-                default: fprintf(stderr, "UNKNOWN ERROR CODE\n"); break;
-            }
-            printf("at %s at %s:%d\n", file, function_name, line);
-        }
     }
 }
