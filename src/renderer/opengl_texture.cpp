@@ -18,28 +18,40 @@ namespace minecraft {
         texture->height = height;
         texture->format = format;
 
-        glGenTextures(1, &texture->id);
-        glBindTexture(GL_TEXTURE_2D, texture->id);
+        glCreateTextures(GL_TEXTURE_2D, 1, &texture->handle);
+        Assert(texture->handle);
 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         set_texture_usage(texture, usage);
 
         i32 internal_format = texture_format_to_opengl_internal_format(format);
         i32 texture_format  = texture_format_to_opengl_texture_format(format);
 
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     internal_format,
-                     width,
-                     height,
-                     0,
-                     texture_format,
-                     GL_UNSIGNED_BYTE,
-                     data);
+        i32 pixel_data_type = GL_UNSIGNED_BYTE;
 
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (format == TextureFormat_RGBA16F)
+        {
+            pixel_data_type = GL_HALF_FLOAT;
+        }
+        else if (format == TextureFormat_R8)
+        {
+            pixel_data_type = GL_FLOAT;
+        }
 
+        glTextureStorage2D(texture->handle, 1, internal_format, width, height);
+        if (data)
+        {
+            glTextureSubImage2D(texture->handle,
+                                0,
+                                0,
+                                0,
+                                width,
+                                height,
+                                texture_format,
+                                pixel_data_type,
+                                data);
+        }
         return true;
     }
 
@@ -67,11 +79,11 @@ namespace minecraft {
 
         if (channel_count == 3)
         {
-            texture_format = TextureFormat_RGB;
+            texture_format = TextureFormat_RGB8;
         }
         else if (channel_count == 4)
         {
-            texture_format = TextureFormat_RGBA;
+            texture_format = TextureFormat_RGBA8;
         }
         else
         {
@@ -95,68 +107,71 @@ namespace minecraft {
 
     void free_texture(Opengl_Texture *texture)
     {
-        glDeleteTextures(1, &texture->id);
-        texture->id = 0;
+        glDeleteTextures(1, &texture->handle);
+        texture->handle = 0;
     }
 
     void set_texture_usage(Opengl_Texture *texture, TextureUsage usage)
     {
         texture->usage = usage;
-        glBindTexture(GL_TEXTURE_2D, texture->id);
 
         switch (usage)
         {
             case TextureUsage_SpriteSheet:
             {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             } break;
 
             case TextureUsage_UI:
             {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             } break;
 
             case TextureUsage_Font:
+            {
+                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            }
+            break;
+
             case TextureUsage_ColorAttachment:
             case TextureUsage_DepthAttachment:
             {
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            }
-            break;
+                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            } break;
         }
     }
 
     void bind_texture(Opengl_Texture *texture, u32 texture_slot)
     {
-        glActiveTexture(GL_TEXTURE0 + texture_slot);
-        glBindTexture(GL_TEXTURE_2D, texture->id);
+        glBindTextureUnit(texture_slot, texture->handle);
     }
 
     u32 texture_format_to_opengl_texture_format(TextureFormat format)
     {
         switch (format)
         {
-            case TextureFormat_RGB:
+            case TextureFormat_RGB8:
             {
                 return GL_RGB;
             } break;
 
-            case TextureFormat_RGBA:
+            case TextureFormat_RGBA8:
             {
                 return GL_RGBA;
             } break;
 
-            case TextureFormat_Red:
+            case TextureFormat_R8:
             {
                 return GL_RED;
             } break;
 
             case TextureFormat_RGBA16F:
             {
-                return GL_HALF_FLOAT;
+                return GL_RGBA;
             } break;
 
             case TextureFormat_Depth24:
@@ -182,17 +197,17 @@ namespace minecraft {
     {
         switch (format)
         {
-            case TextureFormat_RGB:
+            case TextureFormat_RGB8:
             {
                 return GL_RGB8;
             } break;
 
-            case TextureFormat_RGBA:
+            case TextureFormat_RGBA8:
             {
                 return GL_RGBA8;
             } break;
 
-            case TextureFormat_Red:
+            case TextureFormat_R8:
             {
                 return GL_R8;
             } break;

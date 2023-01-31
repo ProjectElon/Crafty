@@ -136,7 +136,7 @@ namespace minecraft {
             pixels[i] = alpha | (alpha << 8) | (alpha << 16) | (alpha << 24);
         }
 
-        if (font->atlas.id)
+        if (font->atlas.handle)
         {
             free_texture(&font->atlas);
         }
@@ -145,7 +145,7 @@ namespace minecraft {
                                           (u8*)pixels,
                                           texture_width,
                                           texture_height,
-                                          TextureFormat_RGBA,
+                                          TextureFormat_RGBA8,
                                           TextureUsage_Font);
         return success;
     }

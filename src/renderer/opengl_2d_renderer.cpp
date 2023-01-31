@@ -157,7 +157,7 @@ namespace minecraft {
                                           (u8*)(&white_pxiel),
                                           1,
                                           1,
-                                          TextureFormat_RGBA,
+                                          TextureFormat_RGBA8,
                                           TextureUsage_UI);
         Assert(success);
 
@@ -224,7 +224,7 @@ namespace minecraft {
 
         for (u32 i = 5; i < 32; i++)
         {
-            if (renderer->texture_slots[i] == texture->id)
+            if (renderer->texture_slots[i] == texture->handle)
             {
                 texture_index = i;
                 break;
@@ -238,7 +238,7 @@ namespace minecraft {
                 if (renderer->texture_slots[i] == -1)
                 {
                     bind_texture(texture, i);
-                    renderer->texture_slots[i] = texture->id;
+                    renderer->texture_slots[i] = texture->handle;
                     texture_index = i;
                     break;
                 }

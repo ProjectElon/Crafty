@@ -4,6 +4,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#include "renderer/opengl_renderer.h"
+
 namespace minecraft {
 
     static void on_framebuffer_resize(GLFWwindow *window, i32 width, i32 height)

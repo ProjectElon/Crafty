@@ -23,19 +23,23 @@ namespace minecraft {
 
     struct Memory_Arena
     {
-        u8 *base;
-        u64 size;
-        u64 allocated;
+        u8  *base;
+        u64  size;
+        u64  allocated;
+        bool is_temporarily_used;
     };
 
     Memory_Arena create_memory_arena(void *base, u64 size);
+    Memory_Arena push_sub_arena(Memory_Arena *arena, u64 size);
+    Memory_Arena push_sub_arena_zero(Memory_Arena *arena, u64 size);
+
     void reset_memory_arena(Memory_Arena *arena);
 
-    void* arena_allocate(Memory_Arena *arena, u64 size);
-    void* arena_allocate_aligned(Memory_Arena *arena, u64 size, u64 alignment);
+    void* arena_allocate(Memory_Arena *arena, u64 size, bool temprary = false);
+    void* arena_allocate_aligned(Memory_Arena *arena, u64 size, u64 alignment, bool temprary = false);
 
-    void* arena_allocate_zero(Memory_Arena *arena, u64 size);
-    void* arena_allocate_aligned_zero(Memory_Arena *arena, u64 size, u64 alignment);
+    void* arena_allocate_zero(Memory_Arena *arena, u64 size, bool temprary = false);
+    void* arena_allocate_aligned_zero(Memory_Arena *arena, u64 size, u64 alignment, bool temprary = false);
 
     struct Temprary_Memory_Arena
     {
@@ -53,6 +57,6 @@ namespace minecraft {
     void* arena_allocate_aligned_zero(Temprary_Memory_Arena *arena, u64 size, u64 alignment);
 
     // todo(harlequin): right know we are doing aligned alloctions only
-    void* begin_array(Memory_Arena *arena, u64 size, u64 alignment);
+    void* begin_array(Memory_Arena *arena, u64 size, u64 alignment, bool temprary = false);
     u64 end_array(Memory_Arena *arena, u8 *array, u64 size);
 }

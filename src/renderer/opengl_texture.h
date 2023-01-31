@@ -6,9 +6,9 @@ namespace minecraft {
 
     enum TextureFormat : u8
     {
-        TextureFormat_RGB,
-        TextureFormat_RGBA,
-        TextureFormat_Red,
+        TextureFormat_RGB8,
+        TextureFormat_RGBA8,
+        TextureFormat_R8,
         TextureFormat_RGBA16F,
         TextureFormat_Depth24,
         TextureFormat_Stencil8,
@@ -35,7 +35,7 @@ namespace minecraft {
 
     struct Opengl_Texture
     {
-        u32           id;
+        u32           handle;
         u32           width;
         u32           height;
         TextureFormat format;

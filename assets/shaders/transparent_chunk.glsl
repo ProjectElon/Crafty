@@ -2,9 +2,9 @@
 
 #version 450 core
 
-layout (location = 0) in uint  in_data0;
-layout (location = 1) in uint  in_data1;
-layout (location = 2) in ivec2 in_instance_chunk_coords;
+layout (location = 0) in uint  in_packed_vertex_attributes0;
+layout (location = 1) in uint  in_packed_vertex_attributes1;
+layout (location = 2) in ivec2 in_chunk_coords;
 
 out vec2 a_uv;
 out flat int a_texture_id;
@@ -73,16 +73,16 @@ uniform sampler2DArray u_block_array_texture;
 
 void main()
 {
-    uint block_x = in_data0 & BLOCK_X_MASK;
-    uint block_y = (in_data0 >> 4) & BLOCK_Y_MASK;
-    uint block_z = (in_data0 >> 12) & BLOCK_Z_MASK;
+    uint block_x = in_packed_vertex_attributes0 & BLOCK_X_MASK;
+    uint block_y = (in_packed_vertex_attributes0 >> 4) & BLOCK_Y_MASK;
+    uint block_z = (in_packed_vertex_attributes0 >> 12) & BLOCK_Z_MASK;
     vec3 block_coords = vec3(block_x, block_y, block_z);
-    uint local_position_id = (in_data0 >> 16) & LOCAL_POSITION_ID_MASK;
-    uint face_id = (in_data0 >> 19) & FACE_ID_MASK;
-    uint face_corner_id = (in_data0 >> 22) & FACE_CORNER_ID_MASK;
-    uint flags = in_data0 >> 24;
+    uint local_position_id = (in_packed_vertex_attributes0 >> 16) & LOCAL_POSITION_ID_MASK;
+    uint face_id = (in_packed_vertex_attributes0 >> 19) & FACE_ID_MASK;
+    uint face_corner_id = (in_packed_vertex_attributes0 >> 22) & FACE_CORNER_ID_MASK;
+    uint flags = in_packed_vertex_attributes0 >> 24;
 
-    vec3 position = vec3(in_instance_chunk_coords.x * CHUNK_WIDTH, 0.0f, in_instance_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
+    vec3 position = vec3(in_chunk_coords.x * CHUNK_WIDTH, 0.0f, in_chunk_coords.y * CHUNK_DEPTH) + block_coords + local_positions[local_position_id] + vec3(0.5f, 0.5f, 0.5f);
     if ((flags & BlockFlags_Is_Solid) == 0)
     {
         position.y -= 0.05f;
@@ -93,16 +93,16 @@ void main()
     a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
     a_uv         = uv_look_up[face_corner_id];
-    a_texture_id = int(in_data1 >> 10);
+    a_texture_id = int(in_packed_vertex_attributes1 >> 10);
 
-    float sky_light_level = float(in_data1 & SKY_LIGHT_LEVEL_MASK);
+    float sky_light_level = float(in_packed_vertex_attributes1 & SKY_LIGHT_LEVEL_MASK);
     float sky_light_factor = u_sky_light_level - 15.0f;
     float sky_light = max(sky_light_level + sky_light_factor, 1.0f);
-    float light_source = float((in_data1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
+    float light_source = float((in_packed_vertex_attributes1 >> 4) & LIGHT_SOURCE_LEVEL_MASK);
 
     a_light_level = float(max(sky_light, light_source)) / 15.0f;
     float ambient_factor = 0.5f + a_light_level * 1.5f;
-    float ambient_occlusion = (float((in_data1 >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK) + ambient_factor) / (3.0f + ambient_factor);
+    float ambient_occlusion = (float((in_packed_vertex_attributes1 >> 8) & AMBIENT_OCCLUSION_LEVEL_MASK) + ambient_factor) / (3.0f + ambient_factor);
 
     if ((flags & BlockFlags_Is_Light_Source) == 0)
     {
@@ -146,8 +146,8 @@ void main()
     if (u_highlighted_block_coords.x == block_x &&
         u_highlighted_block_coords.y == block_y &&
         u_highlighted_block_coords.z == block_z &&
-        u_highlighted_block_chunk_coords.x == in_instance_chunk_coords.x &&
-        u_highlighted_block_chunk_coords.y == in_instance_chunk_coords.y)
+        u_highlighted_block_chunk_coords.x == in_chunk_coords.x &&
+        u_highlighted_block_chunk_coords.y == in_chunk_coords.y)
     {
         a_highlight_color = vec4(0.5f, 0.5f, 0.5f, 1.0f);
     }

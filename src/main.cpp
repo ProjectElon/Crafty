@@ -5,7 +5,7 @@ int main()
     using namespace minecraft;
 
     Game_Memory game_memory = {};
-    game_memory.permanent_memory_size = MegaBytes(64);
+    game_memory.permanent_memory_size = MegaBytes(256);
     game_memory.permanent_memory      = malloc(game_memory.permanent_memory_size);
 
     if (!game_memory.permanent_memory)
