@@ -34,7 +34,7 @@ namespace minecraft {
     {
         Event_Registry &registry = event_system->registry[event_type];
 
-        for (i32 i = 0; i < registry.entry_count; i++)
+        for (u32 i = 0; i < registry.entry_count; i++)
         {
             Event_Entry &entry = registry.entries[i];
             if (entry.sender == sender && entry.on_event == on_event)
@@ -364,6 +364,13 @@ namespace minecraft {
                         mouse_x, mouse_y);
                 return internal_string_buffer;
             } break;
+
+            default:
+            {
+                return "";
+            } break;
         }
+
+        return "";
     }
 }

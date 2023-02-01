@@ -25,10 +25,7 @@ namespace minecraft {
         state = ArenaPushAlignedZero(arena, Console_Commands_State);
         Assert(state);
 
-        u8 *console_commands_memory = ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1));
-        Assert(console_commands_memory);
-
-        state->arena = create_memory_arena(console_commands_memory, MegaBytes(1));
+        state->arena = push_sub_arena_zero(arena, MegaBytes(1));
 
         return true;
     }

@@ -65,9 +65,9 @@ namespace minecraft {
     {
 
         console->state              = ConsoleState_Closed;
-        console->string_input_arena = create_memory_arena(ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1)), MegaBytes(1));
-        console->string_arena       = create_memory_arena(ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1)), MegaBytes(1));
-        console->line_arena         = create_memory_arena(ArenaPushArrayAlignedZero(arena, u8, MegaBytes(1)), MegaBytes(1));
+        console->string_input_arena = push_sub_arena_zero(arena, MegaBytes(1));
+        console->string_arena       = push_sub_arena_zero(arena, MegaBytes(1));
+        console->line_arena         = push_sub_arena_zero(arena, MegaBytes(1));
         console->font               = font;
         console->push_line_mutex    = new std::mutex();
 

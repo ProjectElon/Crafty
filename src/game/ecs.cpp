@@ -59,7 +59,7 @@ namespace minecraft {
         u32 entity_index = this->free_entities.back();
         free_entities.pop_back();
         Entity_Info& info = this->entities[entity_index];
-        Entity entity = make_entity(entity_index, info.generation);
+        Entity entity = MakeEntity(entity_index, info.generation);
 
         info.tag = tag;
         info.archetype = archetype;
@@ -87,7 +87,7 @@ namespace minecraft {
         info.generation++;
         info.mask.reset();
 
-        u32 index = get_entity_index(entity);
+        u32 index = GetEntityIndex(entity);
         free_entities.emplace_back(index);
     }
 
@@ -96,11 +96,11 @@ namespace minecraft {
         auto it = this->tagged_entities.find(tag);
         if (it == this->tagged_entities.end())
         {
-            return make_entity(this->entities.size(), 0);
+            Entity entity = MakeEntity(this->entities.size(), 0);
+            return entity;
         }
-        u32 entity_index  = (u32)it->second;
-        Entity_Info& info = this->entities[entity_index];
-        return make_entity(entity_index, info.generation);
+        Entity entity = it->second;
+        return entity;
     }
 
     ECS_Data ECS::internal_data;

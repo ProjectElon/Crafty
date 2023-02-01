@@ -82,10 +82,10 @@ namespace minecraft {
                                                  Chunk *chunk,
                                                  u32 sub_chunk_index);
 
-    bool opengl_renderer_recreate_frame_buffers();
+    bool opengl_renderer_resize_frame_buffers(u32 width, u32 height);
 
     glm::vec2 opengl_renderer_get_frame_buffer_size();
-    const Opengl_Renderer_Stats *opengl_renderer_get_stats();
+    const Opengl_Renderer_Stats* opengl_renderer_get_stats();
     i64 opengl_renderer_get_free_chunk_bucket_count();
 
     void opengl_renderer_set_is_fxaa_enabled(bool enabled);

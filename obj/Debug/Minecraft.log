@@ -1,6 +1,18 @@
-﻿  opengl_renderer.cpp
-C:\dev\cpp\Crafty\src\game\ecs.h(160,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\game\ecs.h(178,1): warning C4293: '<<': shift count negative or too big, undefined behavior
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(101,34): warning C4244: '=': conversion from 'i64' to 'u32', possible loss of data
-C:\dev\cpp\Crafty\src\renderer\opengl_renderer.cpp(453,44): warning C4267: 'argument': conversion from 'size_t' to 'u32', possible loss of data
+﻿  event.cpp
+  input.cpp
+  platform.cpp
+  Inventory.cpp
+  ecs.cpp
+  game.cpp
+  game_console_commands.cpp
+  jobs.cpp
+  physics.cpp
+  profiler.cpp
+  visual_debugging.cpp
+  world.cpp
+  main.cpp
+  opengl_2d_renderer.cpp
+  opengl_debug_renderer.cpp
+  opengl_renderer.cpp
+  dropdown_console.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

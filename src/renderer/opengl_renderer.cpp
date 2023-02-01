@@ -98,7 +98,7 @@ namespace minecraft {
         command->firstIndex    = 0;
         command->instanceCount = 1;
         command->baseVertex    = bucket->memory_id * World::sub_chunk_bucket_vertex_count;
-        command->baseInstance  = instance_memory_id;
+        command->baseInstance  = (u32)instance_memory_id;
     }
 
     static void draw_commands(Command_Buffer *command_buffer)
@@ -116,18 +116,8 @@ namespace minecraft {
     {
         glm::vec2 frame_buffer_size;
 
-#if 0
-        u32 opaque_frame_buffer_id;
-        u32 opaque_frame_buffer_color_texture_id;
-        u32 opaque_frame_buffer_depth_texture_id;
-
-        u32 transparent_frame_buffer_id;
-        u32 transparent_frame_buffer_accum_texture_id;
-        u32 transparent_frame_buffer_reveal_texture_id;
-#else
         Opengl_Frame_Buffer opaque_frame_buffer;
         Opengl_Frame_Buffer transparent_frame_buffer;
-#endif
 
         Opengl_Vertex_Array chunk_vertex_array;
         Opengl_Vertex_Array screen_quad_vertex_array;
@@ -209,11 +199,6 @@ namespace minecraft {
 
         Opengl_Texture *texture = push_color_attachment(&opaque_frame_buffer, TextureFormat_RGBA16F, arena);
 
-        glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         push_depth_render_buffer_attachment(&opaque_frame_buffer, TextureFormat_Depth24);
 
         bool success = end_frame_buffer(&opaque_frame_buffer);
@@ -229,17 +214,7 @@ namespace minecraft {
 
         texture = push_color_attachment(&transparent_frame_buffer, TextureFormat_RGBA16F, arena);
 
-        glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
         texture = push_color_attachment(&transparent_frame_buffer, TextureFormat_R8, arena);
-
-        glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
         push_depth_attachment_ref(&transparent_frame_buffer,
                                   &renderer->opaque_frame_buffer.depth_attachment_render_buffer);
@@ -377,24 +352,6 @@ namespace minecraft {
 
         renderer->frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
 
-#if 0
-        renderer->opaque_frame_buffer_id = 0;
-        renderer->opaque_frame_buffer_color_texture_id = 0;
-        renderer->opaque_frame_buffer_depth_texture_id = 0;
-
-        renderer->transparent_frame_buffer_id = 0;
-        renderer->transparent_frame_buffer_accum_texture_id = 0;
-        renderer->transparent_frame_buffer_reveal_texture_id = 0;
-
-        bool success = opengl_renderer_recreate_frame_buffers();
-
-        if (!success)
-        {
-            return false;
-        }
-#else
-#endif
-
         // todo(harlequin): temprary
         temp_arena = begin_temprary_memory_arena(arena);
         u8 *magenta_block_texture = ArenaPushArrayAligned(&temp_arena, u8, 32 * 32 * 4);
@@ -448,7 +405,7 @@ namespace minecraft {
         initialize_array_texture(&renderer->block_array_texture,
                                  32,
                                  32,
-                                 paths.size(),
+                                 (u32)paths.size(),
                                  TextureFormat_RGBA8,
                                  mipmapping);
 
@@ -481,8 +438,6 @@ namespace minecraft {
 
         generate_mipmaps(&renderer->block_array_texture);
         end_temprary_memory_arena(&temp_arena);
-
-        renderer->enable_fxaa = true;
 
         return true;
     }
@@ -526,7 +481,7 @@ namespace minecraft {
             return true;
         }
         renderer->frame_buffer_size = { (f32)width, (f32)height };
-        opengl_renderer_recreate_frame_buffers();
+        opengl_renderer_resize_frame_buffers(width, height);
         return false;
     }
 
@@ -1654,19 +1609,10 @@ namespace minecraft {
         glDepthMask(GL_TRUE);
         glDisable(GL_BLEND);
 
-#if 0
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer->opaque_frame_buffer_id);
-        glViewport(0, 0, width, height);
-        glClearColor(clear_color.r, clear_color.g, clear_color.b, clear_color.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-#else
         Opengl_Frame_Buffer *opaque_frame_buffer = &renderer->opaque_frame_buffer;
         bind_frame_buffer(opaque_frame_buffer);
-
-        float depth = 1.0f;
-        glClearNamedFramebufferfv(opaque_frame_buffer->handle, GL_COLOR, 0, glm::value_ptr(clear_color));
-        glClearNamedFramebufferfv(opaque_frame_buffer->handle, GL_DEPTH, 0, &depth);
-#endif
+        clear_color_attachment(opaque_frame_buffer, 0, glm::value_ptr(clear_color));
+        clear_depth_attachment(opaque_frame_buffer, 1.0f);
 
         bind_shader(opaque_shader);
         set_uniform_f32(opaque_shader, "u_one_over_chunk_radius", 1.0f / (chunk_radius * 16.0f));
@@ -1707,22 +1653,12 @@ namespace minecraft {
         glBlendFunci(1, GL_ZERO, GL_ONE_MINUS_SRC_COLOR);
         glBlendEquation(GL_FUNC_ADD);
 
-#if 0
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer->transparent_frame_buffer_id);
-        glViewport(0, 0, width, height);
-        glm::vec4 zeros = { 0.0f, 0.0f, 0.0f, 0.0f };
-        glClearBufferfv(GL_COLOR, 0, glm::value_ptr(zeros));
-
-        glm::vec4 ones = { 1.0f, 1.0f, 1.0f, 1.0f };
-        glClearBufferfv(GL_COLOR, 1, glm::value_ptr(ones));
-#else
         glm::vec4 zeros = { 0.0f, 0.0f, 0.0f, 0.0f };
         glm::vec4 ones  = { 1.0f, 1.0f, 1.0f, 1.0f };
         Opengl_Frame_Buffer *transparent_frame_buffer = &renderer->transparent_frame_buffer;
         bind_frame_buffer(transparent_frame_buffer);
-        glClearNamedFramebufferfv(transparent_frame_buffer->handle, GL_COLOR, 0, glm::value_ptr(zeros));
-        glClearNamedFramebufferfv(transparent_frame_buffer->handle, GL_COLOR, 1, glm::value_ptr(ones));
-#endif
+        clear_color_attachment(transparent_frame_buffer, 0, glm::value_ptr(zeros));
+        clear_color_attachment(transparent_frame_buffer, 1, glm::value_ptr(ones));
 
         bind_shader(transparent_shader);
         set_uniform_f32(transparent_shader, "u_one_over_chunk_radius", 1.0f / (chunk_radius * 16.0f));
@@ -1761,27 +1697,17 @@ namespace minecraft {
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-#if 0
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer->opaque_frame_buffer_id);
-        glViewport(0, 0, width, height);
-#else
+
         bind_frame_buffer(opaque_frame_buffer);
-#endif
+
         bind_shader(composite_shader);
         set_uniform_i32(composite_shader, "u_accum",  2);
         set_uniform_i32(composite_shader, "u_reveal", 3);
-#if 0
-        glActiveTexture(GL_TEXTURE2);
-        glBindTexture(GL_TEXTURE_2D,renderer->transparent_frame_buffer_accum_texture_id);
 
-        glActiveTexture(GL_TEXTURE3);
-        glBindTexture(GL_TEXTURE_2D, renderer->transparent_frame_buffer_reveal_texture_id);
-#else
         Opengl_Texture *accum_texture  = &transparent_frame_buffer->color_attachments[0];
         Opengl_Texture *reveal_texture = &transparent_frame_buffer->color_attachments[1];
         bind_texture(accum_texture, 2);
         bind_texture(reveal_texture, 3);
-#endif
 
         bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -1795,6 +1721,7 @@ namespace minecraft {
         glDisable(GL_DEPTH_TEST);
         glDepthMask(GL_TRUE);
 
+        // todo(harlequin): default frame buffer abstraction
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClearColor(zeros.r, zeros.g, zeros.b, zeros.a);
@@ -1807,14 +1734,8 @@ namespace minecraft {
                          renderer->frame_buffer_size.y);
         set_uniform_i32(screen_shader,  "u_screen", 4);
 
-#if 0
-        glActiveTexture(GL_TEXTURE4);
-        glBindTexture(GL_TEXTURE_2D, renderer->opaque_frame_buffer_color_texture_id);
-#else
-
         Opengl_Texture *screen_texture = &renderer->opaque_frame_buffer.color_attachments[0];
         bind_texture(screen_texture, 4);
-#endif
 
         bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -1825,112 +1746,20 @@ namespace minecraft {
         Platform::opengl_swap_buffers(window);
     }
 
-    bool opengl_renderer_recreate_frame_buffers()
+    bool opengl_renderer_resize_frame_buffers(u32 width, u32 height)
     {
-    #if 0
-        i32 width  = (i32)renderer->frame_buffer_size.x;
-        i32 height = (i32)renderer->frame_buffer_size.y;
-
-        if (renderer->opaque_frame_buffer_id)
-        {
-            glDeleteTextures(1,      &renderer->opaque_frame_buffer_color_texture_id);
-            glDeleteRenderbuffers(1, &renderer->opaque_frame_buffer_depth_texture_id);
-            glDeleteFramebuffers(1,  &renderer->opaque_frame_buffer_id);
-
-            renderer->opaque_frame_buffer_color_texture_id = 0;
-            renderer->opaque_frame_buffer_depth_texture_id = 0;
-            renderer->opaque_frame_buffer_id               = 0;
-        }
-
-        if (renderer->transparent_frame_buffer_id)
-        {
-            glDeleteTextures(1, &renderer->transparent_frame_buffer_accum_texture_id);
-            glDeleteTextures(1, &renderer->transparent_frame_buffer_reveal_texture_id);
-            glDeleteFramebuffers(1, &renderer->transparent_frame_buffer_id);
-            renderer->transparent_frame_buffer_accum_texture_id  = 0;
-            renderer->transparent_frame_buffer_reveal_texture_id = 0;
-            renderer->transparent_frame_buffer_id                = 0;
-        }
-
-        glGenFramebuffers(1, &renderer->opaque_frame_buffer_id);
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer->opaque_frame_buffer_id);
-
-        glGenTextures(1, &renderer->opaque_frame_buffer_color_texture_id);
-        glBindTexture(GL_TEXTURE_2D, renderer->opaque_frame_buffer_color_texture_id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glGenRenderbuffers(1, &renderer->opaque_frame_buffer_depth_texture_id);
-        glBindRenderbuffer(GL_RENDERBUFFER, renderer->opaque_frame_buffer_depth_texture_id);
-        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-        glBindRenderbuffer(GL_RENDERBUFFER, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderer->opaque_frame_buffer_color_texture_id, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderer->opaque_frame_buffer_depth_texture_id);
-
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        {
-            fprintf(stderr, "[ERROR]: failed to create opaque frame buffer\n");
-            return false;
-        }
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // transparent frame buffer
-        glGenFramebuffers(1, &renderer->transparent_frame_buffer_id);
-        glBindFramebuffer(GL_FRAMEBUFFER, renderer->transparent_frame_buffer_id);
-
-        glGenTextures(1, &renderer->transparent_frame_buffer_accum_texture_id);
-        glBindTexture(GL_TEXTURE_2D, renderer->transparent_frame_buffer_accum_texture_id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, width, height, 0, GL_RGBA, GL_HALF_FLOAT, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glGenTextures(1, &renderer->transparent_frame_buffer_reveal_texture_id);
-        glBindTexture(GL_TEXTURE_2D, renderer->transparent_frame_buffer_reveal_texture_id);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_FLOAT, 0);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderer->transparent_frame_buffer_accum_texture_id, 0);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, renderer->transparent_frame_buffer_reveal_texture_id, 0);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderer->opaque_frame_buffer_depth_texture_id);
-
-        const GLenum transparent_draw_buffers[] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
-        glDrawBuffers(2, transparent_draw_buffers);
-
-        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        {
-            fprintf(stderr, "[ERROR]: failed to create transparent frame buffer\n");
-            return false;
-        }
-
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    #else
-        u32 width  = (u32)renderer->frame_buffer_size.x;
-        u32 height = (u32)renderer->frame_buffer_size.y;
-
         bool success = resize_frame_buffer(&renderer->opaque_frame_buffer, width, height);
         if (!success)
         {
             return false;
         }
+
         success = resize_frame_buffer(&renderer->transparent_frame_buffer, width, height);
         if (!success)
         {
             return false;
         }
-    #endif
+
         return true;
     }
 

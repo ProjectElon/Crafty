@@ -167,6 +167,8 @@ namespace minecraft {
             case CollisionFace_Bottom:
                 return 1;
         }
+
+        return 0;
     }
 
     static void get_quadrant_result(const Transform& t0,

@@ -7,6 +7,18 @@
 
 namespace minecraft {
 
+    enum TextureWrapMode : u32
+    {
+        TextureWrapMode_Repeat = GL_REPEAT,
+        TextureWrapMode_Clamp  = GL_CLAMP_TO_EDGE
+    };
+
+    enum TextureFilterMode : u32
+    {
+        TextureFilterMode_Nearest = GL_NEAREST,
+        TextureFilterMode_Linear  = GL_LINEAR,
+    };
+
     bool initialize_texture(Opengl_Texture *texture,
                             u8             *data,
                             u32             width,
@@ -17,13 +29,13 @@ namespace minecraft {
         texture->width  = width;
         texture->height = height;
         texture->format = format;
+        texture->usage  = usage;
 
         glCreateTextures(GL_TEXTURE_2D, 1, &texture->handle);
         Assert(texture->handle);
 
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        set_texture_usage(texture, usage);
+        set_texture_wrap(texture, TextureWrapMode_Clamp, TextureWrapMode_Clamp);
+        set_texture_params_based_on_usage(texture, usage);
 
         i32 internal_format = texture_format_to_opengl_internal_format(format);
         i32 texture_format  = texture_format_to_opengl_texture_format(format);
@@ -105,49 +117,95 @@ namespace minecraft {
         return success;
     }
 
-    void free_texture(Opengl_Texture *texture)
-    {
-        glDeleteTextures(1, &texture->handle);
-        texture->handle = 0;
-    }
-
-    void set_texture_usage(Opengl_Texture *texture, TextureUsage usage)
+    void set_texture_params_based_on_usage(Opengl_Texture *texture, TextureUsage usage)
     {
         texture->usage = usage;
 
         switch (usage)
         {
+            case TextureUsage_None:
+            {
+                set_texture_filtering(texture, TextureFilterMode_Linear, TextureFilterMode_Nearest);
+            } break;
+
             case TextureUsage_SpriteSheet:
             {
-                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                set_texture_filtering(texture, TextureFilterMode_Nearest, TextureFilterMode_Nearest);
             } break;
 
             case TextureUsage_UI:
             {
-                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                set_texture_filtering(texture, TextureFilterMode_Nearest, TextureFilterMode_Linear);
             } break;
 
             case TextureUsage_Font:
             {
-                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                set_texture_filtering(texture, TextureFilterMode_Linear, TextureFilterMode_Linear);
             }
             break;
 
             case TextureUsage_ColorAttachment:
             case TextureUsage_DepthAttachment:
             {
-                glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-                glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                set_texture_filtering(texture, TextureFilterMode_Nearest, TextureFilterMode_Nearest);
             } break;
         }
+    }
+
+    void free_texture(Opengl_Texture *texture)
+    {
+        glDeleteTextures(1, &texture->handle);
+        texture->handle = 0;
     }
 
     void bind_texture(Opengl_Texture *texture, u32 texture_slot)
     {
         glBindTextureUnit(texture_slot, texture->handle);
+    }
+
+    void set_texture_wrap_x(Opengl_Texture *texture, TextureWrapMode wrap_mode)
+    {
+        texture->wrap_mode_x = wrap_mode;
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, wrap_mode);
+    }
+
+    void set_texture_wrap_y(Opengl_Texture *texture,
+                            TextureWrapMode wrap_mode)
+    {
+        texture->wrap_mode_y = wrap_mode;
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, wrap_mode);
+    }
+
+    void set_texture_wrap(Opengl_Texture *texture,
+                          TextureWrapMode wrap_mode_x,
+                          TextureWrapMode wrap_mode_y)
+    {
+        texture->wrap_mode_x = wrap_mode_x;
+        texture->wrap_mode_y = wrap_mode_y;
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_S, wrap_mode_x);
+        glTextureParameteri(texture->handle, GL_TEXTURE_WRAP_T, wrap_mode_y);
+    }
+
+    void set_texture_min_filtering(Opengl_Texture *texture, TextureFilterMode filter)
+    {
+        texture->min_filter = filter;
+        glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, filter);
+    }
+
+    void set_texture_mag_filtering(Opengl_Texture *texture, TextureFilterMode filter)
+    {
+        texture->mag_filter = filter;
+        glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, filter);
+    }
+
+    void set_texture_filtering(Opengl_Texture   *texture,
+                               TextureFilterMode min_filter,
+                               TextureFilterMode mag_filter)
+    {
+        texture->min_filter = min_filter;
+        texture->mag_filter = mag_filter;
+        glTextureParameteri(texture->handle, GL_TEXTURE_MIN_FILTER, min_filter);
+        glTextureParameteri(texture->handle, GL_TEXTURE_MAG_FILTER, mag_filter);
     }
 
     u32 texture_format_to_opengl_texture_format(TextureFormat format)
@@ -231,7 +289,6 @@ namespace minecraft {
             {
                 Assert(false && "unsupported internal format");
             } break;
-
         }
 
         return 0;

@@ -49,9 +49,9 @@ namespace minecraft {
 
     typedef u64 Entity;
 
-    #define make_entity(index, generation) (((u64)((index) << 32)) | (u64)(generation))
-    #define get_entity_index(entity) (u32)((entity) >> 32)
-    #define get_entity_generation(entity) (u32)(entity)
+    #define MakeEntity(index, generation) (((u64)(index) << 32) | (u64)generation)
+    #define GetEntityIndex(entity) (u32)((entity) >> 32)
+    #define GetEntityGeneration(entity) (u32)(entity)
 
     struct Entity_Info
     {
@@ -77,9 +77,9 @@ namespace minecraft {
 
         inline bool is_entity_valid(Entity entity)
         {
-            u32 index = get_entity_index(entity);
+            u32 index = GetEntityIndex(entity);
             if (index < 0 || index >= max_entity_count) return false;
-            u32 generation = get_entity_generation(entity);
+            u32 generation = GetEntityGeneration(entity);
             Entity_Info& info = this->entities[index];
             return info.generation == generation;
         }
@@ -97,10 +97,10 @@ namespace minecraft {
                 pool.allocate(sizeof(T), max_entity_count);
             }
 
-            T* component = (T*)pool.get(entity);
+            T* component = (T*)pool.get((u32)entity);
             memset(component, 0, sizeof(T));
 
-            Entity_Info& info = this->entities[get_entity_index(entity)];
+            Entity_Info& info = this->entities[GetEntityIndex(entity)];
             info.mask.set(component_id);
 
             return component;
@@ -110,13 +110,13 @@ namespace minecraft {
         T* get_component(Entity entity)
         {
             u32 component_id = get_component_id< T >();
-            Entity_Info& info = entities[get_entity_index(entity)];
+            Entity_Info& info = entities[GetEntityIndex(entity)];
             if (!info.mask[component_id])
             {
                 return nullptr;
             }
             auto& pool = component_pools[component_id];
-            T* component = (T*)pool.get(entity);
+            T* component = (T*)pool.get((u32)entity);
             return component;
         }
 
@@ -130,7 +130,7 @@ namespace minecraft {
         void remove_component(Entity entity)
         {
             u32 component_id = get_component_id< T >();
-            u32 index = get_entity_index(entity);
+            u32 index = GetEntityIndex(entity);
             Entity_Info& info = entities[index];
             info.mask.reset(component_id);
         }
@@ -157,17 +157,17 @@ namespace minecraft {
                 ++current_entity_index;
             }
 
-            return current_entity_index == this->registry->entities.size() ? end() : make_entity(current_entity_index, this->registry->entities[current_entity_index].generation);
+            return current_entity_index == this->registry->entities.size() ? end() : MakeEntity(current_entity_index, this->registry->entities[current_entity_index].generation);
         }
 
         inline Entity end()
         {
-            return make_entity(this->registry->entities.size(), 0);
+            return MakeEntity(this->registry->entities.size(), 0);
         }
 
         inline Entity next(Entity entity)
         {
-            u32 current_entity_index = get_entity_index(entity);
+            u32 current_entity_index = GetEntityIndex(entity);
 
             do
             {
@@ -175,7 +175,7 @@ namespace minecraft {
             }
             while (current_entity_index < this->registry->entities.size() && !is_valid(current_entity_index));
 
-            return current_entity_index == this->registry->entities.size() ? end() : make_entity(current_entity_index, this->registry->entities[current_entity_index].generation);
+            return current_entity_index == this->registry->entities.size() ? end() : MakeEntity(current_entity_index, this->registry->entities[current_entity_index].generation);
         }
     };
 

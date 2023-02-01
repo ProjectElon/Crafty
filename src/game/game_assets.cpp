@@ -33,9 +33,7 @@ namespace minecraft {
         state = ArenaPushAlignedZero(arena, Game_Assets_State);
         Assert(state);
 
-        u64 asset_arena_size   = MegaBytes(64);
-        u8 *asset_arena_memory = ArenaPushArrayAlignedZero(arena, u8, asset_arena_size);
-        state->asset_arena     = create_memory_arena(asset_arena_memory, asset_arena_size);
+        state->asset_arena = push_sub_arena(arena, MegaBytes(64));
 
         String8 texture_extensions[] = {
             String8FromCString("png")
@@ -154,19 +152,19 @@ namespace minecraft {
     {
         assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
         Opengl_Texture *block_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
-        set_texture_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
+        set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(&assets->hud_sprite);
-        set_texture_usage(hud_sprite_texture, TextureUsage_UI);
+        set_texture_params_based_on_usage(hud_sprite_texture, TextureUsage_UI);
 
         assets->gameplay_crosshair  = load_asset(String8FromCString("../assets/textures/crosshair/crosshair001.png"));
         Opengl_Texture *gameplay_crosshair_texture = get_texture(&assets->gameplay_crosshair);
-        set_texture_usage(gameplay_crosshair_texture, TextureUsage_UI);
+        set_texture_params_based_on_usage(gameplay_crosshair_texture, TextureUsage_UI);
 
         assets->inventory_crosshair = load_asset(String8FromCString("../assets/textures/crosshair/crosshair022.png"));
         Opengl_Texture *inventory_crosshair_texture = get_texture(&assets->inventory_crosshair);
-        set_texture_usage(inventory_crosshair_texture, TextureUsage_UI);
+        set_texture_params_based_on_usage(inventory_crosshair_texture, TextureUsage_UI);
 
         assets->basic_shader = load_asset(String8FromCString("../assets/shaders/basic.glsl"));
         assets->block_shader = load_asset(String8FromCString("../assets/shaders/block.glsl"));

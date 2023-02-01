@@ -15,16 +15,23 @@ namespace minecraft {
     Memory_Arena push_sub_arena(Memory_Arena *arena, u64 size)
     {
         Memory_Arena sub_arena = {};
-        sub_arena.base         = ArenaPushArray(arena, u8, size);
+        sub_arena.base         = (u8*)arena_allocate(arena, size);
         sub_arena.size         = size;
+        sub_arena.allocated    = 0;
+        sub_arena.is_temporarily_used = false;
+
+        Assert(sub_arena.base);
         return sub_arena;
     }
 
     Memory_Arena push_sub_arena_zero(Memory_Arena *arena, u64 size)
     {
         Memory_Arena sub_arena = {};
-        sub_arena.base         = ArenaPushArrayZero(arena, u8, size);
+        sub_arena.base         = (u8*)arena_allocate_zero(arena, size);
         sub_arena.size         = size;
+        sub_arena.allocated    = 0;
+        sub_arena.is_temporarily_used = false;
+        Assert(sub_arena.base);
         return sub_arena;
     }
 
