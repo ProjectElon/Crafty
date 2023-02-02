@@ -719,7 +719,7 @@ enum Texture_Id : uint16_t
 	Texture_Id_water_still = 696,
 	Texture_Id_water_flow = 697,
 };
-static Texture_Rect texture_rects[MC_PACKED_TEXTURE_COUNT] = 
+static Texture_Rect texture_rects[MC_PACKED_TEXTURE_COUNT] =
 {
 	{ 0, 0, 32, 32 },
 	{ 32, 0, 32, 32 },
@@ -1420,7 +1420,7 @@ static Texture_Rect texture_rects[MC_PACKED_TEXTURE_COUNT] =
 	{ 672, 928, 32, 1024 },
 	{ 704, 928, 64, 2048 },
 };
-static UV_Rect texture_uv_rects[MC_PACKED_TEXTURE_COUNT] = 
+static UV_Rect texture_uv_rects[MC_PACKED_TEXTURE_COUNT] =
 {
 	{ { 0.0378698, 0.989247 }, { 0, 0.989247 }, { 0, 1 }, { 0.0378698, 1 } },
 	{ { 0.0757396, 0.989247 }, { 0.0378698, 0.989247 }, { 0.0378698, 1 }, { 0.0757396, 1 } },

@@ -101,7 +101,7 @@ namespace minecraft {
         bool is_aabb_visible(const AABB& aabb) const;
 
     private:
-        template<Planes i, Planes j>
+        template< Planes i, Planes j >
         struct ij2k
         {
             enum { k = i * (9 - i) / 2 + j - 1 };

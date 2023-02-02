@@ -647,7 +647,6 @@ namespace minecraft {
         }
 
         render_data.tessellated = false;
-
         opengl_renderer_upload_sub_chunk_to_gpu(world, chunk, sub_chunk_index);
 
         if (render_data.opaque_buckets[bucket_index].face_count == 0 && is_sub_chunk_bucket_allocated(&render_data.opaque_buckets[bucket_index]))

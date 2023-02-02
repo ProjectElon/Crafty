@@ -2,6 +2,7 @@
 #include "opengl_renderer.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
+#include "opengl_texture_atlas.h"
 #include "font.h"
 #include "memory/memory_arena.h"
 
@@ -252,6 +253,23 @@ namespace minecraft {
         top_left_position.y         = size.y - position.y;
 
         renderer->quad_instances[renderer->quad_count++] = { top_left_position, scale, rotation, color, texture_index, uv_scale, uv_offset };
+    }
+
+    void opengl_2d_renderer_push_quad(const glm::vec2      &position,
+                                      const glm::vec2      &scale,
+                                      f32                   rotation,
+                                      const glm::vec4      &color,
+                                      Opengl_Texture_Atlas *atlas,
+                                      u32                   sub_texture_index)
+    {
+        const Texture_Coords *coords = get_sub_texture_coords(atlas, sub_texture_index);
+        opengl_2d_renderer_push_quad(position,
+                                     scale,
+                                     rotation,
+                                     color,
+                                     atlas->texture,
+                                     coords->scale,
+                                     coords->offset);
     }
 
     void opengl_2d_renderer_push_string(Bitmap_Font *font,

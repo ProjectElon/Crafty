@@ -69,7 +69,8 @@ namespace minecraft {
         console->string_arena       = push_sub_arena_zero(arena, MegaBytes(1));
         console->line_arena         = push_sub_arena_zero(arena, MegaBytes(1));
         console->font               = font;
-        console->push_line_mutex    = new std::mutex();
+
+        new (&console->push_line_mutex) std::mutex;
 
         console->text_color       = text_color;
         console->background_color = background_color;
@@ -219,9 +220,9 @@ namespace minecraft {
                                                       bool is_command /*= false*/,
                                                       bool is_command_succeeded /*= false*/)
     {
-        console->push_line_mutex->lock();
+        console->push_line_mutex.lock();
         Dropdown_Console_Line_Info& line_info = push_line(console, line, is_command, is_command_succeeded);
-        console->push_line_mutex->unlock();
+        console->push_line_mutex.unlock();
         return line_info;
     }
 

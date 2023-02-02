@@ -29,9 +29,13 @@ namespace minecraft {
         inventory->is_dragging = false;
         inventory->dragging_slot_offset = { 0.0f, 0.0f };
 
-        inventory->font                  = (Bitmap_Font*)assets->noto_mono_font.data;
-        inventory->blocks_sprite_sheet   = (Opengl_Texture*)assets->blocks_sprite_sheet.data;
-        inventory->hud_sprite            = (Opengl_Texture*)assets->hud_sprite.data;
+        inventory->font                  = get_font(&assets->noto_mono_font);
+#if 0
+        inventory->blocks_sprite_sheet   = get_texture(&assets->blocks_sprite_sheet);
+#else
+        inventory->blocks_atlas          = &assets->blocks_atlas;
+#endif
+        inventory->hud_sprite            = get_texture(&assets->hud_sprite);
 
         f32 hud_sprite_width  = (f32)inventory->hud_sprite->width;
         f32 hud_sprite_height = (f32)inventory->hud_sprite->height;
@@ -281,6 +285,7 @@ namespace minecraft {
                 color = grass_color;
             }
 
+#if 0
             opengl_2d_renderer_push_quad(slot_pos + half_slot_size,
                                          slot_size,
                                          0.0f,
@@ -288,7 +293,14 @@ namespace minecraft {
                                          inventory->blocks_sprite_sheet,
                                          side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                          side_texture_uv_rect.bottom_left);
-
+#else
+            opengl_2d_renderer_push_quad(slot_pos + half_slot_size,
+                                         slot_size,
+                                         0.0f,
+                                         color,
+                                         inventory->blocks_atlas,
+                                         info.side_texture_id);
+#endif
             Bitmap_Font* font   = inventory->font;
             String8 slot_text   = push_string8(temp_arena, "%d", (u32)slot.count);
             glm::vec2 text_size = get_string_size(font, slot_text);
@@ -383,6 +395,7 @@ namespace minecraft {
                 UV_Rect& side_texture_uv_rect = texture_uv_rects[info.side_texture_id];
                 glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
+#if 0
                 opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
                                               { slot_width, slot_height },
                                               0.0f,
@@ -391,7 +404,14 @@ namespace minecraft {
                                               side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
                                               side_texture_uv_rect.bottom_left);
 
-
+#else
+                opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
+                                             { slot_width, slot_height },
+                                             0.0f,
+                                             color,
+                                             inventory->blocks_atlas,
+                                             info.side_texture_id);
+#endif
                 Bitmap_Font* font = inventory->font;
                 String8 slot_text = push_string8(temp_arena, "%d", (u32)slot.count);
                 auto text_size    = get_string_size(font, slot_text);

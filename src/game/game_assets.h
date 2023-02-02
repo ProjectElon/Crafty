@@ -3,11 +3,15 @@
 #include "core/common.h"
 #include "containers/string.h"
 
+// todo(harlequin): temprary
+#include "renderer/opengl_texture_atlas.h"
+
 namespace minecraft {
 
     struct Memory_Arena;
     struct Opengl_Texture;
     struct Opengl_Shader;
+    struct Opengl_Texture_Atlas;
     struct Bitmap_Font;
 
     enum GameAssetType : u32
@@ -47,6 +51,8 @@ namespace minecraft {
         Game_Asset hud_sprite;
         Game_Asset gameplay_crosshair;
         Game_Asset inventory_crosshair;
+
+        Opengl_Texture_Atlas blocks_atlas;
 
         Game_Asset basic_shader;
         Game_Asset block_shader;

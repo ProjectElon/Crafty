@@ -4,6 +4,9 @@
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
 
+// todo(harlequin): temprary
+#include "meta/spritesheet_meta.h"
+
 namespace minecraft {
 
     struct Game_Assets_State
@@ -153,6 +156,8 @@ namespace minecraft {
         assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
         Opengl_Texture *block_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
+
+        initialize_texture_atlas(&assets->blocks_atlas, block_sprite_sheet, MC_PACKED_TEXTURE_COUNT, (Rectangle2i*)texture_rects, &state->asset_arena);
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(&assets->hud_sprite);

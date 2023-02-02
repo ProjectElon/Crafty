@@ -17,9 +17,11 @@ namespace minecraft {
 
     struct Bitmap_Font;
     struct Opengl_Texture;
+    struct Opengl_Texture_Atlas;
     struct Input;
     struct World;
     struct Temprary_Memory_Arena;
+    struct Game_Assets;
 
     struct Inventory_Slot
     {
@@ -48,9 +50,13 @@ namespace minecraft {
         i32             dragging_slot_index;
         glm::vec2       dragging_slot_offset;
 
-        Bitmap_Font    *font;
-        Opengl_Texture *blocks_sprite_sheet;
-        Opengl_Texture *hud_sprite;
+        Bitmap_Font          *font;
+#if 0
+        Opengl_Texture       *blocks_sprite_sheet;
+#else
+        Opengl_Texture_Atlas *blocks_atlas;
+#endif
+        Opengl_Texture       *hud_sprite;
 
         UV_Rectangle    inventory_slot_uv_rect;
         UV_Rectangle    active_inventory_slot_uv_rect;
@@ -68,7 +74,7 @@ namespace minecraft {
     };
 
     bool initialize_inventory(Inventory          *inventory,
-                              struct Game_Assets *assets);
+                              Game_Assets *assets);
 
     void shutdown_inventory(Inventory *inventory, String8 path, Temprary_Memory_Arena *temp_arena);
 

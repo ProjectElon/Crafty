@@ -56,7 +56,6 @@ namespace minecraft {
     void* arena_allocate_zero(Temprary_Memory_Arena *arena, u64 size);
     void* arena_allocate_aligned_zero(Temprary_Memory_Arena *arena, u64 size, u64 alignment);
 
-    // todo(harlequin): right know we are doing aligned alloctions only
     void* begin_array(Memory_Arena *arena, u64 size, u64 alignment, bool temprary = false);
     u64 end_array(Memory_Arena *arena, u8 *array, u64 size);
 }

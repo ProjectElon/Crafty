@@ -21,7 +21,6 @@ typedef double   f64;
 
 #define ArrayCount(Array) sizeof(Array) / sizeof(*Array)
 
-// todo(harlequin): these are different units
 #define KiloBytes(X) (X) * (u64)1024
 #define MegaBytes(X) (X) * (u64)1024 * (u64)1024
 #define GigaBytes(X) (X) * (u64)1024 * (u64)1024 * (u64)1024

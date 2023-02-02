@@ -33,7 +33,7 @@ namespace minecraft {
         Memory_Arena string_arena;
         Memory_Arena line_arena;
 
-        std::mutex *push_line_mutex;
+        std::mutex push_line_mutex;
 
         ConsoleState state;
 
