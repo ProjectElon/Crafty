@@ -231,8 +231,8 @@ namespace minecraft {
         Chunk *neighbours[ChunkNeighbour_Count];
 
         std::atomic< ChunkState > state;
-        std::atomic< bool > pending_for_tessellation;
-        std::atomic< bool > tessellated;
+        std::atomic< bool >       pending_for_tessellation;
+        std::atomic< bool >       tessellated;
 
         Block blocks[CHUNK_HEIGHT * CHUNK_DEPTH * CHUNK_WIDTH];
         Block front_edge_blocks[CHUNK_HEIGHT * CHUNK_WIDTH];
@@ -304,12 +304,11 @@ namespace minecraft {
         Chunk_Node *next;
     };
 
-    #define INVALID_CHUNK_ENTRY -1
-
-    struct Chunk_Hash_Table_Entry
+    enum ChunkHashTableEntryState : u16
     {
-        glm::ivec2 chunk_coords;
-        i16        chunk_node_index;
+        ChunkHashTableEntryState_Empty    = 0x0,
+        ChunkHashTableEntryState_Deleted  = 0x1,
+        ChunkHashTableEntryState_Occupied = 0x2
     };
 
     struct World
@@ -345,8 +344,12 @@ namespace minecraft {
         Chunk_Node  chunk_nodes[chunk_capacity];
         Chunk_Node *first_free_chunk_node;
 
-        static constexpr i64   chunk_hash_table_capacity = chunk_capacity;
-        Chunk_Hash_Table_Entry chunk_hash_table[chunk_hash_table_capacity];
+        static constexpr u16 chunk_hash_table_entry_state_mask = 0xC000;
+        static constexpr u16 chunk_hash_table_entry_value_mask = 0x0FFF;
+
+        static constexpr i64 chunk_hash_table_capacity = chunk_capacity;
+        glm::ivec2           chunk_hash_table_keys[chunk_hash_table_capacity];
+        u16                  chunk_hash_table_values[chunk_hash_table_capacity];
 
         Update_Chunk_Job                        update_chunk_jobs_queue_data[DEFAULT_QUEUE_SIZE];
         Circular_FIFO_Queue< Update_Chunk_Job > update_chunk_jobs_queue;
@@ -357,6 +360,26 @@ namespace minecraft {
         Calculate_Chunk_Lighting_Job                        calculate_chunk_lighting_queue_data[DEFAULT_QUEUE_SIZE];
         Circular_FIFO_Queue< Calculate_Chunk_Lighting_Job > calculate_chunk_lighting_queue;
     };
+
+    inline ChunkHashTableEntryState get_entry_state(u16 entry)
+    {
+        return (ChunkHashTableEntryState)(entry >> 14);
+    }
+
+    inline void set_entry_state(u16 &entry, ChunkHashTableEntryState state)
+    {
+        entry = (entry & (~World::chunk_hash_table_entry_state_mask)) | (state << 14);
+    }
+
+    inline u16 get_entry_value(u16 entry)
+    {
+        return entry & World::chunk_hash_table_entry_value_mask;
+    }
+
+    inline void set_entry_value(u16 &entry, u16 value)
+    {
+        entry = (entry & (~World::chunk_hash_table_entry_value_mask)) | (value);
+    }
 
     bool initialize_world(World *world, String8 path, Temprary_Memory_Arena *temp_arena);
     void shutdown_world(World *world);
@@ -376,18 +399,21 @@ namespace minecraft {
     void free_chunk(World *world, Chunk *chunk);
 
     // todo(harlequin): hash function from https://carmencincotti.com/2022-10-31/spatial-hash-maps-part-one/
-    inline i64 get_chunk_hash(glm::ivec2 coords)
+    inline i64 get_chunk_hash(const glm::ivec2& coords)
     {
-        // return glm::abs((i64)coords.x | ((i64)coords.y << (i64)32)) % World::chunk_hash_table_capacity;
-        return glm::abs(((i64)coords.x * (i64)92837111) ^ ((i64)coords.y * (i64)689287499)) % World::chunk_hash_table_capacity;
+        // return glm::abs((i64)coords.x | ((i64)coords.y << (i64)32));
+        return glm::abs(((i64)coords.x * (i64)92837111) ^ ((i64)coords.y * (i64)689287499));
     }
 
-    bool insert_chunk(World *world, Chunk *chunk);
-    bool remove_chunk(World *world, glm::ivec2 coords);
-    Chunk *get_chunk(World *world, glm::ivec2 coords);
+    bool insert_chunk(World            *world,
+                      const glm::ivec2 &chunk_coords,
+                      u16               chunk_node_index,
+                      Chunk           **out_chunk = nullptr);
 
-    void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds);
-    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds);
+    bool remove_chunk(World *world, const glm::ivec2& coords);
+    Chunk *get_chunk(World *world, const glm::ivec2& coords);
+
+    void load_and_update_chunks(World *world, const World_Region_Bounds& region_bounds);
 
     bool is_chunk_in_region_bounds(const glm::ivec2& chunk_coords, const World_Region_Bounds& region_bounds);
 
@@ -432,9 +458,7 @@ namespace minecraft {
                                     const glm::vec3 &view_direction,
                                     u32              max_block_select_dist_in_cube_units);
 
-    void schedule_chunk_lighting_jobs(World *world,
-                                      const World_Region_Bounds &player_region_bounds);
-    void schedule_save_chunks_jobs(World *world);
+    void save_chunks(World *world);
 
     void set_block_id(Chunk *chunk, const glm::ivec3& block_coords, u16 block_id);
     void set_block_sky_light_level(World *world, Chunk *chunk, const glm::ivec3& block_coords, u8 light_level);

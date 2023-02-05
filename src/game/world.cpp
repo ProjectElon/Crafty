@@ -87,8 +87,8 @@ namespace minecraft {
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-            render_data.face_count      = 0;
-            render_data.bucket_index    = 0;
+            render_data.face_count         =  0;
+            render_data.bucket_index       =  0;
             render_data.instance_memory_id = -1;
 
             for (i32 j = 0; j < 2; j++)
@@ -100,7 +100,7 @@ namespace minecraft {
                 render_data.aabb[j] = { { inf, inf, inf }, { -inf, -inf, -inf } };
             }
 
-            render_data.tessellated    = false;
+            render_data.tessellated              = false;
             render_data.pending_for_tessellation = false;
         }
 
@@ -765,7 +765,7 @@ namespace minecraft {
 
         for (u32 i = 0; i < World::chunk_capacity; i++)
         {
-            world->chunk_hash_table[i].chunk_node_index = INVALID_CHUNK_ENTRY;
+            set_entry_state(world->chunk_hash_table_values[i], ChunkHashTableEntryState_Empty);
         }
 
         Chunk_Node *last_chunk_node = &world->chunk_nodes[World::chunk_capacity - 1];
@@ -858,67 +858,130 @@ namespace minecraft {
         world->first_free_chunk_node = chunk_node;
     }
 
-    bool insert_chunk(World *world, Chunk *chunk)
+    bool insert_chunk(World            *world,
+                      const glm::ivec2 &chunk_coords,
+                      u16               chunk_node_index,
+                      Chunk           **out_chunk)
     {
-        u16 chunk_hash = (u16)get_chunk_hash(chunk->world_coords);
-        i16 count      = World::chunk_hash_table_capacity;
-        while (world->chunk_hash_table[chunk_hash].chunk_node_index != INVALID_CHUNK_ENTRY && count--)
-        {
-            if (world->chunk_hash_table[chunk_hash].chunk_coords == chunk->world_coords)
-            {
-                return false;
-            }
-            chunk_hash++;
-            if (chunk_hash == World::chunk_hash_table_capacity) chunk_hash = 0;
-        }
+        u32  start_index        = (u32)(get_chunk_hash(chunk_coords) % World::chunk_hash_table_capacity);
+        u32  index              = start_index;
+        i32  insertion_index    = -1;
+        bool found              = false;
 
-        if (count > 0)
-        {
-            i16 chunk_index = (i16)((Chunk_Node*)chunk - world->chunk_nodes);
-            world->chunk_hash_table[chunk_hash].chunk_coords     = chunk->world_coords;
-            world->chunk_hash_table[chunk_hash].chunk_node_index = chunk_index;
-            return true;
-        }
-
-        return false;
-    }
-
-    bool remove_chunk(World *world, glm::ivec2 coords)
-    {
-        u16 chunk_hash       = (u16)get_chunk_hash(coords);
-        u16 chunk_hast_start = chunk_hash;
         do
         {
-            if (world->chunk_hash_table[chunk_hash].chunk_node_index != INVALID_CHUNK_ENTRY &&
-                world->chunk_hash_table[chunk_hash].chunk_coords == coords)
+            u16 &entry = world->chunk_hash_table_values[index];
+            ChunkHashTableEntryState state = get_entry_state(entry);
+
+            if (state == ChunkHashTableEntryState_Empty)
             {
-                world->chunk_hash_table[chunk_hash].chunk_node_index = INVALID_CHUNK_ENTRY;
+                bool is_insertion_index_set = insertion_index != -1;
+                if (!is_insertion_index_set)
+                {
+                    insertion_index = index;
+                }
+                break;
+            }
+            else if (state == ChunkHashTableEntryState_Deleted)
+            {
+                bool is_insertion_index_set = insertion_index != -1;
+                if (!is_insertion_index_set)
+                {
+                    insertion_index = index;
+                }
+            }
+            else if (world->chunk_hash_table_keys[index] == chunk_coords)
+            {
+                found = true;
+                break;
+            }
+
+            index++;
+            if (index == World::chunk_hash_table_capacity)
+            {
+                index = 0;
+            }
+        }
+        while (index != start_index);
+
+        if (found)
+        {
+            if (out_chunk)
+            {
+                u16 &entry           = world->chunk_hash_table_values[index];
+                u16 chunk_node_index = get_entry_value(entry);
+                *out_chunk           = &world->chunk_nodes[chunk_node_index].chunk;
+            }
+        }
+        else
+        {
+            u16 &entry = world->chunk_hash_table_values[insertion_index];
+            set_entry_state(entry, ChunkHashTableEntryState_Occupied);
+            set_entry_value(entry, chunk_node_index);
+            world->chunk_hash_table_keys[insertion_index] = chunk_coords;
+        }
+
+        return !found;
+    }
+
+    bool remove_chunk(World *world, const glm::ivec2& coords)
+    {
+        u32  start_index        = (u32)(get_chunk_hash(coords) % World::chunk_hash_table_capacity);
+        u32  index              = start_index;
+
+        do
+        {
+            u16 &entry = world->chunk_hash_table_values[index];
+            ChunkHashTableEntryState state = get_entry_state(entry);
+            if (state == ChunkHashTableEntryState_Empty)
+            {
+                break;
+            }
+            else if (state == ChunkHashTableEntryState_Occupied &&
+                     world->chunk_hash_table_keys[index] == coords)
+            {
+                set_entry_state(entry, ChunkHashTableEntryState_Deleted);
                 return true;
             }
-            chunk_hash++;
-            if (chunk_hash == World::chunk_hash_table_capacity) chunk_hash = 0;
+
+            index++;
+            if (index == World::chunk_hash_table_capacity)
+            {
+                index = 0;
+            }
         }
-        while (chunk_hash != chunk_hast_start);
+        while (index != start_index);
 
         return false;
     }
 
-    Chunk* get_chunk(World *world, glm::ivec2 coords)
+    Chunk* get_chunk(World *world, const glm::ivec2& coords)
     {
-        u16 chunk_hash       = (u16)get_chunk_hash(coords);
-        u16 chunk_hast_start = chunk_hash;
+        u32  start_index = (u32)(get_chunk_hash(coords) % World::chunk_hash_table_capacity);
+        u32  index       = start_index;
+
         do
         {
-            Chunk_Hash_Table_Entry *entry = &world->chunk_hash_table[chunk_hash];
-            if (entry->chunk_node_index != INVALID_CHUNK_ENTRY &&
-                entry->chunk_coords == coords)
+            u16 &entry = world->chunk_hash_table_values[index];
+            ChunkHashTableEntryState state = get_entry_state(entry);
+            if (state == ChunkHashTableEntryState_Empty)
             {
-                return &world->chunk_nodes[entry->chunk_node_index].chunk;
+                break;
             }
-            chunk_hash++;
-            if (chunk_hash == World::chunk_hash_table_capacity) chunk_hash = 0;
+            else if (state == ChunkHashTableEntryState_Occupied &&
+                     world->chunk_hash_table_keys[index] == coords)
+            {
+                u16 chunk_node_index = get_entry_value(entry);
+                return &world->chunk_nodes[chunk_node_index].chunk;
+            }
+
+            index++;
+            if (index == World::chunk_hash_table_capacity)
+            {
+                index = 0;
+            }
         }
-        while (chunk_hash != chunk_hast_start);
+        while (index != start_index);
 
         return nullptr;
     }
@@ -1026,23 +1089,34 @@ namespace minecraft {
                chunk_coords.y >= region_bounds.min.y && chunk_coords.y <= region_bounds.max.y;
      }
 
-    void load_chunks_at_region(World *world, const World_Region_Bounds& region_bounds)
+    void load_and_update_chunks(World *world, const World_Region_Bounds& region_bounds)
     {
-        for (i32 z = region_bounds.min.y - 1; z <= region_bounds.max.y + 1; ++z)
+        for (i32 z = region_bounds.min.y - World::pending_free_chunk_radius;
+                 z <= region_bounds.max.y + World::pending_free_chunk_radius; ++z)
         {
-            for (i32 x = region_bounds.min.x - 1; x <= region_bounds.max.x + 1; ++x)
+            for (i32 x = region_bounds.min.x - World::pending_free_chunk_radius;
+                     x <= region_bounds.max.x + World::pending_free_chunk_radius; ++x)
             {
                 glm::ivec2 chunk_coords = { x, z };
-                Chunk* chunk = get_chunk(world, chunk_coords);
-                if (!chunk)
+                Chunk *chunk            = allocate_chunk(world);
+                u16    chunk_node_index = (u16)((Chunk_Node*)chunk - world->chunk_nodes);
+                Chunk *hashed           = nullptr;
+                if (insert_chunk(world,
+                                 chunk_coords,
+                                 chunk_node_index,
+                                &hashed))
                 {
-                    chunk = allocate_chunk(world);
                     initialize_chunk(chunk, chunk_coords);
-                    insert_chunk(world, chunk);
                     Load_Chunk_Job load_chunk_job = {};
                     load_chunk_job.world = world;
                     load_chunk_job.chunk = chunk;
                     Job_System::schedule(load_chunk_job);
+                }
+                else
+                {
+                    free_chunk(world, chunk);
+                    Assert(inserted);
+                    chunk = inserted;
                 }
             }
         }
@@ -1051,60 +1125,84 @@ namespace minecraft {
 
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
+            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
             {
                 continue;
             }
 
-            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].chunk_coords;
+            const glm::ivec2& chunk_coords = world->chunk_hash_table_keys[i];
 
-            if (!is_chunk_in_region_bounds(chunk_coords, region_bounds))
-            {
-                continue;
-            }
-
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
+            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
+            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
             Assert(chunk);
 
-            bool all_neighbours_loaded = true;
-
-            for (i32 i = 0; i < ChunkNeighbour_Count; i++)
+            if (is_chunk_in_region_bounds(chunk_coords, world->active_region_bounds))
             {
-                glm::ivec2 neighbour_chunk_coords = chunk_coords + dirs[i];
+                bool all_neighbours_loaded = true;
 
-                Chunk *neighbour_chunk = chunk->neighbours[i];
-
-                if (!neighbour_chunk)
+                for (i32 i = 0; i < ChunkNeighbour_Count; i++)
                 {
-                    neighbour_chunk = get_chunk(world, neighbour_chunk_coords);
-                    Assert(neighbour_chunk);
-                    chunk->neighbours[i] = neighbour_chunk;
+                    glm::ivec2 neighbour_chunk_coords = chunk_coords + dirs[i];
+
+                    Chunk *neighbour_chunk = chunk->neighbours[i];
+
+                    if (!neighbour_chunk)
+                    {
+                        neighbour_chunk = get_chunk(world, neighbour_chunk_coords);
+                        Assert(neighbour_chunk);
+                        chunk->neighbours[i] = neighbour_chunk;
+                    }
+
+                    if (neighbour_chunk->state == ChunkState_Initialized)
+                    {
+                        all_neighbours_loaded = false;
+                    }
                 }
 
-                if (neighbour_chunk->state == ChunkState_Initialized)
+                if (all_neighbours_loaded && chunk->state == ChunkState_Loaded)
                 {
-                    all_neighbours_loaded = false;
+                    chunk->state = ChunkState_NeighboursLoaded;
+                }
+
+                auto& light_propagation_queue        = world->light_propagation_queue;
+                auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
+
+                if (chunk->state == ChunkState_NeighboursLoaded)
+                {
+                    chunk->state = ChunkState_PendingForLightPropagation;
+
+                    Calculate_Chunk_Light_Propagation_Job job;
+                    job.world = world;
+                    job.chunk = chunk;
+                    light_propagation_queue.push(job);
+                }
+                else if (chunk->state == ChunkState_LightPropagated)
+                {
+                    bool all_neighbours_light_propagated = true;
+
+                    for (i32 i = 0; i < ChunkNeighbour_Count; i++)
+                    {
+                        Chunk *neighbour_chunk = chunk->neighbours[i];
+
+                        if (neighbour_chunk->state < ChunkState_LightPropagated)
+                        {
+                            all_neighbours_light_propagated = false;
+                            break;
+                        }
+                    }
+
+                    if (all_neighbours_light_propagated)
+                    {
+                        chunk->state = ChunkState_PendingForLightCalculation;
+
+                        Calculate_Chunk_Lighting_Job job;
+                        job.world = world;
+                        job.chunk = chunk;
+                        calculate_chunk_lighting_queue.push(job);
+                    }
                 }
             }
 
-            if (all_neighbours_loaded && chunk->state == ChunkState_Loaded)
-            {
-                chunk->state = ChunkState_NeighboursLoaded;
-            }
-        }
-    }
-
-    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds)
-    {
-        for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
-        {
-            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
-            {
-                continue;
-            }
-
-            const glm::ivec2 &chunk_coords = world->chunk_hash_table[i].chunk_coords;
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
             bool out_of_bounds = chunk_coords.x < region_bounds.min.x - World::pending_free_chunk_radius ||
                                  chunk_coords.x > region_bounds.max.x + World::pending_free_chunk_radius ||
                                  chunk_coords.y < region_bounds.min.y - World::pending_free_chunk_radius ||
@@ -1121,9 +1219,11 @@ namespace minecraft {
                 Serialize_And_Free_Chunk_Job serialize_and_free_chunk_job;
                 serialize_and_free_chunk_job.world = world;
                 serialize_and_free_chunk_job.chunk = chunk;
-                Job_System::schedule(serialize_and_free_chunk_job, false);
+                bool is_high_priority = false;
+                Job_System::schedule(serialize_and_free_chunk_job, is_high_priority);
 
-                remove_chunk(world, chunk->world_coords);
+                bool removed = remove_chunk(world, chunk->world_coords);
+                Assert(removed);
             }
         }
 
@@ -1135,6 +1235,21 @@ namespace minecraft {
                 chunk->state = ChunkState_Freed;
                 free_chunk(world, chunk);
             }
+        }
+    }
+
+    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds)
+    {
+        for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
+        {
+            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
+            {
+                continue;
+            }
+
+            const glm::ivec2& chunk_coords = world->chunk_hash_table_keys[i];
+            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
+            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
         }
     }
 
@@ -1325,7 +1440,7 @@ namespace minecraft {
         if (chunk)
         {
             glm::ivec3 block_coords = world_position_to_block_coords(world, position);
-            if (block_coords.x >= 0 && block_coords.x < CHUNK_WIDTH &&
+            if (block_coords.x >= 0 && block_coords.x < CHUNK_WIDTH  &&
                 block_coords.y >= 0 && block_coords.y < CHUNK_HEIGHT &&
                 block_coords.z >= 0 && block_coords.z < CHUNK_WIDTH)
             {
@@ -1427,84 +1542,31 @@ namespace minecraft {
         return result;
     }
 
-    void schedule_chunk_lighting_jobs(World *world, const World_Region_Bounds &player_region_bounds)
+    void save_chunks(World *world)
     {
-        auto& light_propagation_queue        = world->light_propagation_queue;
-        auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
-
-        auto dirs = get_chunk_neighbour_directions();
-
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
+            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
             {
                 continue;
             }
 
-            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].chunk_coords;
-            if (!is_chunk_in_region_bounds(chunk_coords, player_region_bounds))
-            {
-                continue;
-            }
-
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
+            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
+            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
             Assert(chunk);
 
-            if (chunk->state == ChunkState_NeighboursLoaded)
+            if (chunk->state > ChunkState_Initialized)
             {
-                chunk->state = ChunkState_PendingForLightPropagation;
+                chunk->state = ChunkState_PendingForSave;
 
-                Calculate_Chunk_Light_Propagation_Job job;
+                Serialize_Chunk_Job job;
                 job.world = world;
                 job.chunk = chunk;
-                light_propagation_queue.push(job);
-            }
-            else if (chunk->state == ChunkState_LightPropagated)
-            {
-                bool all_neighbours_light_propagated = true;
-
-                for (i32 i = 0; i < ChunkNeighbour_Count; i++)
-                {
-                    Chunk *neighbour_chunk = chunk->neighbours[i];
-
-                    if (neighbour_chunk->state < ChunkState_LightPropagated)
-                    {
-                        all_neighbours_light_propagated = false;
-                        break;
-                    }
-                }
-
-                if (all_neighbours_light_propagated)
-                {
-                    chunk->state = ChunkState_PendingForLightCalculation;
-
-                    Calculate_Chunk_Lighting_Job job;
-                    job.world = world;
-                    job.chunk = chunk;
-                    calculate_chunk_lighting_queue.push(job);
-                }
+                Job_System::schedule(job);
             }
         }
-    }
 
-    void schedule_save_chunks_jobs(World *world)
-    {
-        for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
-        {
-            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
-            {
-                continue;
-            }
-
-            Chunk *chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
-
-            chunk->state = ChunkState_PendingForSave;
-
-            Serialize_Chunk_Job job;
-            job.world = world;
-            job.chunk = chunk;
-            Job_System::schedule(job);
-        }
+        Job_System::wait_for_jobs_to_finish();
     }
 
     String8 get_chunk_file_path(World *world,

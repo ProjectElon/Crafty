@@ -157,9 +157,8 @@ namespace minecraft {
 
         for (u32 i = 0; i < internal_data.thread_count; i++)
         {
-            Memory_Arena *arena = &internal_data.arenas[i];
-            u8 *buffer = ArenaPushArrayZero(permanent_arena, u8, MegaBytes(1));
-            *arena = create_memory_arena(buffer, MegaBytes(1));
+            // todo(harlequin): maybe we can use thread local storage
+            internal_data.arenas[i]  = push_sub_arena(permanent_arena, MegaBytes(1));
             internal_data.threads[i] = std::thread(execute_jobs, i);
         }
 

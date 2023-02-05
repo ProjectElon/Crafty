@@ -1517,19 +1517,20 @@ namespace minecraft {
     {
         for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
         {
-            if (world->chunk_hash_table[i].chunk_node_index == INVALID_CHUNK_ENTRY)
+            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
             {
                 continue;
             }
 
-            const glm::ivec2& chunk_coords = world->chunk_hash_table[i].chunk_coords;
+            const glm::ivec2& chunk_coords = world->chunk_hash_table_keys[i];
 
             if (!is_chunk_in_region_bounds(chunk_coords, player_region_bounds))
             {
                 continue;
             }
 
-            Chunk* chunk = &world->chunk_nodes[world->chunk_hash_table[i].chunk_node_index].chunk;
+            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
+            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
             Assert(chunk);
 
             if (chunk->state >= ChunkState_Loaded)

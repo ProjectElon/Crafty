@@ -281,8 +281,7 @@ namespace minecraft {
 
     void shutdown_game(Game_State *game_state)
     {
-        schedule_save_chunks_jobs(game_state->world);
-        Job_System::wait_for_jobs_to_finish();
+        save_chunks(game_state->world);
 
         Job_System::shutdown();
 
@@ -554,12 +553,10 @@ namespace minecraft {
             }
 
             update_world_time(world, game_state->delta_time);
-            glm::vec2 active_chunk_coords    = world_position_to_chunk_coords(camera->position);
-            world->active_region_bounds = get_world_bounds_from_chunk_coords(game_config->chunk_radius,
-                                                                                  active_chunk_coords);
-            load_chunks_at_region(world, world->active_region_bounds);
-            schedule_chunk_lighting_jobs(world, world->active_region_bounds);
-            free_chunks_out_of_region(world, world->active_region_bounds);
+            glm::vec2 active_chunk_coords = world_position_to_chunk_coords(camera->position);
+            world->active_region_bounds   = get_world_bounds_from_chunk_coords(game_config->chunk_radius,
+                                                                               active_chunk_coords);
+            load_and_update_chunks(world, world->active_region_bounds);
 
             update_entities(&registry, gameplay_input, camera, game_state->delta_time);
 

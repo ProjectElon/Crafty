@@ -25,6 +25,8 @@ namespace minecraft {
         String8 sub_chunk_bucket_used_memory_text;
         String8 player_position_text;
         String8 player_chunk_coords_text;
+        String8 player_chunk_state_text;
+        String8 player_chunk_tesslating;
         String8 chunk_radius_text;
         String8 game_time_text;
         String8 global_sky_light_level_text;

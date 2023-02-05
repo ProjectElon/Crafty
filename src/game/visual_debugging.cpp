@@ -75,21 +75,21 @@ namespace minecraft {
 
             debug_state->block_facing_normal_face_text =
                 push_string8(frame_arena,
-                                                       "block face: %s",
-                                                       back_facing_normal_label);
+                             "block face: %s",
+                             back_facing_normal_label);
 
             debug_state->block_facing_normal_chunk_coords_text =
                 push_string8(frame_arena,
-                                                       "chunk: (%d, %d)",
-                                                       chunk_coords.x,
-                                                       chunk_coords.y);
+                             "chunk: (%d, %d)",
+                             chunk_coords.x,
+                             chunk_coords.y);
 
             debug_state->block_facing_normal_block_coords_text =
                 push_string8(frame_arena,
-                                                       "block: (%d, %d, %d)",
-                                                        block_coords.x,
-                                                        block_coords.y,
-                                                        block_coords.z);
+                             "block: (%d, %d, %d)",
+                             block_coords.x,
+                             block_coords.y,
+                             block_coords.z);
 
             Block_Light_Info* light_info = get_block_light_info(select_query->block_facing_normal_query.chunk,
                                                                 select_query->block_facing_normal_query.block_coords);
@@ -183,21 +183,81 @@ namespace minecraft {
 
         glm::vec2 active_chunk_coords = world_position_to_chunk_coords(camera->position);
 
+        auto chunk_state_to_cstring = [](ChunkState state) -> const char *
+        {
+            switch (state)
+            {
+                case ChunkState_Initialized:
+                {
+                    return "Initialized";
+                } break;
+
+                case ChunkState_Loaded:
+                {
+                    return "Loaded";
+                } break;
+                case ChunkState_NeighboursLoaded:
+                {
+                    return "ChunkState_NeighboursLoaded";
+                } break;
+                case ChunkState_PendingForLightPropagation:
+                {
+                    return "PendingForLightPropagation";
+                } break;
+                case ChunkState_LightPropagated:
+                {
+                    return "LightPropagated";
+                } break;
+                case ChunkState_PendingForLightCalculation:
+                {
+                    return "PendingForLightCalculation";
+                } break;
+                case ChunkState_LightCalculated:
+                {
+                    return "LightCalculated";
+                } break;
+                case ChunkState_PendingForSave:
+                {
+                    return "PendingForSave";
+                } break;
+                case ChunkState_Saved:
+                {
+                    return "ChunkState_Saved";
+                } break;
+
+                case ChunkState_Freed:
+                {
+                    return "ChunkState_Freed";
+                } break;
+            }
+        };
+
+        Chunk *chunk = get_chunk(world, active_chunk_coords);
+        if (chunk)
+        {
+            debug_state->player_chunk_state_text = push_string8(frame_arena,
+                                                                "chunk state: %s",
+                                                                chunk_state_to_cstring(chunk->state));
+
+            debug_state->player_chunk_tesslating = push_string8(frame_arena,
+                                                                "tessellation state: %s",
+                                                                chunk->pending_for_tessellation && chunk->tessellated == false ? "pending" : "tessellated");
+        }
         debug_state->player_chunk_coords_text =
             push_string8(frame_arena,
-                                                   "chunk coords: (%d, %d)",
-                                                   (i32)active_chunk_coords.x,
-                                                   (i32)active_chunk_coords.y);
+                         "chunk coords: (%d, %d)",
+                         (i32)active_chunk_coords.x,
+                         (i32)active_chunk_coords.y);
 
         debug_state->chunk_radius_text =
             push_string8(frame_arena,
-                                                   "chunk radius: %d",
-                                                   game_config->chunk_radius);
+                         "chunk radius: %d",
+                         game_config->chunk_radius);
 
         debug_state->global_sky_light_level_text =
             push_string8(frame_arena,
-                                                   "global sky light level: %d",
-                                                   (u32)world->sky_light_level);
+                         "global sky light level: %d",
+                         (u32)world->sky_light_level);
 
         u32 hours;
         u32 minutes;
@@ -223,13 +283,16 @@ namespace minecraft {
 
         UI::rect(frame_buffer_size * glm::vec2(0.33f, 1.0f) - glm::vec2(0.0f, 20.0f));
         UI::set_cursor({ 10.0f, 10.0f });
+        String8 empty = String8FromCString("");
 
+        UI::text(String8FromCString("Active Chunk"));
         UI::text(debug_state->player_chunk_coords_text);
         UI::text(debug_state->player_position_text);
-        UI::text(debug_state->chunk_radius_text);
+        UI::text(debug_state->player_chunk_state_text);
+        UI::text(debug_state->player_chunk_tesslating);
 
-        String8 empty = String8FromCString("");
         UI::text(empty);
+        String8FromCString("Rendering");
 
         UI::text(debug_state->frames_per_second_text);
         UI::text(debug_state->frame_time_text);
@@ -241,14 +304,27 @@ namespace minecraft {
         UI::text(debug_state->sub_chunk_bucket_allocated_memory_text);
         UI::text(debug_state->sub_chunk_bucket_used_memory_text);
 
-        UI::text(empty);
+        bool fxaa_enabled  = opengl_renderer_is_fxaa_enabled();
+        String8 fxaa_label = {};
+        if (fxaa_enabled)
+        {
+            fxaa_label = String8FromCString("FXAA: On");
+        }
+        else
+        {
+            fxaa_label = String8FromCString("FXAA: Off");
+        }
+        UI::text(fxaa_label);
 
+        UI::text(empty);
+        UI::text(String8FromCString("World Settings"));
+        UI::text(debug_state->chunk_radius_text);
         UI::text(debug_state->game_time_text);
         UI::text(debug_state->global_sky_light_level_text);
 
         UI::text(empty);
 
-        String8 debug_block_label = String8FromCString("debug block");
+        String8 debug_block_label = String8FromCString("Active Block");
         UI::text(debug_block_label);
         UI::text(debug_state->block_facing_normal_chunk_coords_text);
         UI::text(debug_state->block_facing_normal_block_coords_text);
@@ -257,19 +333,6 @@ namespace minecraft {
         UI::text(debug_state->block_facing_normal_light_source_level_text);
         UI::text(debug_state->block_facing_normal_light_level_text);
 
-        UI::text(empty);
-
-        bool fxaa_enabled = opengl_renderer_is_fxaa_enabled();
-        String8 fxaa_label = {};
-        if (fxaa_enabled)
-        {
-            fxaa_label = String8FromCString("FXAA: ON");
-        }
-        else
-        {
-            fxaa_label = String8FromCString("FXAA: OFF");
-        }
-        UI::text(fxaa_label);
         UI::end();
     }
 }
