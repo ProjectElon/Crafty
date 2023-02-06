@@ -35,18 +35,17 @@ namespace minecraft {
         World *world = data->world;
         Chunk *chunk = data->chunk;
 
-        for (i32 sub_chunk_index = World::sub_chunk_count_per_chunk - 1; sub_chunk_index >= 0; sub_chunk_index--)
+        for (i32 sub_chunk_index = Chunk::SubChunkCount - 1; sub_chunk_index >= 0; sub_chunk_index--)
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            if (render_data.pending_for_tessellation)
+            if (render_data.state == TessellationState_Pending)
             {
                 opengl_renderer_update_sub_chunk(world, chunk, sub_chunk_index);
-                render_data.pending_for_tessellation = false;
+                render_data.state = TessellationState_Done;
             }
         }
 
-        chunk->pending_for_tessellation = false;
-        chunk->tessellated              = true;
+        chunk->tessellation_state = TessellationState_Done;
     }
 
     void Serialize_Chunk_Job::execute(void* job_data, Temprary_Memory_Arena *temp_arena)
@@ -63,11 +62,11 @@ namespace minecraft {
         Serialize_And_Free_Chunk_Job* data = (Serialize_And_Free_Chunk_Job*)job_data;
         World *world = data->world;
         Chunk *chunk = data->chunk;
-        for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+        for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; ++sub_chunk_index)
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-            if (!render_data.pending_for_tessellation && render_data.tessellated)
+            if (render_data.state != TessellationState_Pending)
             {
                 opengl_renderer_free_sub_chunk(chunk, sub_chunk_index);
             }

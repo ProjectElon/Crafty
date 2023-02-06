@@ -123,7 +123,7 @@ namespace minecraft {
     {
         u32 new_chunk_radius = glm::clamp(args[0].uint32,
                                           (u32)8,
-                                          (u32)World::max_chunk_radius);
+                                          (u32)World::MaxChunkRadius);
         Game_State *game_state   = (Game_State*)console_commands_get_user_pointer();
         game_state->game_config.chunk_radius = new_chunk_radius;
         return true;

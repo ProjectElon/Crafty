@@ -117,52 +117,52 @@ namespace minecraft {
 
         debug_state->frames_per_second_text =
             push_string8(frame_arena,
-                                                   "FPS: %d",
-                                                   game_state->frames_per_second);
+                         "FPS: %d",
+                         game_state->frames_per_second);
 
         debug_state->frame_time_text =
             push_string8(frame_arena,
-                                                   "frame time: %.2f ms",
-                                                   game_state->delta_time * 1000.0f);
+                         "frame time: %.2f ms",
+                         game_state->delta_time * 1000.0f);
 
         debug_state->vertex_count_text =
             push_string8(frame_arena,
-                                                   "vertex count: %d",
-                                                   stats->per_frame.face_count * 4);
+                         "vertex count: %d",
+                         stats->per_frame.face_count * 4);
 
         debug_state->face_count_text =
             push_string8(frame_arena,
-                                                   "face count: %u",
-                                                   stats->per_frame.face_count);
+                         "face count: %u",
+                         stats->per_frame.face_count);
 
         debug_state->sub_chunk_bucket_capacity_text =
             push_string8(frame_arena,
-                                                   "sub chunk bucket capacity: %llu",
-                                                   World::sub_chunk_bucket_capacity);
+                         "sub chunk bucket capacity: %llu",
+                         World::SubChunkBucketCapacity);
 
-        i64 sub_chunk_bucket_count = World::sub_chunk_bucket_capacity - opengl_renderer_get_free_chunk_bucket_count();
+        i64 sub_chunk_bucket_count = World::SubChunkBucketCapacity - opengl_renderer_get_free_chunk_bucket_count();
         debug_state->sub_chunk_bucket_count_text =
             push_string8(frame_arena,
-                                                   "sub chunk buckets: %llu",
-                                                   sub_chunk_bucket_count);
+                         "sub chunk buckets: %llu",
+                         sub_chunk_bucket_count);
 
         {
             f64 total_size =
-                (World::sub_chunk_bucket_capacity * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+                (World::SubChunkBucketCapacity * World::SubChunkBucketSize) / (1024.0 * 1024.0);
 
             debug_state->sub_chunk_bucket_total_memory_text =
                 push_string8(frame_arena,
-                                                       "buckets total memory: %.2f",
-                                                       total_size);
+                             "buckets total memory: %.2f mb",
+                             total_size);
         }
 
         {
             f64 total_size =
-                (sub_chunk_bucket_count * World::sub_chunk_bucket_size) / (1024.0 * 1024.0);
+                (sub_chunk_bucket_count * World::SubChunkBucketSize) / (1024.0 * 1024.0);
             debug_state->sub_chunk_bucket_allocated_memory_text =
                 push_string8(frame_arena,
-                                                       "buckets allocated memory: %.2f",
-                                                       total_size);
+                             "buckets allocated memory: %.2f mb",
+                             total_size);
         }
 
         {
@@ -170,16 +170,16 @@ namespace minecraft {
                 stats->persistent.sub_chunk_used_memory / (1024.0 * 1024.0);
             debug_state->sub_chunk_bucket_used_memory_text =
                 push_string8(frame_arena,
-                                                       "buckets used memory: %.2f",
-                                                       total_size);
+                             "buckets used memory: %.2f mb",
+                             total_size);
         }
 
         debug_state->player_position_text =
             push_string8(frame_arena,
-                                                   "position: (%.2f, %.2f, %.2f)",
-                                                   camera->position.x,
-                                                   camera->position.y,
-                                                   camera->position.z);
+                         "position: (%.2f, %.2f, %.2f)",
+                         camera->position.x,
+                         camera->position.y,
+                         camera->position.z);
 
         glm::vec2 active_chunk_coords = world_position_to_chunk_coords(camera->position);
 
@@ -229,6 +229,37 @@ namespace minecraft {
                 {
                     return "ChunkState_Freed";
                 } break;
+
+                default:
+                {
+                    return "";
+                } break;
+            }
+        };
+
+        auto tessellation_state_to_cstring = [](TessellationState state) -> const char *
+        {
+            switch (state)
+            {
+                case TessellationState_None:
+                {
+                    return "None";
+                } break;
+
+                case TessellationState_Pending:
+                {
+                    return "Pending";
+                } break;
+
+                case TessellationState_Done:
+                {
+                    return "Done";
+                } break;
+
+                default:
+                {
+                    return "";
+                } break;
             }
         };
 
@@ -241,8 +272,9 @@ namespace minecraft {
 
             debug_state->player_chunk_tesslating = push_string8(frame_arena,
                                                                 "tessellation state: %s",
-                                                                chunk->pending_for_tessellation && chunk->tessellated == false ? "pending" : "tessellated");
+                                                                tessellation_state_to_cstring(chunk->tessellation_state));
         }
+
         debug_state->player_chunk_coords_text =
             push_string8(frame_arena,
                          "chunk coords: (%d, %d)",
@@ -265,10 +297,10 @@ namespace minecraft {
         game_time_to_real_time(world->game_time, &hours, &minutes, &seconds);
         debug_state->game_time_text =
             push_string8(frame_arena,
-                                                   "game time: %d:%d:%d",
-                                                   hours,
-                                                   minutes,
-                                                   seconds);
+                        "game time: %d:%d:%d",
+                        hours,
+                        minutes,
+                        seconds);
     }
 
     void draw_visual_debugging_data(Game_Debug_State *debug_state,

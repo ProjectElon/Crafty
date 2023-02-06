@@ -97,7 +97,7 @@ namespace minecraft {
         command->count         = bucket->face_count * 6;
         command->firstIndex    = 0;
         command->instanceCount = 1;
-        command->baseVertex    = bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        command->baseVertex    = bucket->memory_id * World::SubChunkBucketVertexCount;
         command->baseInstance  = (u32)instance_memory_id;
     }
 
@@ -272,7 +272,7 @@ namespace minecraft {
 
         Opengl_Vertex_Buffer chunk_vertex_buffer = push_vertex_buffer(&chunk_vertex_array,
                                                                       sizeof(Block_Face_Vertex),
-                                                                      World::sub_chunk_bucket_vertex_count * World::sub_chunk_bucket_capacity,
+                                                                      World::SubChunkBucketVertexCount * World::SubChunkBucketCapacity,
                                                                       nullptr,
                                                                       flags);
 
@@ -290,7 +290,7 @@ namespace minecraft {
 
         Opengl_Vertex_Buffer chunk_instance_buffer = push_vertex_buffer(&chunk_vertex_array,
                                                                         sizeof(Chunk_Instance),
-                                                                        World::sub_chunk_bucket_capacity,
+                                                                        World::SubChunkBucketCapacity,
                                                                         nullptr,
                                                                         flags);
 
@@ -303,12 +303,12 @@ namespace minecraft {
                               per_instance);
 
         Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(arena);
-        u32 *chunk_indicies = ArenaPushArrayAligned(&temp_arena, u32, INDEX_COUNT_PER_SUB_CHUNK);
+        u32 *chunk_indicies = ArenaPushArrayAligned(&temp_arena, u32, Chunk::SubChunkIndexCount);
 
         u32 element_index = 0;
         u32 vertex_index  = 0;
 
-        for (u32 i = 0; i < BLOCK_COUNT_PER_SUB_CHUNK * 6; i++)
+        for (u32 i = 0; i < Chunk::SubChunkBlockCount * 6; i++)
         {
             chunk_indicies[element_index + 0] = vertex_index + 3;
             chunk_indicies[element_index + 1] = vertex_index + 1;
@@ -324,7 +324,7 @@ namespace minecraft {
 
         Opengl_Index_Buffer chunk_index_buffer = push_index_buffer(&chunk_vertex_array,
                                                                    chunk_indicies,
-                                                                   INDEX_COUNT_PER_SUB_CHUNK);
+                                                                   Chunk::SubChunkIndexCount);
         end_temprary_memory_arena(&temp_arena);
 
         end_vertex_array(&chunk_vertex_array);
@@ -335,20 +335,20 @@ namespace minecraft {
 
         new (&renderer->free_buckets_mutex) std::mutex;
         new (&renderer->free_buckets) std::vector< i32 >;
-        renderer->free_buckets.resize(World::sub_chunk_bucket_capacity);
+        renderer->free_buckets.resize(World::SubChunkBucketCapacity);
 
         new (&renderer->free_instances_mutex) std::mutex;
         new (&renderer->free_instances) std::vector< i32 >;
-        renderer->free_instances.resize(World::sub_chunk_bucket_capacity);
+        renderer->free_instances.resize(World::SubChunkBucketCapacity);
 
-        for (i32 i = 0; i < World::sub_chunk_bucket_capacity; ++i)
+        for (i32 i = 0; i < World::SubChunkBucketCapacity; ++i)
         {
-            renderer->free_buckets[i]   = World::sub_chunk_bucket_capacity - i - 1;
-            renderer->free_instances[i] = World::sub_chunk_bucket_capacity - i - 1;
+            renderer->free_buckets[i]   = World::SubChunkBucketCapacity - i - 1;
+            renderer->free_instances[i] = World::SubChunkBucketCapacity - i - 1;
         }
 
-        initialize_command_buffer(&renderer->opaque_command_buffer, World::sub_chunk_bucket_capacity);
-        initialize_command_buffer(&renderer->transparent_command_buffer, World::sub_chunk_bucket_capacity);
+        initialize_command_buffer(&renderer->opaque_command_buffer, World::SubChunkBucketCapacity);
+        initialize_command_buffer(&renderer->transparent_command_buffer, World::SubChunkBucketCapacity);
 
         renderer->frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
 
@@ -552,14 +552,14 @@ namespace minecraft {
         bucket->memory_id = renderer->free_buckets.back();
         renderer->free_buckets.pop_back();
         renderer->free_buckets_mutex.unlock();
-        bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::SubChunkBucketVertexCount;
         bucket->face_count = 0;
     }
 
     void opengl_renderer_reset_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
-        bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::sub_chunk_bucket_vertex_count;
+        bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::SubChunkBucketVertexCount;
         bucket->face_count = 0;
     }
 
@@ -621,7 +621,7 @@ namespace minecraft {
         }
 
         render_data.face_count = 0;
-        render_data.tessellated = false;
+        render_data.state      = TessellationState_Done;
     }
 
     void opengl_renderer_update_sub_chunk(World *world, Chunk* chunk, u32 sub_chunk_index)
@@ -646,7 +646,7 @@ namespace minecraft {
             renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Block_Face_Vertex);
         }
 
-        render_data.tessellated = false;
+        // render_data.tessellated = false;
         opengl_renderer_upload_sub_chunk_to_gpu(world, chunk, sub_chunk_index);
 
         if (render_data.opaque_buckets[bucket_index].face_count == 0 && is_sub_chunk_bucket_allocated(&render_data.opaque_buckets[bucket_index]))
@@ -1190,7 +1190,7 @@ namespace minecraft {
                 opengl_renderer_allocate_sub_chunk_bucket(bucket);
             }
 
-            Assert(bucket->face_count + 1 <= World::sub_chunk_bucket_face_count);
+            Assert(bucket->face_count + 1 <= World::SubChunkBucketFaceCount);
 
             u32 data00 = compress_vertex0(block_coords, p0, face, BlockFaceCorner_BottomRight, block_flags);
             u32 data01 = compress_vertex0(block_coords, p1, face, BlockFaceCorner_BottomLeft,  block_flags);
@@ -1341,7 +1341,7 @@ namespace minecraft {
 
         if (block_coords.x == 0)
         {
-            left_block = &(chunk->left_edge_blocks[block_coords.y * CHUNK_DEPTH + block_coords.z]);
+            left_block = &(chunk->left_edge_blocks[block_coords.y * Chunk::Depth + block_coords.z]);
         }
         else
         {
@@ -1363,9 +1363,9 @@ namespace minecraft {
 
         Block* right_block = nullptr;
 
-        if (block_coords.x == CHUNK_WIDTH - 1)
+        if (block_coords.x == Chunk::Width - 1)
         {
-            right_block = &(chunk->right_edge_blocks[block_coords.y * CHUNK_DEPTH + block_coords.z]);
+            right_block = &(chunk->right_edge_blocks[block_coords.y * Chunk::Depth + block_coords.z]);
         }
         else
         {
@@ -1388,7 +1388,7 @@ namespace minecraft {
 
         if (block_coords.z == 0)
         {
-            front_block = &(chunk->front_edge_blocks[block_coords.y * CHUNK_WIDTH + block_coords.x]);
+            front_block = &(chunk->front_edge_blocks[block_coords.y * Chunk::Width + block_coords.x]);
         }
         else
         {
@@ -1411,9 +1411,9 @@ namespace minecraft {
 
         Block* back_block = nullptr;
 
-        if (block_coords.z == CHUNK_DEPTH - 1)
+        if (block_coords.z == Chunk::Depth - 1)
         {
-            back_block = &(chunk->back_edge_blocks[block_coords.y * CHUNK_WIDTH + block_coords.x]);
+            back_block = &(chunk->back_edge_blocks[block_coords.y * Chunk::Width + block_coords.x]);
         }
         else
         {
@@ -1447,14 +1447,14 @@ namespace minecraft {
         constexpr f32 inf = std::numeric_limits< f32 >::max();
         render_data.aabb[bucket_index] = { { inf, inf, inf }, { -inf, -inf, -inf } };
 
-        i32 sub_chunk_start_y = sub_chunk_index * World::sub_chunk_height;
-        i32 sub_chunk_end_y = (sub_chunk_index + 1) * World::sub_chunk_height;
+        i32 sub_chunk_start_y = sub_chunk_index * Chunk::SubChunkHeight;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * Chunk::SubChunkHeight;
 
         for (i32 y = sub_chunk_start_y; y < sub_chunk_end_y; ++y)
         {
-            for (i32 z = 0; z < CHUNK_DEPTH; ++z)
+            for (i32 z = 0; z < Chunk::Depth; ++z)
             {
-                for (i32 x = 0; x < CHUNK_WIDTH; ++x)
+                for (i32 x = 0; x < Chunk::Width; ++x)
                 {
                     glm::ivec3 block_coords = { x, y, z };
                     Block *block = get_block(chunk, block_coords);
@@ -1484,8 +1484,6 @@ namespace minecraft {
             renderer->stats.persistent.sub_chunk_used_memory += opqaue_bucket.face_count * 4 * sizeof(Block_Face_Vertex);
             renderer->stats.persistent.sub_chunk_used_memory += transparent_bucket.face_count * 4 * sizeof(Block_Face_Vertex);
         }
-
-        render_data.tessellated = true;
     }
 
     void opengl_renderer_render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index)
@@ -1515,7 +1513,7 @@ namespace minecraft {
                                                  const World_Region_Bounds &player_region_bounds,
                                                  Camera *camera)
     {
-        for (u32 i = 0; i < World::chunk_hash_table_capacity; i++)
+        for (u32 i = 0; i < World::ChunkHashTableCapacity; i++)
         {
             if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
             {
@@ -1535,7 +1533,7 @@ namespace minecraft {
 
             if (chunk->state >= ChunkState_Loaded)
             {
-                for (i32 sub_chunk_index = 0; sub_chunk_index < World::sub_chunk_count_per_chunk; ++sub_chunk_index)
+                for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; ++sub_chunk_index)
                 {
                     Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
