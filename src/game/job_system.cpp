@@ -59,14 +59,15 @@ namespace minecraft {
         }
     }
 
-    static void do_light_thread_work(World *world, Memory_Arena *permanent_arena)
+    static void do_light_thread_work(World *world, Memory_Arena *arena)
     {
         auto& light_propagation_queue        = world->light_propagation_queue;
         auto& calculate_chunk_lighting_queue = world->calculate_chunk_lighting_queue;
         auto& update_chunk_jobs_queue        = world->update_chunk_jobs_queue;
 
-        Circular_FIFO_Queue< Block_Query_Result > light_queue;
-        light_queue.initialize(ArenaPushArrayAlignedZero(permanent_arena, Block_Query_Result, DEFAULT_QUEUE_SIZE));
+        auto *light_queue = ArenaPushAligned(arena, Circular_Queue< Block_Query_Result >);
+        Assert(light_queue);
+        light_queue->initialize();
 
         while (Job_System::internal_data.running)
         {
@@ -74,7 +75,7 @@ namespace minecraft {
             {
                 Calculate_Chunk_Light_Propagation_Job job = light_propagation_queue.pop();
                 Chunk *chunk = job.chunk;
-                propagate_sky_light(world, chunk, &light_queue);
+                propagate_sky_light(world, chunk, light_queue);
                 chunk->state = ChunkState_LightPropagated;
             }
 
@@ -82,13 +83,13 @@ namespace minecraft {
             {
                 Calculate_Chunk_Lighting_Job job = calculate_chunk_lighting_queue.pop();
                 Chunk *chunk = job.chunk;
-                calculate_lighting(world, chunk, &light_queue);
+                calculate_lighting(world, chunk, light_queue);
                 chunk->state = ChunkState_LightCalculated;
             }
 
-            while (!light_queue.is_empty())
+            while (!light_queue->is_empty())
             {
-                auto block_query = light_queue.pop();
+                auto block_query = light_queue->pop();
 
                 Block* block = block_query.block;
                 Block_Light_Info *block_light_info = get_block_light_info(block_query.chunk, block_query.block_coords);
@@ -111,13 +112,13 @@ namespace minecraft {
                             if ((i32)neighbour_block_light_info->sky_light_level <= (i32)block_light_info->sky_light_level - 2)
                             {
                                 set_block_sky_light_level(world, neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->sky_light_level - 1);
-                                light_queue.push(neighbour_query);
+                                light_queue->push(neighbour_query);
                             }
 
                             if ((i32)neighbour_block_light_info->light_source_level <= (i32)block_light_info->light_source_level - 2)
                             {
                                 set_block_light_source_level(world, neighbour_query.chunk, neighbour_query.block_coords, (i32)block_light_info->light_source_level - 1);
-                                light_queue.push(neighbour_query);
+                                light_queue->push(neighbour_query);
                             }
                         }
                     }

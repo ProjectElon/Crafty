@@ -2,40 +2,41 @@
 
 #include "core/common.h"
 
-#define DEFAULT_QUEUE_SIZE 65536
-
 namespace minecraft {
 
-    template<typename T>
-    struct Circular_FIFO_Queue
+    template< typename T, const u32 MaxElementCount = 65536 >
+    struct Circular_Queue
     {
-        T  *data;
-        i32 count;
+        T   data[MaxElementCount];
         i32 start_index;
         i32 end_index;
 
-        bool initialize(T *data, i32 count = DEFAULT_QUEUE_SIZE)
+        bool initialize()
         {
-            this->data        = data;
-            this->count       = count;
-            this->start_index = 0;
-            this->end_index   = 0;
+            start_index = 0;
+            end_index   = 0;
             return true;
         }
 
         inline void push(const T& element)
         {
-            data[this->end_index] = element;
-            this->end_index++;
-            if (this->end_index == count) this->end_index = 0;
+            data[end_index] = element;
+            end_index++;
+            if (end_index == MaxElementCount)
+            {
+                end_index = 0;
+            }
         }
 
         inline T pop()
         {
             Assert(!is_empty());
-            T element = data[this->start_index];
-            this->start_index++;
-            if (this->start_index == count) this->start_index = 0;
+            T element = data[start_index];
+            start_index++;
+            if (start_index == MaxElementCount)
+            {
+                start_index = 0;
+            }
             return element;
         }
 

@@ -256,11 +256,11 @@ namespace minecraft {
 
     void propagate_sky_light(World *world,
                              Chunk *chunk,
-                             Circular_FIFO_Queue< struct Block_Query_Result > *queue);
+                             Circular_Queue< struct Block_Query_Result > *queue);
 
     void calculate_lighting(World *world,
                             Chunk *chunk,
-                            Circular_FIFO_Queue< struct Block_Query_Result > *queue);
+                            Circular_Queue< struct Block_Query_Result > *queue);
 
     void serialize_chunk(World *world,
                          Chunk *chunk,
@@ -351,14 +351,9 @@ namespace minecraft {
         glm::ivec2           chunk_hash_table_keys[chunk_hash_table_capacity];
         u16                  chunk_hash_table_values[chunk_hash_table_capacity];
 
-        Update_Chunk_Job                        update_chunk_jobs_queue_data[DEFAULT_QUEUE_SIZE];
-        Circular_FIFO_Queue< Update_Chunk_Job > update_chunk_jobs_queue;
-
-        Calculate_Chunk_Light_Propagation_Job                        light_propagation_queue_data[DEFAULT_QUEUE_SIZE];
-        Circular_FIFO_Queue< Calculate_Chunk_Light_Propagation_Job > light_propagation_queue;
-
-        Calculate_Chunk_Lighting_Job                        calculate_chunk_lighting_queue_data[DEFAULT_QUEUE_SIZE];
-        Circular_FIFO_Queue< Calculate_Chunk_Lighting_Job > calculate_chunk_lighting_queue;
+        Circular_Queue< Update_Chunk_Job >                      update_chunk_jobs_queue;
+        Circular_Queue< Calculate_Chunk_Light_Propagation_Job > light_propagation_queue;
+        Circular_Queue< Calculate_Chunk_Lighting_Job >          calculate_chunk_lighting_queue;
     };
 
     inline ChunkHashTableEntryState get_entry_state(u16 entry)

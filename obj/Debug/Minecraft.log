@@ -1,18 +1,2 @@
-﻿  event.cpp
-  input.cpp
-  platform.cpp
-  Inventory.cpp
-  game.cpp
-  game_console_commands.cpp
-  job_system.cpp
-  jobs.cpp
-  physics.cpp
-  profiler.cpp
-  visual_debugging.cpp
-  world.cpp
-  main.cpp
-  opengl_2d_renderer.cpp
-  opengl_debug_renderer.cpp
-  opengl_renderer.cpp
-  dropdown_console.cpp
+﻿  game_assets.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

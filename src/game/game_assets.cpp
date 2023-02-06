@@ -125,7 +125,7 @@ namespace minecraft {
             {
                 Bitmap_Font *font = ArenaPushAligned(&state->asset_arena,
                                                      Bitmap_Font);
-                load_font(font, path.data, 22, &state->asset_arena);
+                load_font(font, path.data, 20, &state->asset_arena);
                 asset.data = font;
             } break;
         }

@@ -608,7 +608,7 @@ namespace minecraft {
         return neighbours;
     }
 
-    void propagate_sky_light(World *world, Chunk *chunk, Circular_FIFO_Queue< Block_Query_Result > *queue)
+    void propagate_sky_light(World *world, Chunk *chunk, Circular_Queue< Block_Query_Result > *queue)
     {
         for (i32 z = 0; z < CHUNK_DEPTH; z++)
         {
@@ -651,7 +651,7 @@ namespace minecraft {
 
     void calculate_lighting(World *world,
                             Chunk *chunk,
-                            Circular_FIFO_Queue< Block_Query_Result > *queue)
+                            Circular_Queue< Block_Query_Result > *queue)
     {
         for (i32 y = CHUNK_HEIGHT - 1; y >= 0; y--)
         {
@@ -780,9 +780,9 @@ namespace minecraft {
         world->free_chunk_count      = World::chunk_capacity;
         world->first_free_chunk_node = &world->chunk_nodes[0];
 
-        world->update_chunk_jobs_queue.initialize(world->update_chunk_jobs_queue_data, DEFAULT_QUEUE_SIZE);
-        world->calculate_chunk_lighting_queue.initialize(world->calculate_chunk_lighting_queue_data, DEFAULT_QUEUE_SIZE);
-        world->light_propagation_queue.initialize(world->light_propagation_queue_data, DEFAULT_QUEUE_SIZE);
+        world->update_chunk_jobs_queue.initialize();
+        world->calculate_chunk_lighting_queue.initialize();
+        world->light_propagation_queue.initialize();
 
         world->game_timer     = 0.0f;
         world->game_time_rate = 1.0f / 72.0f; // 1 / 72.0f is the number used by minecraft
@@ -1115,8 +1115,8 @@ namespace minecraft {
                 else
                 {
                     free_chunk(world, chunk);
-                    Assert(inserted);
-                    chunk = inserted;
+                    Assert(hashed);
+                    chunk = hashed;
                 }
             }
         }
@@ -1253,7 +1253,7 @@ namespace minecraft {
         }
     }
 
-    static void queue_update_sub_chunk_job(Circular_FIFO_Queue< Update_Chunk_Job > &queue, Chunk *chunk, i32 sub_chunk_index)
+    static void queue_update_sub_chunk_job(Circular_Queue< Update_Chunk_Job > &queue, Chunk *chunk, i32 sub_chunk_index)
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
