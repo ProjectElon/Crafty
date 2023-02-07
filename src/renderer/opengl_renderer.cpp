@@ -1,5 +1,6 @@
 #include "opengl_renderer.h"
 #include "core/platform.h"
+#include "core/file_system.h"
 #include "game/game.h"
 #include "camera.h"
 #include "opengl_debug_renderer.h"
@@ -9,7 +10,7 @@
 #include "opengl_vertex_array.h"
 #include "opengl_frame_buffer.h"
 #include "memory/memory_arena.h"
-#include "core/file_system.h"
+#include "containers/queue.h"
 
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -132,10 +133,10 @@ namespace minecraft {
         Chunk_Instance    *base_instance;
 
         std::mutex         free_buckets_mutex;
-        std::vector< i32 > free_buckets; // todo(harlequin): refactor
+        Circular_Queue< i32, World::SubChunkBucketCapacity > free_buckets;
 
         std::mutex         free_instances_mutex;
-        std::vector< i32 > free_instances; // todo(harlequin): refactor
+        Circular_Queue< i32, World::SubChunkBucketCapacity > free_instances;
 
         bool enable_fxaa;
 
@@ -334,17 +335,15 @@ namespace minecraft {
         renderer->base_instance      = (Chunk_Instance *) chunk_instance_buffer.data;
 
         new (&renderer->free_buckets_mutex) std::mutex;
-        new (&renderer->free_buckets) std::vector< i32 >;
-        renderer->free_buckets.resize(World::SubChunkBucketCapacity);
-
         new (&renderer->free_instances_mutex) std::mutex;
-        new (&renderer->free_instances) std::vector< i32 >;
-        renderer->free_instances.resize(World::SubChunkBucketCapacity);
+
+        renderer->free_buckets.initialize();
+        renderer->free_buckets.initialize();
 
         for (i32 i = 0; i < World::SubChunkBucketCapacity; ++i)
         {
-            renderer->free_buckets[i]   = World::SubChunkBucketCapacity - i - 1;
-            renderer->free_instances[i] = World::SubChunkBucketCapacity - i - 1;
+            renderer->free_buckets.push(i);
+            renderer->free_instances.push(i);
         }
 
         initialize_command_buffer(&renderer->opaque_command_buffer, World::SubChunkBucketCapacity);
@@ -547,10 +546,8 @@ namespace minecraft {
 
     void opengl_renderer_allocate_sub_chunk_bucket(Sub_Chunk_Bucket *bucket)
     {
-        Assert(renderer->free_buckets.size());
         renderer->free_buckets_mutex.lock();
-        bucket->memory_id = renderer->free_buckets.back();
-        renderer->free_buckets.pop_back();
+        bucket->memory_id = renderer->free_buckets.pop();
         renderer->free_buckets_mutex.unlock();
         bucket->current_vertex = renderer->base_vertex + bucket->memory_id * World::SubChunkBucketVertexCount;
         bucket->face_count = 0;
@@ -567,7 +564,7 @@ namespace minecraft {
     {
         Assert(bucket->memory_id != -1 && bucket->current_vertex);
         renderer->free_buckets_mutex.lock();
-        renderer->free_buckets.push_back(bucket->memory_id);
+        renderer->free_buckets.push(bucket->memory_id);
         renderer->free_buckets_mutex.unlock();
         bucket->memory_id = -1;
         bucket->current_vertex = nullptr;
@@ -576,10 +573,8 @@ namespace minecraft {
 
     i32 opengl_renderer_allocate_sub_chunk_instance()
     {
-        Assert(renderer->free_buckets.size());
         renderer->free_instances_mutex.lock();
-        i32 instance_memory_id = renderer->free_instances.back();
-        renderer->free_instances.pop_back();
+        i32 instance_memory_id = renderer->free_instances.pop();
         renderer->free_instances_mutex.unlock();
         return instance_memory_id;
     }
@@ -587,7 +582,7 @@ namespace minecraft {
     void opengl_renderer_free_sub_chunk_instance(i32 instance_memory_id)
     {
         renderer->free_instances_mutex.lock();
-        renderer->free_instances.push_back(instance_memory_id);
+        renderer->free_instances.push(instance_memory_id);
         renderer->free_instances_mutex.unlock();
     }
 
@@ -1773,7 +1768,7 @@ namespace minecraft {
 
     i64 opengl_renderer_get_free_chunk_bucket_count()
     {
-        return renderer->free_buckets.size();
+        return renderer->free_buckets.count;
     }
 
     void opengl_renderer_set_is_fxaa_enabled(bool enabled)

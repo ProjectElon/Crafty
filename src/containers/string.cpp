@@ -54,15 +54,30 @@ namespace minecraft {
         return result;
     }
 
-    bool equal(String8 *A, String8 *B)
+    u64 hash(const String8 &str)
     {
-        if (A->count != B->count)
+        u64 hash = 0;
+        for(u32 i = 0; i < str.count; ++i)
+        {
+            hash += str.data[i];
+            hash += (hash << 10);
+            hash ^= (hash >> 6);
+        }
+        hash += (hash << 3);
+        hash ^= (hash >> 11);
+        hash += (hash << 15);
+        return hash;
+    }
+
+    bool equal(const String8 *a, const String8 *b)
+    {
+        if (a->count != b->count)
         {
             return false;
         }
-        for (i32 i = 0; i < A->count; i++)
+        for (i32 i = 0; i < a->count; i++)
         {
-            if (A->data[i] != B->data[i])
+            if (a->data[i] != b->data[i])
             {
                 return false;
             }

@@ -2,21 +2,20 @@
     "env": {
         "myDefaultIncludePath": [
             "${workspaceFolder}",
-            "${workspaceFolder}/src/**"
+            "${workspaceFolder}/src"
         ],
-        "myCompilerPath": "/usr/local/bin/gcc-7"
+        "myCompilerPath": ""
     },
     "configurations": [
         {
-            "name": "Mac",
-            "intelliSenseMode": "clang-x64",
+            "name": "Windows",
+            "intelliSenseMode": "windows-clang-x64",
             "includePath": [
                 "${myDefaultIncludePath}",
+                "${workspaceFolder}/src/",
                 "${workspaceFolder}/lib/include"
             ],
             "defines": [
-                "FOO",
-                "BAR=100"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17",

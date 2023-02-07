@@ -13,6 +13,13 @@
         "xlocmon": "cpp",
         "xlocnum": "cpp",
         "xloctime": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "list": "cpp",
+        "map": "cpp",
+        "vector": "cpp",
+        "xhash": "cpp",
+        "xtree": "cpp",
+        "xstring": "cpp",
+        "*.rh": "cpp"
     }
 }

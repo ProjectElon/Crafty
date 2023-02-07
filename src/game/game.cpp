@@ -2,6 +2,7 @@
 #include "core/platform.h"
 
 #include "containers/string.h"
+#include "containers/hash_table.h" // todo(harlequin): temprary
 
 #include "game/job_system.h"
 #include "game/jobs.h"
@@ -275,6 +276,13 @@ namespace minecraft {
         Platform::switch_to_window_mode(game_state->window,
                                         game_config,
                                         window_mode);
+
+        Hash_Table< String8, u32, 1024 > table;
+        table.initialize();
+        u32 *a = table.insert(String8FromCString("hello"), 1).entry;
+        u32 *b = table.insert(String8FromCString("hello"), 2).entry;
+        u32 *c = table.find(String8FromCString("hello")).entry;
+        u32 d  = table.remove(String8FromCString("hello"));
 
         return true;
     }

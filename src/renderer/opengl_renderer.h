@@ -47,16 +47,16 @@ namespace minecraft {
     bool opengl_renderer_on_resize(const Event* event, void *sender);
 
     void opengl_renderer_update_sub_chunk(World *world,
-                                          Chunk* chunk,
-                                          u32 sub_chunk_index);
+                                          Chunk *chunk,
+                                          u32    sub_chunk_index);
 
-    void opengl_renderer_begin_frame(const glm::vec4& clear_color,
-                                     const glm::vec4& tint_color,
+    void opengl_renderer_begin_frame(const glm::vec4 &clear_color,
+                                     const glm::vec4 &tint_color,
                                      Camera *camera);
 
     void opengl_renderer_render_sub_chunk(World *world,
                                           Chunk *chunk,
-                                          u32 sub_chunk_index);
+                                          u32    sub_chunk_index);
 
     void opengl_renderer_render_chunks_at_region(World *world,
                                                  const World_Region_Bounds &player_region_bounds,

@@ -20,7 +20,13 @@ namespace minecraft {
     String8 push_string8(Memory_Arena *arena, const char *format, ...);
     String8 push_string8(Temprary_Memory_Arena *temp_arena, const char *format, ...);
 
-    bool equal(String8 *A, String8 *B);
+    u64 hash(const String8& str);
+
+    bool equal(const String8 *a, const String8 *b);
+    inline bool operator==(const String8& a, const String8& b)
+    {
+        return equal(&a, &b);
+    }
 
     i32 find_first_any_char(String8 *str, const char *pattern);
     i32 find_last_any_char(String8 *str, const char *pattern);
