@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/common.h"
+#include <atomic>
 
 namespace minecraft {
 
@@ -10,7 +11,7 @@ namespace minecraft {
         T   data[MaxElementCount];
         i32 start_index;
         i32 end_index;
-        u32 count;
+        std::atomic<u32> count; // todo(harlequin): move to concurrent circular queue
 
         bool initialize()
         {
@@ -20,9 +21,9 @@ namespace minecraft {
             return true;
         }
 
-        inline void push(const T& element)
+        inline void push(const T &element)
         {
-            Assert(count < MaxElementCount);
+            Assert(!is_full());
             data[end_index] = element;
             end_index++;
             if (end_index == MaxElementCount)
@@ -45,6 +46,14 @@ namespace minecraft {
             return element;
         }
 
-        inline bool is_empty() { return count == 0; }
+        inline bool is_empty()
+        {
+            return count == 0;
+        }
+
+        inline bool is_full()
+        {
+            return count == MaxElementCount;
+        }
     };
 }

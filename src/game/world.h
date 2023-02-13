@@ -77,12 +77,12 @@ namespace minecraft {
         static const Block_Info block_infos[BlockId_Count];  // todo(harlequin): this is going to be content driven in the future with the help of a tool
 
         u32         free_chunk_count;
-        Chunk_Node  chunk_nodes[ChunkCapacity];
+        Chunk_Node  chunk_nodes[World::ChunkCapacity];
         Chunk_Node *first_free_chunk_node;
 
         constexpr static u16 ChunkHashTableEntryStateMask = 0xC000;
         constexpr static u16 ChunkHashTableEntryValueMask = 0x0FFF;
-        constexpr static i64 ChunkHashTableCapacity       = ChunkCapacity;
+        constexpr static i64 ChunkHashTableCapacity       = World::ChunkCapacity;
 
         glm::ivec2 chunk_hash_table_keys[ChunkHashTableCapacity];
         u16        chunk_hash_table_values[ChunkHashTableCapacity];

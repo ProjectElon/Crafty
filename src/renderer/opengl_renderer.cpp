@@ -368,9 +368,8 @@ namespace minecraft {
         }
 
         // todo(harlequin): temprary
-        std::vector< std::string > texture_extensions = { ".png" };
         bool recursive = true;
-        std::vector< std::string > paths = File_System::list_files_at_path("../assets/textures/blocks", recursive, texture_extensions);
+        std::vector< std::string > paths = list_files_at_path("../assets/textures/blocks", recursive, { ".png" });
 
         auto compare = [](const std::string& a, const std::string& b) -> bool
         {
@@ -1554,9 +1553,9 @@ namespace minecraft {
     {
         wait_for_gpu_to_finish_work();
 
-        renderer->sky_color = clear_color;
+        renderer->sky_color  = clear_color;
         renderer->tint_color = tint_color;
-        renderer->camera = camera;
+        renderer->camera     = camera;
 
         memset(&renderer->stats.per_frame, 0, sizeof(PerFrame_Stats));
     }
@@ -1566,11 +1565,11 @@ namespace minecraft {
                                    f32                 sky_light_level,
                                    Block_Query_Result *selected_block_query)
     {
-        Opengl_Shader *opaque_shader      = get_shader(&assets->opaque_chunk_shader);
-        Opengl_Shader *transparent_shader = get_shader(&assets->transparent_chunk_shader);
-        Opengl_Shader *composite_shader   = get_shader(&assets->composite_shader);
-        Opengl_Shader *screen_shader      = get_shader(&assets->screen_shader);
-        Opengl_Shader *line_shader        = get_shader(&assets->line_shader);
+        Opengl_Shader *opaque_shader      = get_shader(assets->opaque_chunk_shader);
+        Opengl_Shader *transparent_shader = get_shader(assets->transparent_chunk_shader);
+        Opengl_Shader *composite_shader   = get_shader(assets->composite_shader);
+        Opengl_Shader *screen_shader      = get_shader(assets->screen_shader);
+        Opengl_Shader *line_shader        = get_shader(assets->line_shader);
 
         i32 width  = (i32)renderer->frame_buffer_size.x;
         i32 height = (i32)renderer->frame_buffer_size.y;

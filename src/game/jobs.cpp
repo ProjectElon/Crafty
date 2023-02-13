@@ -21,7 +21,7 @@ namespace minecraft {
 
         generate_chunk(chunk, world->seed);
 
-        if (File_System::exists(chunk_file_path.data))
+        if (exists(chunk_file_path.data))
         {
             deserialize_chunk(world, chunk, temp_arena);
         }

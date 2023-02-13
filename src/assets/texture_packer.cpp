@@ -23,10 +23,10 @@ namespace minecraft {
     };
 
     bool Texture_Packer::pack_textures(
-        std::vector<std::string> &paths,
-        const std::string &image_output_path,
-        const std::string &meta_output_path,
-        const std::string &header_output_path)
+        std::vector< std::string > &paths,
+        const std::string          &image_output_path,
+        const std::string          &meta_output_path,
+        const std::string          &header_output_path)
     {
         u32 texture_count = (u32)paths.size();
 

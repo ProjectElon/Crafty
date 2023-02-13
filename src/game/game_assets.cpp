@@ -1,23 +1,34 @@
 #include "game/game_assets.h"
+#include "core/file_system.h"
 #include "memory/memory_arena.h"
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
+#include "containers/hash_table.h"
 
 // todo(harlequin): temprary
 #include "meta/spritesheet_meta.h"
+
+#include <filesystem>
+#include "game_assets.h"
 
 namespace minecraft {
 
     struct Game_Assets_State
     {
         Memory_Arena    asset_arena;
+        Memory_Arena    asset_string_table_arena;
         Game_Asset_Info asset_infos[GameAssetType_Count];
+        u32             asset_count;
+        String8        *asset_string_table;
+        Game_Asset     *assets;
     };
 
     static Game_Assets_State *state;
 
-    void set_asset_extensions(GameAssetType type, String8 *extensions, u32 count)
+    static void set_asset_extensions(GameAssetType type,
+                                     String8      *extensions,
+                                     u32           count)
     {
         Game_Asset_Info *asset_info = &state->asset_infos[type];
         asset_info->extensions      = ArenaPushArrayAligned(&state->asset_arena,
@@ -27,7 +38,28 @@ namespace minecraft {
         memcpy(asset_info->extensions, extensions, count * sizeof(String8));
     }
 
-    bool initialize_game_assets(Memory_Arena *arena)
+    static GameAssetType find_asset_type(const String8 *extension)
+    {
+        GameAssetType asset_type = GameAssetType_None;
+
+        for (u32 i = 1; i < GameAssetType_Count; i++)
+        {
+            Game_Asset_Info *asset_info = state->asset_infos + i;
+            for (u32 j = 0; j < asset_info->extension_count; j++)
+            {
+                String8 *supported_extension = asset_info->extensions + j;
+                if (equal(extension, supported_extension))
+                {
+                    asset_type = (GameAssetType)i;
+                    break;
+                }
+            }
+        }
+
+        return asset_type;
+    }
+
+    bool initialize_game_assets(Memory_Arena *arena, const char *root_path)
     {
         if (state)
         {
@@ -36,6 +68,7 @@ namespace minecraft {
         state = ArenaPushAlignedZero(arena, Game_Assets_State);
         Assert(state);
 
+        state->asset_string_table_arena = push_sub_arena(arena, MegaBytes(1));
         state->asset_arena = push_sub_arena(arena, MegaBytes(64));
 
         String8 texture_extensions[] = {
@@ -53,6 +86,55 @@ namespace minecraft {
         };
         set_asset_extensions(GameAssetType_Font, font_extensions, ArrayCount(font_extensions));
 
+        state->asset_string_table = ArenaBeginArray(&state->asset_arena, String8);
+        auto it = std::filesystem::recursive_directory_iterator(std::filesystem::path(root_path));
+
+        for (const auto &entry : it)
+        {
+            if (entry.is_regular_file())
+            {
+                std::string asset_file_path = entry.path().string();
+                for (size_t i = 0; i < asset_file_path.length(); i++)
+                {
+                    if (asset_file_path[i] == '\\')
+                    {
+                        asset_file_path[i] = '/';
+                    }
+                }
+
+                String8 *str = ArenaPushArrayEntry(&state->asset_arena,
+                                                    state->asset_string_table);
+
+                *str = push_string8(&state->asset_string_table_arena,
+                                    "%.*s",
+                                    (i32)asset_file_path.length(),
+                                    asset_file_path.c_str());
+            }
+        }
+
+        state->asset_count = (u32)ArenaEndArray(&state->asset_arena,
+                                                state->asset_string_table);
+
+        state->assets = ArenaPushArrayAligned(&state->asset_arena,
+                                              Game_Asset,
+                                              state->asset_count);
+
+        for (u32 i = 0; i < state->asset_count; i++)
+        {
+            Game_Asset *asset      = &state->assets[i];
+            String8    *asset_path = &state->asset_string_table[i];
+            i32 dot_index          = find_last_any_char(asset_path, ".");
+            if (dot_index == -1)
+            {
+                fprintf(stderr,
+                        "[ERROR]: asset path: %.*s missing extension",
+                        (i32)asset_path->count,
+                        asset_path->data);
+            }
+            String8 extension = sub_str(asset_path, dot_index + 1);
+            asset->type       = find_asset_type(&extension);
+        }
+
         return true;
     }
 
@@ -60,48 +142,52 @@ namespace minecraft {
     {
     }
 
-    Game_Asset load_asset(String8 path)
+    Asset_Handle find_asset(const String8 &path)
     {
-        Game_Asset asset = {};
-        asset.path       = path;
+        Asset_Handle handle = INVALID_ASSET_HANDLE;
 
-        i32 dot_index    = find_last_any_char(&path, ".");
-        if (dot_index == -1)
+        // todo(harlequin): should we use a hash table here ?
+        for (u32 i = 0; i < state->asset_count; i++)
         {
-            fprintf(stderr,
-                    "[ERROR]: asset path: %.*s missing extension",
-                    (i32)path.count,
-                    path.data);
-            return asset;
-        }
-
-        String8 asset_extension  = sub_str(&path, dot_index + 1);
-        GameAssetType asset_type = GameAssetType_None;
-
-        for (u32 i = 1; i < GameAssetType_Count; i++)
-        {
-            Game_Asset_Info *asset_info = state->asset_infos + i;
-            for (u32 j = 0; j < asset_info->extension_count; j++)
+            String8 *str = state->asset_string_table + i;
+            if (equal(str, &path))
             {
-                String8 *supported_extension = asset_info->extensions + j;
-                if (equal(&asset_extension, supported_extension))
-                {
-                    asset_type = (GameAssetType)i;
-                    break;
-                }
+                handle = i;
+                break;
             }
         }
 
-        asset.type = asset_type;
+        return handle;
+    }
 
-        switch (asset_type)
+    const Game_Asset *get_asset(Asset_Handle handle)
+    {
+        Assert(handle < state->asset_count);
+        return &state->assets[handle];
+    }
+
+    // todo(harlequin): remove asset logging from load_texture load_shader load_font
+    bool load_asset(Asset_Handle handle)
+    {
+        Assert(handle < state->asset_count);
+        Game_Asset *asset = &state->assets[handle];
+        if (asset->state == AssetState_Loaded)
+        {
+            return true;
+        }
+
+        String8 *asset_path = &state->asset_string_table[handle];
+        asset->state = AssetState_Pending;
+
+        switch (asset->type)
         {
             case GameAssetType_None:
             {
+                asset->state = AssetState_Unloaded;
                 fprintf(stderr,
-                        "[ERROR]: unsupported asset extension: %.*s",
-                        (i32)asset_extension.count,
-                        asset_extension.data);
+                        "[ERROR]: failed to load asset: %.*s",
+                        (i32)asset_path->count,
+                             asset_path->data);
                 return asset;
             } break;
 
@@ -109,44 +195,80 @@ namespace minecraft {
             {
                 Opengl_Texture *texture = ArenaPushAligned(&state->asset_arena,
                                                            Opengl_Texture);
-                load_texture(texture, path.data, TextureUsage_UI);
-                asset.data = texture;
+                bool loaded = load_texture(texture,
+                                           asset_path->data,
+                                           TextureUsage_UI);
+                if (!loaded)
+                {
+                    return false;
+                }
+                asset->data = texture;
             } break;
 
             case GameAssetType_Shader:
             {
                 Opengl_Shader *shader = ArenaPushAligned(&state->asset_arena,
                                                          Opengl_Shader);
-                load_shader(shader, path.data);
-                asset.data = shader;
+                bool loaded = load_shader(shader,
+                                          asset_path->data);
+                if (!loaded)
+                {
+                    return false;
+                }
+                asset->data = shader;
             } break;
 
             case GameAssetType_Font:
             {
                 Bitmap_Font *font = ArenaPushAligned(&state->asset_arena,
                                                      Bitmap_Font);
-                load_font(font, path.data, 20, &state->asset_arena);
-                asset.data = font;
+                bool loaded = load_font(font,
+                                        asset_path->data,
+                                        22,
+                                        &state->asset_arena);
+                if (!loaded)
+                {
+                    return false;
+                }
+
+                asset->data = font;
             } break;
         }
 
-        return asset;
+        asset->state = AssetState_Loaded;
+        return true;
     }
 
-    Opengl_Texture* get_texture(Game_Asset *asset)
+    Asset_Handle load_asset(const String8 &path)
     {
+        Asset_Handle handle = find_asset(path);
+        if (handle != INVALID_ASSET_HANDLE)
+        {
+            load_asset(handle);
+        }
+        return handle;
+    }
+
+    Opengl_Texture* get_texture(Asset_Handle handle)
+    {
+        Assert(handle < state->asset_count);
+        Game_Asset *asset = &state->assets[handle];
         Assert(asset->type == GameAssetType_Texture);
         return (Opengl_Texture*)asset->data;
     }
 
-    Opengl_Shader* get_shader(Game_Asset *asset)
+    Opengl_Shader* get_shader(Asset_Handle handle)
     {
+        Assert(handle < state->asset_count);
+        Game_Asset *asset = &state->assets[handle];
         Assert(asset->type == GameAssetType_Shader);
         return (Opengl_Shader*)asset->data;
     }
 
-    Bitmap_Font* get_font(Game_Asset *asset)
+    Bitmap_Font* get_font(Asset_Handle handle)
     {
+        Assert(handle < state->asset_count);
+        Game_Asset *asset = &state->assets[handle];
         Assert(asset->type == GameAssetType_Font);
         return (Bitmap_Font*)asset->data;
     }
@@ -154,21 +276,21 @@ namespace minecraft {
     void load_game_assets(Game_Assets *assets)
     {
         assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
-        Opengl_Texture *block_sprite_sheet = get_texture(&assets->blocks_sprite_sheet);
+        Opengl_Texture *block_sprite_sheet = get_texture(assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
         initialize_texture_atlas(&assets->blocks_atlas, block_sprite_sheet, MC_PACKED_TEXTURE_COUNT, (Rectangle2i*)texture_rects, &state->asset_arena);
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
-        Opengl_Texture *hud_sprite_texture = get_texture(&assets->hud_sprite);
+        Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);
         set_texture_params_based_on_usage(hud_sprite_texture, TextureUsage_UI);
 
         assets->gameplay_crosshair  = load_asset(String8FromCString("../assets/textures/crosshair/crosshair001.png"));
-        Opengl_Texture *gameplay_crosshair_texture = get_texture(&assets->gameplay_crosshair);
+        Opengl_Texture *gameplay_crosshair_texture = get_texture(assets->gameplay_crosshair);
         set_texture_params_based_on_usage(gameplay_crosshair_texture, TextureUsage_UI);
 
         assets->inventory_crosshair = load_asset(String8FromCString("../assets/textures/crosshair/crosshair022.png"));
-        Opengl_Texture *inventory_crosshair_texture = get_texture(&assets->inventory_crosshair);
+        Opengl_Texture *inventory_crosshair_texture = get_texture(assets->inventory_crosshair);
         set_texture_params_based_on_usage(inventory_crosshair_texture, TextureUsage_UI);
 
         assets->basic_shader = load_asset(String8FromCString("../assets/shaders/basic.glsl"));

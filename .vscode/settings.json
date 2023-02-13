@@ -20,6 +20,7 @@
         "xhash": "cpp",
         "xtree": "cpp",
         "xstring": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "filesystem": "cpp"
     }
 }

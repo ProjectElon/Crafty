@@ -2,7 +2,6 @@
 #include "core/platform.h"
 
 #include "containers/string.h"
-#include "containers/hash_table.h" // todo(harlequin): temprary
 
 #include "game/job_system.h"
 #include "game/jobs.h"
@@ -120,7 +119,7 @@ namespace minecraft {
             return false;
         }
 
-        if (!initialize_game_assets(&game_memory->transient_arena))
+        if (!initialize_game_assets(&game_memory->transient_arena, "../assets/"))
         {
             fprintf(stderr, "[ERROR]: failed to initialize game_assets\n");
             return false;
@@ -164,7 +163,7 @@ namespace minecraft {
         default_ui_state.text_color = { 1.0f, 1.0f, 1.0f, 1.0f };
         default_ui_state.fill_color = { 1.0f, 0.0f, 0.0f, 1.0f };
         default_ui_state.offset     = { 0.0f, 0.0f };
-        default_ui_state.font       = get_font(&assets->noto_mono_font);
+        default_ui_state.font       = get_font(assets->noto_mono_font);
 
         if (!UI::initialize(&default_ui_state))
         {
@@ -199,7 +198,7 @@ namespace minecraft {
 
         if (!initialize_dropdown_console(console,
                                          &game_memory->permanent_arena,
-                                         get_font(&assets->noto_mono_font),
+                                         get_font(assets->noto_mono_font),
                                          event_system,
                                          text_color                  * normalize_color_factor,
                                          background_color            * normalize_color_factor,
@@ -276,14 +275,6 @@ namespace minecraft {
         Platform::switch_to_window_mode(game_state->window,
                                         game_config,
                                         window_mode);
-
-        Hash_Table< String8, u32, 1024 > table;
-        table.initialize();
-        u32 *a = table.insert(String8FromCString("hello"), 1).entry;
-        u32 *b = table.insert(String8FromCString("hello"), 2).entry;
-        u32 *c = table.find(String8FromCString("hello")).entry;
-        u32 d  = table.remove(String8FromCString("hello"));
-
         return true;
     }
 
@@ -666,12 +657,12 @@ namespace minecraft {
             draw_hotbar(inventory, world, frame_buffer_size, &frame_arena);
 
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
-            Opengl_Texture *cursor_texture = get_texture(&game_state->assets.gameplay_crosshair);
+            Opengl_Texture *cursor_texture = get_texture(game_state->assets.gameplay_crosshair);
 
             if (!game_state->is_cursor_locked)
             {
                 cursor = input->mouse_position;
-                cursor_texture = get_texture(&game_state->assets.inventory_crosshair);
+                cursor_texture = get_texture(game_state->assets.inventory_crosshair);
             }
 
             glm::vec2 cursor_size = { cursor_texture->width * 0.5f, cursor_texture->height * 0.5f };
@@ -684,7 +675,7 @@ namespace minecraft {
 
             draw_dropdown_console(console, game_state->delta_time);
 
-            opengl_2d_renderer_draw_quads(get_shader(&assets->quad_shader));
+            opengl_2d_renderer_draw_quads(get_shader(assets->quad_shader));
             opengl_renderer_swap_buffers(game_state->window);
 
             end_temprary_memory_arena(&frame_arena);

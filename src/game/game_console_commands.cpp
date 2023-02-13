@@ -140,7 +140,7 @@ namespace minecraft {
 
         while (command)
         {
-            String_Builder builder = begin_string_builder(&temp_arena);
+            Temprary_String_Builder builder = begin_string_builder(&temp_arena);
 
             push_string8(&builder,
                         "%.*s",

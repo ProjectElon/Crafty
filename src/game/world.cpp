@@ -17,9 +17,9 @@ namespace minecraft {
     {
         namespace fs = std::filesystem;
 
-        if (!File_System::exists(world_path.data))
+        if (!exists(world_path.data))
         {
-            File_System::create_directory(world_path.data);
+            create_directory(world_path.data);
         }
 
         world->path = world_path;
@@ -538,21 +538,6 @@ namespace minecraft {
         }
 
         return result;
-    }
-
-    void free_chunks_out_of_region(World *world, const World_Region_Bounds& region_bounds)
-    {
-        for (u32 i = 0; i < World::ChunkHashTableCapacity; i++)
-        {
-            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
-            {
-                continue;
-            }
-
-            const glm::ivec2& chunk_coords = world->chunk_hash_table_keys[i];
-            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
-            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
-        }
     }
 
     static void queue_update_sub_chunk_job(Circular_Queue< Update_Chunk_Job > &queue, Chunk *chunk, i32 sub_chunk_index)

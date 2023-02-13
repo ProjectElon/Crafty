@@ -416,9 +416,9 @@ namespace minecraft {
         }
         else
         {
-            if (File_System::exists(chunk_file_path.data))
+            if (exists(chunk_file_path.data))
             {
-                if (!File_System::delete_file(chunk_file_path.data))
+                if (!delete_file(chunk_file_path.data))
                 {
                     fprintf(stderr,
                             "[ERROR]: failed to delete file: %.*s\n",

@@ -25,48 +25,64 @@ namespace minecraft {
 
     struct Game_Asset_Info
     {
-        u32       extension_count;
-        String8  *extensions;
+        u32      extension_count;
+        String8 *extensions;
+    };
+
+    #define INVALID_ASSET_HANDLE (~0u)
+    typedef u32 Asset_Handle;
+
+    enum AssetState : u8
+    {
+        AssetState_Unloaded = 0x0,
+        AssetState_Pending  = 0x1,
+        AssetState_Loaded   = 0x2
     };
 
     struct Game_Asset
     {
+        AssetState    state;
         GameAssetType type;
-        String8       path;
         void         *data;
     };
 
-    bool initialize_game_assets(Memory_Arena *arena);
+    bool initialize_game_assets(Memory_Arena *arena, const char *root_path);
     void shutdown_game_assets();
 
-    Game_Asset load_asset(String8 path);
+    inline bool is_asset_handle_valid(Asset_Handle handle)
+    {
+        return handle != INVALID_ASSET_HANDLE;
+    }
 
-    Opengl_Texture* get_texture(Game_Asset *asset);
-    Opengl_Shader* get_shader(Game_Asset *asset);
-    Bitmap_Font* get_font(Game_Asset *asset);
+    Asset_Handle find_asset(const String8 &path);
+    const Game_Asset* get_asset(Asset_Handle handle);
+
+    Opengl_Texture* get_texture(Asset_Handle handle);
+    Opengl_Shader* get_shader(Asset_Handle handle);
+    Bitmap_Font* get_font(Asset_Handle handle);
 
     struct Game_Assets
     {
-        Game_Asset blocks_sprite_sheet;
-        Game_Asset hud_sprite;
-        Game_Asset gameplay_crosshair;
-        Game_Asset inventory_crosshair;
+        Asset_Handle blocks_sprite_sheet;
+        Asset_Handle hud_sprite;
+        Asset_Handle gameplay_crosshair;
+        Asset_Handle inventory_crosshair;
 
         Opengl_Texture_Atlas blocks_atlas;
 
-        Game_Asset basic_shader;
-        Game_Asset block_shader;
-        Game_Asset composite_shader;
-        Game_Asset line_shader;
-        Game_Asset opaque_chunk_shader;
-        Game_Asset transparent_chunk_shader;
-        Game_Asset screen_shader;
-        Game_Asset quad_shader;
+        Asset_Handle basic_shader;
+        Asset_Handle block_shader;
+        Asset_Handle composite_shader;
+        Asset_Handle line_shader;
+        Asset_Handle opaque_chunk_shader;
+        Asset_Handle transparent_chunk_shader;
+        Asset_Handle screen_shader;
+        Asset_Handle quad_shader;
 
-        Game_Asset fira_code_font;
-        Game_Asset noto_mono_font;
-        Game_Asset consolas_mono_font;
-        Game_Asset liberation_mono_font;
+        Asset_Handle fira_code_font;
+        Asset_Handle noto_mono_font;
+        Asset_Handle consolas_mono_font;
+        Asset_Handle liberation_mono_font;
     };
 
     void load_game_assets(Game_Assets *assets);

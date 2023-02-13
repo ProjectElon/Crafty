@@ -29,13 +29,13 @@ namespace minecraft {
         inventory->is_dragging = false;
         inventory->dragging_slot_offset = { 0.0f, 0.0f };
 
-        inventory->font                  = get_font(&assets->noto_mono_font);
+        inventory->font                  = get_font(assets->noto_mono_font);
 #if 0
         inventory->blocks_sprite_sheet   = get_texture(&assets->blocks_sprite_sheet);
 #else
         inventory->blocks_atlas          = &assets->blocks_atlas;
 #endif
-        inventory->hud_sprite            = get_texture(&assets->hud_sprite);
+        inventory->hud_sprite            = get_texture(assets->hud_sprite);
 
         f32 hud_sprite_width  = (f32)inventory->hud_sprite->width;
         f32 hud_sprite_height = (f32)inventory->hud_sprite->height;
@@ -459,7 +459,7 @@ namespace minecraft {
                                                    (i32)path.count,
                                                    path.data);
 
-        if (!File_System::exists(inventory_file_path.data))
+        if (!exists(inventory_file_path.data))
         {
             return;
         }
