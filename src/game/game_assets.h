@@ -29,8 +29,8 @@ namespace minecraft {
         String8 *extensions;
     };
 
-    #define INVALID_ASSET_HANDLE (~0u)
     typedef u32 Asset_Handle;
+    #define INVALID_ASSET_HANDLE (~0u)
 
     enum AssetState : u8
     {
@@ -39,23 +39,23 @@ namespace minecraft {
         AssetState_Loaded   = 0x2
     };
 
-    struct Game_Asset
+    struct Game_Asset_Entry
     {
-        AssetState    state;
+        String8      *path;
         GameAssetType type;
+        AssetState    state;
+        u64           size;
         void         *data;
     };
 
-    bool initialize_game_assets(Memory_Arena *arena, const char *root_path);
+    bool initialize_game_assets(Memory_Arena *arena,
+                                const char   *root_path);
     void shutdown_game_assets();
 
-    inline bool is_asset_handle_valid(Asset_Handle handle)
-    {
-        return handle != INVALID_ASSET_HANDLE;
-    }
+    bool is_asset_handle_valid(Asset_Handle handle);
 
     Asset_Handle find_asset(const String8 &path);
-    const Game_Asset* get_asset(Asset_Handle handle);
+    const Game_Asset_Entry* get_asset(Asset_Handle handle);
 
     Opengl_Texture* get_texture(Asset_Handle handle);
     Opengl_Shader* get_shader(Asset_Handle handle);
@@ -68,6 +68,7 @@ namespace minecraft {
         Asset_Handle gameplay_crosshair;
         Asset_Handle inventory_crosshair;
 
+        // todo(harlequin): temprary
         Opengl_Texture_Atlas blocks_atlas;
 
         Asset_Handle basic_shader;

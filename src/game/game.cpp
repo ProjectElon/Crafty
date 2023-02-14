@@ -99,7 +99,7 @@ namespace minecraft {
         if (!initialize_opengl_renderer(game_state->window,
                                         game_config->window_width,
                                         game_config->window_height,
-                                        &game_memory->permanent_arena))
+                                       &game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize render system\n");
             return false;

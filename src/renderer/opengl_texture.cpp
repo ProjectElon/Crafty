@@ -99,7 +99,7 @@ namespace minecraft {
         }
         else
         {
-            Assert(false && "unsupported channel count");
+            return false;
         }
 
         bool success = initialize_texture(texture,

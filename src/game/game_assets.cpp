@@ -16,22 +16,26 @@ namespace minecraft {
 
     struct Game_Assets_State
     {
-        Memory_Arena    asset_arena;
-        Memory_Arena    asset_string_table_arena;
+        Memory_Arena asset_entry_arena;
+        Memory_Arena asset_string_arena;
+        Memory_Arena asset_path_arena;
+        Memory_Arena asset_storage_arena;
+
         Game_Asset_Info asset_infos[GameAssetType_Count];
-        u32             asset_count;
-        String8        *asset_string_table;
-        Game_Asset     *assets;
+
+        u32               asset_count;
+        String8          *asset_paths;
+        Game_Asset_Entry *asset_entries;
     };
 
-    static Game_Assets_State *state;
+    static Game_Assets_State *game_assets_state;
 
     static void set_asset_extensions(GameAssetType type,
                                      String8      *extensions,
                                      u32           count)
     {
-        Game_Asset_Info *asset_info = &state->asset_infos[type];
-        asset_info->extensions      = ArenaPushArrayAligned(&state->asset_arena,
+        Game_Asset_Info *asset_info = &game_assets_state->asset_infos[type];
+        asset_info->extensions      = ArenaPushArrayAligned(&game_assets_state->asset_entry_arena,
                                                             String8,
                                                             count);
         asset_info->extension_count = count;
@@ -44,7 +48,7 @@ namespace minecraft {
 
         for (u32 i = 1; i < GameAssetType_Count; i++)
         {
-            Game_Asset_Info *asset_info = state->asset_infos + i;
+            Game_Asset_Info *asset_info = game_assets_state->asset_infos + i;
             for (u32 j = 0; j < asset_info->extension_count; j++)
             {
                 String8 *supported_extension = asset_info->extensions + j;
@@ -59,17 +63,86 @@ namespace minecraft {
         return asset_type;
     }
 
+    // todo(harlequin): remove asset logging from load_texture load_shader load_font
+    static bool load_asset(Game_Asset_Entry *asset_entry, const String8 &path)
+    {
+        assert(asset_entry);
+
+        asset_entry->state = AssetState_Pending;
+
+        switch (asset_entry->type)
+        {
+            case GameAssetType_Texture:
+            {
+                Opengl_Texture *texture = ArenaPushAligned(&game_assets_state->asset_storage_arena,
+                                                           Opengl_Texture);
+                bool loaded = load_texture(texture,
+                                           path.data,
+                                           TextureUsage_UI);
+                if (!loaded)
+                {
+                    asset_entry->state = AssetState_Unloaded;
+                    return false;
+                }
+                asset_entry->data = texture;
+            } break;
+
+            case GameAssetType_Shader:
+            {
+                Opengl_Shader *shader = ArenaPushAligned(&game_assets_state->asset_storage_arena,
+                                                         Opengl_Shader);
+                bool loaded = load_shader(shader,
+                                          path.data);
+                if (!loaded)
+                {
+                    asset_entry->state = AssetState_Unloaded;
+                    return false;
+                }
+                asset_entry->data = shader;
+            } break;
+
+            case GameAssetType_Font:
+            {
+                Bitmap_Font *font = ArenaPushAligned(&game_assets_state->asset_storage_arena,
+                                                     Bitmap_Font);
+                bool loaded = load_font(font,
+                                        path.data,
+                                        22,
+                                        &game_assets_state->asset_storage_arena);
+                if (!loaded)
+                {
+                    asset_entry->state = AssetState_Unloaded;
+                    return false;
+                }
+
+                asset_entry->data = font;
+            } break;
+
+            default:
+            {
+                asset_entry->state = AssetState_Unloaded;
+                return false;
+            } break;
+        }
+
+        asset_entry->state = AssetState_Loaded;
+        return true;
+    }
+
     bool initialize_game_assets(Memory_Arena *arena, const char *root_path)
     {
-        if (state)
+        if (game_assets_state)
         {
             return false;
         }
-        state = ArenaPushAlignedZero(arena, Game_Assets_State);
-        Assert(state);
+        game_assets_state = ArenaPushAlignedZero(arena, Game_Assets_State);
+        Assert(game_assets_state);
 
-        state->asset_string_table_arena = push_sub_arena(arena, MegaBytes(1));
-        state->asset_arena = push_sub_arena(arena, MegaBytes(64));
+
+        game_assets_state->asset_string_arena  = push_sub_arena(arena, MegaBytes(1));
+        game_assets_state->asset_path_arena    = push_sub_arena(arena, MegaBytes(1));
+        game_assets_state->asset_entry_arena   = push_sub_arena(arena, MegaBytes(1));
+        game_assets_state->asset_storage_arena = push_sub_arena(arena, MegaBytes(64));
 
         String8 texture_extensions[] = {
             String8FromCString("png")
@@ -86,8 +159,11 @@ namespace minecraft {
         };
         set_asset_extensions(GameAssetType_Font, font_extensions, ArrayCount(font_extensions));
 
-        state->asset_string_table = ArenaBeginArray(&state->asset_arena, String8);
-        auto it = std::filesystem::recursive_directory_iterator(std::filesystem::path(root_path));
+        game_assets_state->asset_paths   = ArenaBeginArray(&game_assets_state->asset_path_arena, String8);
+        game_assets_state->asset_entries = ArenaBeginArray(&game_assets_state->asset_entry_arena, Game_Asset_Entry);
+
+        namespace fs = std::filesystem;
+        auto it = fs::recursive_directory_iterator(fs::path(root_path));
 
         for (const auto &entry : it)
         {
@@ -102,38 +178,46 @@ namespace minecraft {
                     }
                 }
 
-                String8 *str = ArenaPushArrayEntry(&state->asset_arena,
-                                                    state->asset_string_table);
+                String8 *asset_path = ArenaPushArrayEntry(&game_assets_state->asset_path_arena,
+                                                           game_assets_state->asset_paths);
 
-                *str = push_string8(&state->asset_string_table_arena,
-                                    "%.*s",
-                                    (i32)asset_file_path.length(),
-                                    asset_file_path.c_str());
+                Game_Asset_Entry *asset_entry = ArenaPushArrayEntry(&game_assets_state->asset_entry_arena,
+                                                                    game_assets_state->asset_entries);
+
+                *asset_path = push_string8(&game_assets_state->asset_string_arena,
+                                           "%.*s",
+                                           (i32)asset_file_path.length(),
+                                           asset_file_path.c_str());
+
+                asset_entry->path = asset_path;
+                asset_entry->size = fs::file_size(entry.path());
+
+                i32 dot_index = find_last_any_char(asset_path, ".");
+                if (dot_index == -1)
+                {
+                    fprintf(stderr,
+                            "[ERROR]: asset path: %.*s missing extension",
+                            (i32)asset_path->count,
+                            asset_path->data);
+                }
+                String8 extension = sub_str(asset_path, dot_index + 1);
+                asset_entry->type = find_asset_type(&extension);
+                if (asset_entry->type == GameAssetType_None)
+                {
+                    fprintf(stderr,
+                            "[ERROR]: failed to load unregistered asset: %.*s\n",
+                            (i32)asset_path->count,
+                            asset_path->data);
+                }
+                else
+                {
+                    load_asset(asset_entry, *asset_path);
+                }
             }
         }
 
-        state->asset_count = (u32)ArenaEndArray(&state->asset_arena,
-                                                state->asset_string_table);
-
-        state->assets = ArenaPushArrayAligned(&state->asset_arena,
-                                              Game_Asset,
-                                              state->asset_count);
-
-        for (u32 i = 0; i < state->asset_count; i++)
-        {
-            Game_Asset *asset      = &state->assets[i];
-            String8    *asset_path = &state->asset_string_table[i];
-            i32 dot_index          = find_last_any_char(asset_path, ".");
-            if (dot_index == -1)
-            {
-                fprintf(stderr,
-                        "[ERROR]: asset path: %.*s missing extension",
-                        (i32)asset_path->count,
-                        asset_path->data);
-            }
-            String8 extension = sub_str(asset_path, dot_index + 1);
-            asset->type       = find_asset_type(&extension);
-        }
+        game_assets_state->asset_count = (u32)ArenaEndArray(&game_assets_state->asset_entry_arena,
+                                                             game_assets_state->asset_paths);
 
         return true;
     }
@@ -142,14 +226,19 @@ namespace minecraft {
     {
     }
 
+    bool is_asset_handle_valid(Asset_Handle handle)
+    {
+        return handle < game_assets_state->asset_count;
+    }
+
     Asset_Handle find_asset(const String8 &path)
     {
         Asset_Handle handle = INVALID_ASSET_HANDLE;
 
         // todo(harlequin): should we use a hash table here ?
-        for (u32 i = 0; i < state->asset_count; i++)
+        for (u32 i = 0; i < game_assets_state->asset_count; i++)
         {
-            String8 *str = state->asset_string_table + i;
+            String8 *str = game_assets_state->asset_paths + i;
             if (equal(str, &path))
             {
                 handle = i;
@@ -160,83 +249,10 @@ namespace minecraft {
         return handle;
     }
 
-    const Game_Asset *get_asset(Asset_Handle handle)
+    const Game_Asset_Entry *get_asset(Asset_Handle handle)
     {
-        Assert(handle < state->asset_count);
-        return &state->assets[handle];
-    }
-
-    // todo(harlequin): remove asset logging from load_texture load_shader load_font
-    bool load_asset(Asset_Handle handle)
-    {
-        Assert(handle < state->asset_count);
-        Game_Asset *asset = &state->assets[handle];
-        if (asset->state == AssetState_Loaded)
-        {
-            return true;
-        }
-
-        String8 *asset_path = &state->asset_string_table[handle];
-        asset->state = AssetState_Pending;
-
-        switch (asset->type)
-        {
-            case GameAssetType_None:
-            {
-                asset->state = AssetState_Unloaded;
-                fprintf(stderr,
-                        "[ERROR]: failed to load asset: %.*s",
-                        (i32)asset_path->count,
-                             asset_path->data);
-                return asset;
-            } break;
-
-            case GameAssetType_Texture:
-            {
-                Opengl_Texture *texture = ArenaPushAligned(&state->asset_arena,
-                                                           Opengl_Texture);
-                bool loaded = load_texture(texture,
-                                           asset_path->data,
-                                           TextureUsage_UI);
-                if (!loaded)
-                {
-                    return false;
-                }
-                asset->data = texture;
-            } break;
-
-            case GameAssetType_Shader:
-            {
-                Opengl_Shader *shader = ArenaPushAligned(&state->asset_arena,
-                                                         Opengl_Shader);
-                bool loaded = load_shader(shader,
-                                          asset_path->data);
-                if (!loaded)
-                {
-                    return false;
-                }
-                asset->data = shader;
-            } break;
-
-            case GameAssetType_Font:
-            {
-                Bitmap_Font *font = ArenaPushAligned(&state->asset_arena,
-                                                     Bitmap_Font);
-                bool loaded = load_font(font,
-                                        asset_path->data,
-                                        22,
-                                        &state->asset_arena);
-                if (!loaded)
-                {
-                    return false;
-                }
-
-                asset->data = font;
-            } break;
-        }
-
-        asset->state = AssetState_Loaded;
-        return true;
+        Assert(handle < game_assets_state->asset_count);
+        return &game_assets_state->asset_entries[handle];
     }
 
     Asset_Handle load_asset(const String8 &path)
@@ -244,31 +260,35 @@ namespace minecraft {
         Asset_Handle handle = find_asset(path);
         if (handle != INVALID_ASSET_HANDLE)
         {
-            load_asset(handle);
+            Game_Asset_Entry *asset_entry = &game_assets_state->asset_entries[handle];
+            if (asset_entry->state == AssetState_Unloaded)
+            {
+                bool loaded = load_asset(asset_entry, path);
+            }
         }
         return handle;
     }
 
     Opengl_Texture* get_texture(Asset_Handle handle)
     {
-        Assert(handle < state->asset_count);
-        Game_Asset *asset = &state->assets[handle];
+        Assert(handle < game_assets_state->asset_count);
+        Game_Asset_Entry *asset = &game_assets_state->asset_entries[handle];
         Assert(asset->type == GameAssetType_Texture);
         return (Opengl_Texture*)asset->data;
     }
 
     Opengl_Shader* get_shader(Asset_Handle handle)
     {
-        Assert(handle < state->asset_count);
-        Game_Asset *asset = &state->assets[handle];
+        Assert(handle < game_assets_state->asset_count);
+        Game_Asset_Entry *asset = &game_assets_state->asset_entries[handle];
         Assert(asset->type == GameAssetType_Shader);
         return (Opengl_Shader*)asset->data;
     }
 
     Bitmap_Font* get_font(Asset_Handle handle)
     {
-        Assert(handle < state->asset_count);
-        Game_Asset *asset = &state->assets[handle];
+        Assert(handle < game_assets_state->asset_count);
+        Game_Asset_Entry *asset = &game_assets_state->asset_entries[handle];
         Assert(asset->type == GameAssetType_Font);
         return (Bitmap_Font*)asset->data;
     }
@@ -279,7 +299,11 @@ namespace minecraft {
         Opengl_Texture *block_sprite_sheet = get_texture(assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
-        initialize_texture_atlas(&assets->blocks_atlas, block_sprite_sheet, MC_PACKED_TEXTURE_COUNT, (Rectangle2i*)texture_rects, &state->asset_arena);
+        initialize_texture_atlas(&assets->blocks_atlas,
+                                  assets->blocks_sprite_sheet,
+                                  MC_PACKED_TEXTURE_COUNT,
+                                  (Rectangle2i*)texture_rects,
+                                  &game_assets_state->asset_entry_arena);
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);

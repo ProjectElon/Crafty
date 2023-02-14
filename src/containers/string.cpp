@@ -108,14 +108,13 @@ namespace minecraft {
         u32 pattern_count = (u32)strlen(pattern);
         i32 index = -1;
 
-        for (u32 i = 0; i < str->count; i++)
+        for (i32 i = (u32)str->count - 1; i >= 0; i--)
         {
             for (u32 j = 0; j < pattern_count; j++)
             {
                 if (str->data[i] == pattern[j])
                 {
-                    index = i;
-                    break;
+                    return i;
                 }
             }
         }

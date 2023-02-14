@@ -21,6 +21,20 @@
         "xtree": "cpp",
         "xstring": "cpp",
         "*.rh": "cpp",
-        "filesystem": "cpp"
+        "filesystem": "cpp",
+        "codecvt": "cpp",
+        "forward_list": "cpp",
+        "fstream": "cpp",
+        "iomanip": "cpp",
+        "ios": "cpp",
+        "iosfwd": "cpp",
+        "istream": "cpp",
+        "optional": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "stop_token": "cpp",
+        "string": "cpp",
+        "xiosbase": "cpp",
+        "xlocbuf": "cpp"
     }
 }
