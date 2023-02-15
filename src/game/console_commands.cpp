@@ -339,6 +339,11 @@ namespace minecraft {
             {
                 return "string";
             } break;
+
+            default:
+            {
+                return "unknown type";
+            } break;
         }
     }
 }

@@ -299,11 +299,28 @@ namespace minecraft {
         Opengl_Texture *block_sprite_sheet = get_texture(assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
+        String8 *names = ArenaPushArray(&game_assets_state->asset_storage_arena, String8, MC_PACKED_TEXTURE_COUNT);
+
+        for (u32 i = 0; i < MC_PACKED_TEXTURE_COUNT; i++)
+        {
+            names[i] = { (char*)texture_names[i], strlen(texture_names[i]) };
+        }
+
         initialize_texture_atlas(&assets->blocks_atlas,
-                                  assets->blocks_sprite_sheet,
-                                  MC_PACKED_TEXTURE_COUNT,
-                                  (Rectangle2i*)texture_rects,
-                                  &game_assets_state->asset_entry_arena);
+                                 assets->blocks_sprite_sheet,
+                                 MC_PACKED_TEXTURE_COUNT,
+                                 (Rectangle2i*)texture_rects,
+                                 names,
+                                 &game_assets_state->asset_storage_arena);
+
+        bool success = serialize_texture_atlas(&assets->blocks_atlas,
+                                               "../assets/textures/blocks.atlas");
+        Assert(success);
+        success = deserialize_texture_atlas(&assets->blocks_atlas,
+                                            "../assets/textures/blocks.atlas",
+                                            &game_assets_state->asset_storage_arena);
+        Assert(success);
+        Assert(get_sub_texture_index(&assets->blocks_atlas, String8FromCString("water")) == Texture_Id_water);
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);

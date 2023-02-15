@@ -41,6 +41,7 @@ namespace minecraft {
         std::stringstream meta_file_stream;
         std::stringstream texture_enum_stream;
         std::stringstream texture_rect_stream;
+        std::stringstream texture_name_stream;
 
         auto compare = [](const std::string& a, const std::string& b) -> bool
         {
@@ -118,7 +119,7 @@ namespace minecraft {
                 }
             }
 
-            Rectangle2i texture_rect = { current_x, current_y, (u32)width, (u32)height };
+            Rectangle2i texture_rect = { (i32)current_x, (i32)current_y, (u32)width, (u32)height };
 
             std::string texture_name_without_extension = std::filesystem::path(path).filename().stem().string();
             Texture_Info& info = textures[texture_id];
@@ -128,6 +129,7 @@ namespace minecraft {
             meta_file_stream << texture_name_without_extension << " " << current_x << " " << current_y << " " << width << " " << height << "\n";
             texture_enum_stream << "\tTexture_Id_" << texture_name_without_extension << " = " << texture_id << ",\n";
             texture_rect_stream << "\t{ " << current_x << ", " << current_y << ", " << width << ", " << height << " },\n";
+            texture_name_stream << "\"" << texture_name_without_extension << "\",";
 
             current_x += width;
             texture_id++;
@@ -213,6 +215,11 @@ namespace minecraft {
         header_file_stream << "static Texture_Rect texture_rects[MC_PACKED_TEXTURE_COUNT] = \n{\n";
         header_file_stream << texture_rect_stream.str();
         header_file_stream << "};\n";
+
+        header_file_stream << "static const char* texture_names[MC_PACKED_TEXTURE_COUNT] = \n{\n";
+        header_file_stream << texture_name_stream.str();
+        header_file_stream << "};\n";
+
 
         std::stringstream texture_uv_rect_stream;
 

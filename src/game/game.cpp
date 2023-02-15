@@ -1,5 +1,6 @@
 #include "game/game.h"
 #include "core/platform.h"
+#include "core/file_system.h" // todo(harlequin): temprary
 
 #include "containers/string.h"
 
@@ -219,8 +220,8 @@ namespace minecraft {
 
         const char *world_name = "harlequin";
         String8 world_path = push_string8(&game_memory->transient_arena,
-                                                                    "../assets/worlds/%s",
-                                                                        world_name);
+                                          "../assets/worlds/%s",
+                                          world_name);
         Temprary_Memory_Arena temp_arena = begin_temprary_memory_arena(&game_memory->transient_arena);
         initialize_world(world, world_path, &temp_arena);
         end_temprary_memory_arena(&temp_arena);

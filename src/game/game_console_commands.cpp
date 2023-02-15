@@ -3,6 +3,11 @@
 #include "game/world.h"
 #include "renderer/opengl_renderer.h"
 #include "ui/dropdown_console.h"
+#include "assets/texture_packer.h"
+#include "game_console_commands.h"
+
+//todo(harlequin): temprary
+#include "core/file_system.h"
 
 namespace minecraft {
 
@@ -54,6 +59,9 @@ namespace minecraft {
                                           &set_time_command,
                                           set_time_command_args,
                                           ArrayCount(set_time_command_args));
+
+        console_commands_register_command(String8FromCString("pack_textures"),
+                                          &pack_textures_command);
     }
 
     bool clear_command(Console_Command_Argument *args)
@@ -206,6 +214,19 @@ namespace minecraft {
             return false;
         }
         game_state->world->game_time = real_time_to_game_time(hours, minutes, seconds);
+        return true;
+    }
+
+    bool minecraft::pack_textures_command(Console_Command_Argument *args)
+    {
+        std::vector< std::string > paths = list_files_at_path("../assets/textures/blocks/",
+                                                              false,
+                                                              { ".png" });
+
+        Texture_Packer::pack_textures(paths,
+                                      "../assets/textures/block_spritesheet.png",
+                                      "../assets/textures/spritesheet_meta.text",
+                                      "../src/meta/spritesheet_meta.h");
         return true;
     }
 }

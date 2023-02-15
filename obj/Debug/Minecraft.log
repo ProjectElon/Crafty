@@ -1,5 +1,2 @@
 ﻿  game_assets.cpp
-  opengl_texture.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(88,13): warning C4101: 'opengl_texture_format': unreferenced local variable
-C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(89,13): warning C4101: 'opengl_internal_format': unreferenced local variable
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe
