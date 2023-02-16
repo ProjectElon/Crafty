@@ -18,7 +18,7 @@ namespace minecraft {
         u8              *font_data;
         Opengl_Texture   atlas;
         stbtt_packedchar glyphs[256];
-        i32              char_height;
+        f32              char_height;
         i32              size_in_pixels;
     };
 

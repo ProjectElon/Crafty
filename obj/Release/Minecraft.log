@@ -1,24 +1,2 @@
-﻿  event.cpp
-  input.cpp
-  platform.cpp
-  Inventory.cpp
-  chunk.cpp
-  game.cpp
-  game_assets.cpp
-  game_console_commands.cpp
-  job_system.cpp
-  jobs.cpp
-  physics.cpp
-  profiler.cpp
-  visual_debugging.cpp
-  world.cpp
-  main.cpp
-  opengl_2d_renderer.cpp
-  opengl_debug_renderer.cpp
-  opengl_renderer.cpp
-  opengl_texture.cpp
-  opengl_texture_atlas.cpp
-  dropdown_console.cpp
-C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(88,13): warning C4101: 'opengl_texture_format': unreferenced local variable
-C:\dev\cpp\Crafty\src\renderer\opengl_texture.cpp(89,13): warning C4101: 'opengl_internal_format': unreferenced local variable
+﻿  opengl_renderer.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

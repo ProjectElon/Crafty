@@ -84,8 +84,8 @@ namespace minecraft {
         stbtt_InitFont(&font_info, font->font_data, 0);
         i32 ascent;
         stbtt_GetFontVMetrics(&font_info, &ascent, 0, 0);
-        f32 scale = stbtt_ScaleForPixelHeight(&font_info, size_in_pixels);
-        font->char_height = (i32)(ascent * scale);
+        f32 scale = stbtt_ScaleForPixelHeight(&font_info, (f32)size_in_pixels);
+        font->char_height = (f32)ascent * scale;
         font->size_in_pixels = size_in_pixels;
 
         char first_char    = ' ';
@@ -116,7 +116,7 @@ namespace minecraft {
         if (!stbtt_PackFontRange(&context,
                                  font->font_data,
                                  0,
-                                 size_in_pixels,
+                                 (f32)size_in_pixels,
                                  first_char,
                                  char_count,
                                  font->glyphs))
@@ -130,10 +130,13 @@ namespace minecraft {
         i32 pixel_count = texture_width * texture_height;
         u32 *pixels = ArenaPushArrayAligned(temp_arena, u32, pixel_count);
 
-        for (u32 i = 0; i < pixel_count; ++i)
+        for (i32 i = 0; i < pixel_count; ++i)
         {
-            u32 alpha = bitmap[i];
-            pixels[i] = alpha | (alpha << 8) | (alpha << 16) | (alpha << 24);
+            u32 R = 255;
+            u32 G = 255;
+            u32 B = 255;
+            u32 A = bitmap[i];
+            pixels[i] = R | (G << 8u) | (B << 16u) | (A << 24u);
         }
 
         if (font->atlas.handle)

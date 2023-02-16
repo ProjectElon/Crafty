@@ -20,6 +20,7 @@ namespace minecraft {
         GameAssetType_Texture,
         GameAssetType_Shader,
         GameAssetType_Font,
+        GameAssetType_TextureAtlas,
         GameAssetType_Count
     };
 
@@ -55,10 +56,15 @@ namespace minecraft {
     bool is_asset_handle_valid(Asset_Handle handle);
 
     Asset_Handle find_asset(const String8 &path);
-    const Game_Asset_Entry* get_asset(Asset_Handle handle);
+
+    Asset_Handle load_asset(const String8 &path);
+    bool load_asset(Asset_Handle asset_handle);
+
+    const Game_Asset_Entry* get_asset(Asset_Handle asset_handle);
 
     Opengl_Texture* get_texture(Asset_Handle handle);
     Opengl_Shader* get_shader(Asset_Handle handle);
+    Opengl_Texture_Atlas *get_texture_atlas(Asset_Handle handle);
     Bitmap_Font* get_font(Asset_Handle handle);
 
     struct Game_Assets
@@ -68,8 +74,7 @@ namespace minecraft {
         Asset_Handle gameplay_crosshair;
         Asset_Handle inventory_crosshair;
 
-        // todo(harlequin): temprary
-        Opengl_Texture_Atlas blocks_atlas;
+        Asset_Handle blocks_atlas;
 
         Asset_Handle basic_shader;
         Asset_Handle block_shader;

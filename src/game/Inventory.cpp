@@ -33,16 +33,16 @@ namespace minecraft {
 #if 0
         inventory->blocks_sprite_sheet   = get_texture(&assets->blocks_sprite_sheet);
 #else
-        inventory->blocks_atlas          = &assets->blocks_atlas;
+        inventory->blocks_atlas          = get_texture_atlas(assets->blocks_atlas);
 #endif
         inventory->hud_sprite            = get_texture(assets->hud_sprite);
 
-        f32 hud_sprite_width  = (f32)inventory->hud_sprite->width;
-        f32 hud_sprite_height = (f32)inventory->hud_sprite->height;
+        const u32 &hud_sprite_width  = inventory->hud_sprite->width;
+        const u32 &hud_sprite_height = inventory->hud_sprite->height;
 
-        inventory->inventory_slot_uv_rect        = convert_texture_rect_to_uv_rect({ 0, 176, 32, 32 },   hud_sprite_width, hud_sprite_height);
-        inventory->active_inventory_slot_uv_rect = convert_texture_rect_to_uv_rect({ 0, 144, 32, 32 },   hud_sprite_width, hud_sprite_height);
-        inventory->inventory_hud_uv_rect         = convert_texture_rect_to_uv_rect({ 276, 0, 216, 194 }, hud_sprite_width, hud_sprite_height);
+        inventory->inventory_slot_texture_coords        = rectangle_to_texture_coords({ 0, 176, 32, 32 },   hud_sprite_width, hud_sprite_height);
+        inventory->active_inventory_slot_texture_coords = rectangle_to_texture_coords({ 0, 144, 32, 32 },   hud_sprite_width, hud_sprite_height);
+        inventory->inventory_hud_texture_coords         = rectangle_to_texture_coords({ 276, 0, 216, 194 }, hud_sprite_width, hud_sprite_height);
 
         inventory->hot_bar_scale = 0.3f;
 
@@ -123,13 +123,13 @@ namespace minecraft {
             {
                 f32 slot_x = current_slot_x + (slot_size.x + slot_padding.x) * col;
                 f32 slot_y = current_slot_y + (slot_size.y + slot_padding.y) * row;
-                slot_positions[slot_index++] = make_rectangle2(slot_x, slot_y, slot_size.x, slot_size.y);
+                slot_positions[slot_index++] = rectangle(slot_x, slot_y, slot_size.x, slot_size.y);
             }
         }
 
         f32 crafting_output_slot_x = current_slot_x + (slot_size.x + slot_padding.x) * 7;
         f32 crafting_output_slot_y = current_slot_y + (slot_size.y + slot_padding.y) * 1;
-        slot_positions[slot_index++] = make_rectangle2(crafting_output_slot_x, crafting_output_slot_y, slot_size.x, slot_size.y);
+        slot_positions[slot_index++] = rectangle(crafting_output_slot_x, crafting_output_slot_y, slot_size.x, slot_size.y);
 
         // main inventory
         current_slot_y += 3.0f * (slot_size.y + slot_padding.y) + (12.0f / 194.0f) * inventory_hud_size.y;
@@ -142,7 +142,7 @@ namespace minecraft {
             {
                 f32 slot_x = current_slot_x + (slot_size.x + slot_padding.x) * col;
                 f32 slot_y = current_slot_y + (slot_size.y + slot_padding.y) * row;
-                slot_positions[slot_index++] = make_rectangle2(slot_x, slot_y, slot_size.x, slot_size.y);
+                slot_positions[slot_index++] = rectangle(slot_x, slot_y, slot_size.x, slot_size.y);
             }
         }
 
@@ -158,7 +158,7 @@ namespace minecraft {
                 Inventory_Slot& slot = inventory->hot_bar[col];
                 f32 slot_x = current_slot_x + (slot_size.x + slot_padding.x) * col;
                 f32 slot_y = current_slot_y + (slot_size.y + slot_padding.y) * row;
-                slot_positions[slot_index++] = make_rectangle2(slot_x, slot_y, slot_size.x, slot_size.y);
+                slot_positions[slot_index++] = rectangle(slot_x, slot_y, slot_size.x, slot_size.y);
             }
         }
     }
@@ -170,11 +170,11 @@ namespace minecraft {
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
             Inventory_Slot &slot = inventory->slots[slot_index];
-            const Rectangle2 &slot_rect = inventory->slot_positions[slot_index];
+            const Rectangle &slot_rect = inventory->slot_positions[slot_index];
             bool is_slot_empty = slot.count == 0 && slot.block_id == BlockId_Air;
 
             if (!is_slot_empty &&
-                is_point_inside_rectangle2(mouse, slot_rect) &&
+                is_point_inside_rectangle(mouse, slot_rect) &&
                 is_button_held(input, MC_MOUSE_BUTTON_LEFT) &&
                 !inventory->is_dragging)
             {
@@ -201,7 +201,7 @@ namespace minecraft {
             for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
             {
                 Inventory_Slot &slot = inventory->slots[slot_index];
-                const Rectangle2 &slot_rect = inventory->slot_positions[slot_index];
+                const Rectangle &slot_rect = inventory->slot_positions[slot_index];
 
                 glm::vec2 slot_center_p = slot_rect.min + half_slot_size;
                 glm::vec2 mouse_to_slot = (mouse - inventory->dragging_slot_offset + half_slot_size) - slot_center_p;
@@ -261,7 +261,7 @@ namespace minecraft {
         auto half_slot_size      = slot_size * 0.5f;
 
         Inventory_Slot &slot = inventory->slots[slot_index];
-        Rectangle2 slot_rect = inventory->slot_positions[slot_index];
+        Rectangle slot_rect = inventory->slot_positions[slot_index];
 
         glm::vec2 slot_pos = slot_rect.min;
 
@@ -285,22 +285,13 @@ namespace minecraft {
                 color = grass_color;
             }
 
-#if 0
-            opengl_2d_renderer_push_quad(slot_pos + half_slot_size,
-                                         slot_size,
-                                         0.0f,
-                                         color,
-                                         inventory->blocks_sprite_sheet,
-                                         side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
-                                         side_texture_uv_rect.bottom_left);
-#else
             opengl_2d_renderer_push_quad(slot_pos + half_slot_size,
                                          slot_size,
                                          0.0f,
                                          color,
                                          inventory->blocks_atlas,
                                          info.side_texture_id);
-#endif
+
             Bitmap_Font* font   = inventory->font;
             String8 slot_text   = push_string8(temp_arena, "%d", (u32)slot.count);
             glm::vec2 text_size = get_string_size(font, slot_text);
@@ -325,8 +316,8 @@ namespace minecraft {
                                      0.0f,
                                      { 1.0f, 1.0f, 1.0f, 1.0f },
                                      inventory->hud_sprite,
-                                     inventory->inventory_hud_uv_rect.top_right - inventory->inventory_hud_uv_rect.bottom_left,
-                                     inventory->inventory_hud_uv_rect.bottom_left);
+                                     inventory->inventory_hud_texture_coords.scale,
+                                     inventory->inventory_hud_texture_coords.offset);
 
         for (i32 slot_index = 0; slot_index < INVENTORY_SLOT_TOTAL_COUNT; slot_index++)
         {
@@ -379,11 +370,11 @@ namespace minecraft {
         {
             Inventory_Slot& slot = inventory->hot_bar[slot_index];
 
-            UV_Rectangle* slot_uv_rect = &inventory->inventory_slot_uv_rect;
+            Texture_Coords* slot_texture_coords = &inventory->inventory_slot_texture_coords;
 
             if (inventory->active_hot_bar_slot_index == slot_index)
             {
-                slot_uv_rect = &inventory->active_inventory_slot_uv_rect;
+                slot_texture_coords = &inventory->active_inventory_slot_texture_coords;
             }
 
             f32 slot_center_x = hot_bar_start_x + slot_index * slot_width + half_slot_width;
@@ -395,31 +386,21 @@ namespace minecraft {
                 UV_Rect& side_texture_uv_rect = texture_uv_rects[info.side_texture_id];
                 glm::vec4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-#if 0
-                opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
-                                              { slot_width, slot_height },
-                                              0.0f,
-                                              color,
-                                              inventory->blocks_sprite_sheet,
-                                              side_texture_uv_rect.top_right - side_texture_uv_rect.bottom_left,
-                                              side_texture_uv_rect.bottom_left);
-
-#else
                 opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
                                              { slot_width, slot_height },
                                              0.0f,
                                              color,
                                              inventory->blocks_atlas,
                                              info.side_texture_id);
-#endif
+
                 Bitmap_Font* font = inventory->font;
                 String8 slot_text = push_string8(temp_arena, "%d", (u32)slot.count);
                 auto text_size    = get_string_size(font, slot_text);
                 opengl_2d_renderer_push_string(font,
-                                                slot_text,
-                                                text_size,
-                                                { slot_center_x, slot_center_y },
-                                                { 1.0f, 1.0f, 1.0f, 1.0f });
+                                               slot_text,
+                                               text_size,
+                                               { slot_center_x, slot_center_y },
+                                               { 1.0f, 1.0f, 1.0f, 1.0f });
             }
 
             opengl_2d_renderer_push_quad({ slot_center_x, slot_center_y },
@@ -427,8 +408,8 @@ namespace minecraft {
                                           0.0f,
                                           { 1.0f, 1.0f, 1.0f, 1.0f },
                                           inventory->hud_sprite,
-                                          slot_uv_rect->top_right - slot_uv_rect->bottom_left,
-                                          slot_uv_rect->bottom_left);
+                                          slot_texture_coords->scale,
+                                          slot_texture_coords->offset);
         }
     }
 

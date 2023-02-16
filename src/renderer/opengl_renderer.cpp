@@ -1729,6 +1729,7 @@ namespace minecraft {
         Opengl_Texture *screen_texture = &renderer->opaque_frame_buffer.color_attachments[0];
         bind_texture(screen_texture, 4);
 
+        // todo(harlequin): remove renderer->screen_quad_vertex_array and use a predefined vertices in screen.glsl vertex shader
         bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }

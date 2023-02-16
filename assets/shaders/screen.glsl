@@ -28,13 +28,13 @@ uniform bool u_enable_fxaa;
 uniform sampler2D u_screen;
 
 #ifndef FXAA_REDUCE_MIN
-    #define FXAA_REDUCE_MIN   (1.0/ 128.0)
+    #define FXAA_REDUCE_MIN   (1.0f / 128.0f)
 #endif
 #ifndef FXAA_REDUCE_MUL
-    #define FXAA_REDUCE_MUL   (1.0 / 8.0)
+    #define FXAA_REDUCE_MUL   (1.0f / 8.0f)
 #endif
 #ifndef FXAA_SPAN_MAX
-    #define FXAA_SPAN_MAX     8.0
+    #define FXAA_SPAN_MAX     8.0f
 #endif
 
 //optimized version for mobile, where dependent
@@ -44,14 +44,14 @@ vec4 fxaa(sampler2D tex, vec2 fragCoord, vec2 resolution,
             vec2 v_rgbSW, vec2 v_rgbSE,
             vec2 v_rgbM) {
     vec4 color;
-    mediump vec2 inverseVP = vec2(1.0 / resolution.x, 1.0 / resolution.y);
+    mediump vec2 inverseVP = vec2(1.0f / resolution.x, 1.0f / resolution.y);
     vec3 rgbNW = texture2D(tex, v_rgbNW).xyz;
     vec3 rgbNE = texture2D(tex, v_rgbNE).xyz;
     vec3 rgbSW = texture2D(tex, v_rgbSW).xyz;
     vec3 rgbSE = texture2D(tex, v_rgbSE).xyz;
     vec4 texColor = texture2D(tex, v_rgbM);
     vec3 rgbM  = texColor.xyz;
-    vec3 luma = vec3(0.299, 0.587, 0.114);
+    vec3 luma = vec3(0.299f, 0.587f, 0.114f);
     float lumaNW = dot(rgbNW, luma);
     float lumaNE = dot(rgbNE, luma);
     float lumaSW = dot(rgbSW, luma);
@@ -65,19 +65,19 @@ vec4 fxaa(sampler2D tex, vec2 fragCoord, vec2 resolution,
     dir.y =  ((lumaNW + lumaSW) - (lumaNE + lumaSE));
 
     float dirReduce = max((lumaNW + lumaNE + lumaSW + lumaSE) *
-                          (0.25 * FXAA_REDUCE_MUL), FXAA_REDUCE_MIN);
+                          (0.25f * FXAA_REDUCE_MUL), FXAA_REDUCE_MIN);
 
-    float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+    float rcpDirMin = 1.0f / (min(abs(dir.x), abs(dir.y)) + dirReduce);
     dir = min(vec2(FXAA_SPAN_MAX, FXAA_SPAN_MAX),
               max(vec2(-FXAA_SPAN_MAX, -FXAA_SPAN_MAX),
               dir * rcpDirMin)) * inverseVP;
 
-    vec3 rgbA = 0.5 * (
+    vec3 rgbA = 0.5f * (
         texture2D(tex, fragCoord * inverseVP + dir * (1.0 / 3.0 - 0.5)).xyz +
         texture2D(tex, fragCoord * inverseVP + dir * (2.0 / 3.0 - 0.5)).xyz);
-    vec3 rgbB = rgbA * 0.5 + 0.25 * (
-        texture2D(tex, fragCoord * inverseVP + dir * -0.5).xyz +
-        texture2D(tex, fragCoord * inverseVP + dir * 0.5).xyz);
+    vec3 rgbB = rgbA * 0.5f + 0.25f * (
+        texture2D(tex, fragCoord * inverseVP + dir * -0.5f).xyz +
+        texture2D(tex, fragCoord * inverseVP + dir * 0.5f).xyz);
 
     float lumaB = dot(rgbB, luma);
     if ((lumaB < lumaMin) || (lumaB > lumaMax))

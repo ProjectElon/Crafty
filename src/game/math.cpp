@@ -1,34 +1,41 @@
 #include "game/math.h"
 #include "core/common.h"
 #include "renderer/camera.h"
+#include "math.h"
 
 namespace minecraft {
 
-    Rectangle2 make_rectangle2(const glm::vec2& top_left, const glm::vec2& size)
+    Rectangle rectangle(const glm::vec2& top_left,
+                        const glm::vec2& size)
     {
-        Rectangle2 result;
+        Rectangle result;
         result.min = top_left;
         result.max = top_left + size;
         return result;
     }
 
-    Rectangle2 make_rectangle2(f32 x, f32 y, f32 width, f32 height)
+    Rectangle rectangle(f32 x,
+                        f32 y,
+                        f32 width,
+                        f32 height)
     {
-        Rectangle2 result;
+        Rectangle result;
         result.min = { x, y };
         result.max = { x + width, y + height };
         return result;
     }
 
-    Rectangle2 make_rectangle2_min_max(const glm::vec2& min, const glm::vec2& max)
+    Rectangle rectangle_min_max(const glm::vec2& min,
+                                       const glm::vec2& max)
     {
-        Rectangle2 result;
+        Rectangle result;
         result.min = min;
         result.max = max;
         return result;
     }
 
-    bool is_point_inside_rectangle2(const glm::vec2& point, const Rectangle2& rectangle)
+    bool is_point_inside_rectangle(const glm::vec2& point,
+                                   const Rectangle& rectangle)
     {
         return point.x >= rectangle.min.x &&
                point.x <= rectangle.max.x &&
@@ -36,14 +43,48 @@ namespace minecraft {
                point.y <= rectangle.max.y;
     }
 
-    UV_Rectangle convert_texture_rect_to_uv_rect(Rectangle2i rect,
-                                                 f32 texture_width,
-                                                 f32 texture_height)
+    bool is_rectangle_inside_rectangle(const Rectanglei &a,
+                                       const Rectanglei &b)
+    {
+        return a.x >= b.x && a.x + a.width <= b.x + b.width &&
+               a.y >= b.y && a.y + a.height <= b.y + b.height;
+    }
+
+    bool is_rectangle_inside_rectangle(const Rectangle &a,
+                                       const Rectangle &b)
+    {
+        return a.min.x >= b.min.x && a.max.x <= b.max.x &&
+               a.min.y >= b.min.y && a.max.y <= b.max.y;
+    }
+
+    Texture_Coords rectangle_to_texture_coords(const Rectanglei &rect,
+                                               u32               texture_width,
+                                               u32               texture_height)
+    {
+        f32 one_over_texture_width  = 1.0f / texture_width;
+        f32 one_over_texture_height = 1.0f / texture_height;
+
+        Texture_Coords texture_coords;
+
+        texture_coords.scale =
+            { (f32)rect.width  * one_over_texture_width,
+              (f32)rect.height * one_over_texture_height };
+
+        texture_coords.offset =
+            { (f32)rect.x * one_over_texture_width,
+              (f32)(texture_height - rect.y - rect.height) * one_over_texture_height };
+
+        return texture_coords;
+    }
+
+    UV_Rectangle convert_texture_rect_to_uv_rect(const Rectanglei &rect,
+                                                 u32                texture_width,
+                                                 u32                texture_height)
     {
         UV_Rectangle result;
 
-        f32 one_over_width = 1.0f / texture_width;
-        f32 one_over_height = 1.0f / texture_height;
+        f32 one_over_width = 1.0f / (f32)texture_width;
+        f32 one_over_height = 1.0f / (f32)texture_height;
 
         f32 new_y = texture_height - (f32)rect.y;
         result.bottom_right = { ((f32)rect.x + rect.width) * one_over_width, (new_y - rect.height) * one_over_height };

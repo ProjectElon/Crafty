@@ -10,7 +10,7 @@ namespace minecraft {
 
     #define Infinity32 std::numeric_limits<f32>::max()
 
-    struct Rectangle2i
+    struct Rectanglei
     {
         i32 x;
         i32 y;
@@ -18,22 +18,19 @@ namespace minecraft {
         u32 height;
     };
 
-    struct Rectangle2
+    struct Rectangle
     {
-        union
-        {
-            struct
-            {
-                f32 x;
-                f32 y;
-            };
-
-            glm::vec2 min;
-        };
-
+        glm::vec2 min;
         glm::vec2 max;
     };
 
+    struct Texture_Coords
+    {
+        glm::vec2 scale;
+        glm::vec2 offset;
+    };
+
+    // todo(harlequin): remove the UV_Rectangle
     struct UV_Rectangle
     {
         glm::vec2 bottom_right;
@@ -42,14 +39,33 @@ namespace minecraft {
         glm::vec2 top_right;
     };
 
-    Rectangle2 make_rectangle2(const glm::vec2& top_left, const glm::vec2& size);
-    Rectangle2 make_rectangle2(f32 x, f32 y, f32 width, f32 height);
-    Rectangle2 make_rectangle2_min_max(const glm::vec2& min, const glm::vec2& max);
-    bool is_point_inside_rectangle2(const glm::vec2& point, const Rectangle2& rectangle);
+    Rectangle rectangle(const glm::vec2& top_left,
+                        const glm::vec2& size);
 
-    UV_Rectangle convert_texture_rect_to_uv_rect(Rectangle2i rect,
-                                                 f32 texture_width,
-                                                 f32 texture_height);
+    Rectangle rectangle(f32 x,
+                        f32 y,
+                        f32 width,
+                        f32 height);
+
+    Rectangle rectangle_min_max(const glm::vec2& min,
+                                const glm::vec2& max);
+
+    bool is_point_inside_rectangle(const glm::vec2& point,
+                                   const Rectangle& rectangle);
+
+    bool is_rectangle_inside_rectangle(const Rectanglei& a,
+                                       const Rectanglei& b);
+
+    bool is_rectangle_inside_rectangle(const Rectangle& a,
+                                       const Rectangle& b);
+
+    UV_Rectangle convert_texture_rect_to_uv_rect(const Rectanglei &rect,
+                                                 u32 texture_width,
+                                                 u32 texture_height);
+
+     Texture_Coords rectangle_to_texture_coords(const Rectanglei &rect,
+                                                u32 texture_width,
+                                                u32 texture_height);
 
     struct AABB
     {
@@ -70,7 +86,9 @@ namespace minecraft {
         f32       distance;
     };
 
-    Ray_Cast_Result cast_ray_on_aabb(const Ray& ray, const AABB& aabb, f32 max_distance = Infinity32);
+    Ray_Cast_Result cast_ray_on_aabb(const Ray& ray,
+                                     const AABB& aabb,
+                                     f32 max_distance = Infinity32);
 
     struct Plane
     {

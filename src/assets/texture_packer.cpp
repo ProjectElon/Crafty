@@ -19,7 +19,7 @@ namespace minecraft {
     struct Texture_Info
     {
         std::string name;
-        Rectangle2i rect;
+        Rectanglei rect;
     };
 
     bool Texture_Packer::pack_textures(
@@ -119,7 +119,7 @@ namespace minecraft {
                 }
             }
 
-            Rectangle2i texture_rect = { (i32)current_x, (i32)current_y, (u32)width, (u32)height };
+            Rectanglei texture_rect = { (i32)current_x, (i32)current_y, (u32)width, (u32)height };
 
             std::string texture_name_without_extension = std::filesystem::path(path).filename().stem().string();
             Texture_Info& info = textures[texture_id];
@@ -225,7 +225,7 @@ namespace minecraft {
 
         for (auto& texture_info : textures)
         {
-            UV_Rectangle uv_rect = convert_texture_rect_to_uv_rect(texture_info.rect, (f32)output_width, (f32)output_height);
+            UV_Rectangle uv_rect = convert_texture_rect_to_uv_rect(texture_info.rect, output_width, output_height);
             texture_uv_rect_stream << "\t{ ";
             texture_uv_rect_stream << "{ " << uv_rect.bottom_right.x << ", " << uv_rect.bottom_right.y << " }, ";
             texture_uv_rect_stream << "{ " << uv_rect.bottom_left.x  << ", " << uv_rect.bottom_left.y << " }, ";

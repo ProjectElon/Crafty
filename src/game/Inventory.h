@@ -58,9 +58,10 @@ namespace minecraft {
 #endif
         Opengl_Texture       *hud_sprite;
 
-        UV_Rectangle    inventory_slot_uv_rect;
-        UV_Rectangle    active_inventory_slot_uv_rect;
-        UV_Rectangle    inventory_hud_uv_rect;
+        // todo(harlequin): inventory.atlas
+        Texture_Coords inventory_slot_texture_coords;
+        Texture_Coords active_inventory_slot_texture_coords;
+        Texture_Coords inventory_hud_texture_coords;
 
         f32             hot_bar_scale;
         f32             hot_bar_size;
@@ -70,7 +71,7 @@ namespace minecraft {
         glm::vec2       slot_size;
         glm::vec2       slot_padding;
 
-        Rectangle2 slot_positions[INVENTORY_SLOT_TOTAL_COUNT];
+        Rectangle slot_positions[INVENTORY_SLOT_TOTAL_COUNT];
     };
 
     bool initialize_inventory(Inventory          *inventory,

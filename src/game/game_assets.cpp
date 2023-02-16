@@ -66,7 +66,8 @@ namespace minecraft {
     // todo(harlequin): remove asset logging from load_texture load_shader load_font
     static bool load_asset(Game_Asset_Entry *asset_entry, const String8 &path)
     {
-        assert(asset_entry);
+        Assert(asset_entry);
+        Assert(asset_entry->state == AssetState_Unloaded);
 
         asset_entry->state = AssetState_Pending;
 
@@ -107,7 +108,7 @@ namespace minecraft {
                                                      Bitmap_Font);
                 bool loaded = load_font(font,
                                         path.data,
-                                        22,
+                                        18,
                                         &game_assets_state->asset_storage_arena);
                 if (!loaded)
                 {
@@ -116,6 +117,22 @@ namespace minecraft {
                 }
 
                 asset_entry->data = font;
+            } break;
+
+            case GameAssetType_TextureAtlas:
+            {
+                Opengl_Texture_Atlas *atlas = ArenaPushAligned(&game_assets_state->asset_storage_arena,
+                                                               Opengl_Texture_Atlas);
+                bool loaded = deserialize_texture_atlas(atlas,
+                                                        path.data,
+                                                        &game_assets_state->asset_storage_arena);
+                if (!loaded)
+                {
+                    asset_entry->state = AssetState_Unloaded;
+                    return false;
+                }
+
+                asset_entry->data = atlas;
             } break;
 
             default:
@@ -144,20 +161,31 @@ namespace minecraft {
         game_assets_state->asset_entry_arena   = push_sub_arena(arena, MegaBytes(1));
         game_assets_state->asset_storage_arena = push_sub_arena(arena, MegaBytes(64));
 
-        String8 texture_extensions[] = {
+        String8 texture_extensions[] =
+        {
             String8FromCString("png")
         };
         set_asset_extensions(GameAssetType_Texture, texture_extensions, ArrayCount(texture_extensions));
 
-        String8 shader_extensions[] = {
+        String8 shader_extensions[] =
+        {
             String8FromCString("glsl")
         };
         set_asset_extensions(GameAssetType_Shader, shader_extensions, ArrayCount(shader_extensions));
 
-        String8 font_extensions[] = {
+        String8 font_extensions[] =
+        {
             String8FromCString("ttf")
         };
         set_asset_extensions(GameAssetType_Font, font_extensions, ArrayCount(font_extensions));
+
+        String8 texture_atlas_extensions[] =
+        {
+            String8FromCString("atlas")
+        };
+        set_asset_extensions(GameAssetType_TextureAtlas,
+                             texture_atlas_extensions,
+                             ArrayCount(texture_atlas_extensions));
 
         game_assets_state->asset_paths   = ArenaBeginArray(&game_assets_state->asset_path_arena, String8);
         game_assets_state->asset_entries = ArenaBeginArray(&game_assets_state->asset_entry_arena, Game_Asset_Entry);
@@ -169,7 +197,9 @@ namespace minecraft {
         {
             if (entry.is_regular_file())
             {
-                std::string asset_file_path = entry.path().string();
+                const fs::path &file_path = entry.path();
+                std::string asset_file_path = file_path.string();
+
                 for (size_t i = 0; i < asset_file_path.length(); i++)
                 {
                     if (asset_file_path[i] == '\\')
@@ -190,7 +220,7 @@ namespace minecraft {
                                            asset_file_path.c_str());
 
                 asset_entry->path = asset_path;
-                asset_entry->size = fs::file_size(entry.path());
+                asset_entry->size = fs::file_size(file_path);
 
                 i32 dot_index = find_last_any_char(asset_path, ".");
                 if (dot_index == -1)
@@ -208,10 +238,6 @@ namespace minecraft {
                             "[ERROR]: failed to load unregistered asset: %.*s\n",
                             (i32)asset_path->count,
                             asset_path->data);
-                }
-                else
-                {
-                    load_asset(asset_entry, *asset_path);
                 }
             }
         }
@@ -249,24 +275,35 @@ namespace minecraft {
         return handle;
     }
 
-    const Game_Asset_Entry *get_asset(Asset_Handle handle)
+    const Game_Asset_Entry *get_asset(Asset_Handle asset_handle)
     {
-        Assert(handle < game_assets_state->asset_count);
-        return &game_assets_state->asset_entries[handle];
+        Assert(is_asset_handle_valid(asset_handle));
+        return &game_assets_state->asset_entries[asset_handle];
     }
 
     Asset_Handle load_asset(const String8 &path)
     {
-        Asset_Handle handle = find_asset(path);
-        if (handle != INVALID_ASSET_HANDLE)
+        Asset_Handle asset_handle = find_asset(path);
+        if (asset_handle != INVALID_ASSET_HANDLE)
         {
-            Game_Asset_Entry *asset_entry = &game_assets_state->asset_entries[handle];
+            Game_Asset_Entry *asset_entry = &game_assets_state->asset_entries[asset_handle];
             if (asset_entry->state == AssetState_Unloaded)
             {
                 bool loaded = load_asset(asset_entry, path);
             }
         }
-        return handle;
+        return asset_handle;
+    }
+
+    bool load_asset(Asset_Handle asset_handle)
+    {
+        Assert(is_asset_handle_valid(asset_handle));
+        Game_Asset_Entry *asset_entry = &game_assets_state->asset_entries[asset_handle];
+        if (asset_entry->state == AssetState_Unloaded)
+        {
+            load_asset(asset_entry, *asset_entry->path);
+        }
+        return asset_entry->state == AssetState_Loaded;
     }
 
     Opengl_Texture* get_texture(Asset_Handle handle)
@@ -285,6 +322,14 @@ namespace minecraft {
         return (Opengl_Shader*)asset->data;
     }
 
+    Opengl_Texture_Atlas *get_texture_atlas(Asset_Handle handle)
+    {
+        Assert(handle < game_assets_state->asset_count);
+        Game_Asset_Entry *asset = &game_assets_state->asset_entries[handle];
+        Assert(asset->type == GameAssetType_TextureAtlas);
+        return (Opengl_Texture_Atlas*)asset->data;
+    }
+
     Bitmap_Font* get_font(Asset_Handle handle)
     {
         Assert(handle < game_assets_state->asset_count);
@@ -295,10 +340,13 @@ namespace minecraft {
 
     void load_game_assets(Game_Assets *assets)
     {
+        assets->blocks_atlas = load_asset(String8FromCString("../assets/textures/blocks.atlas"));
+
         assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
         Opengl_Texture *block_sprite_sheet = get_texture(assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
+#if 0
         String8 *names = ArenaPushArray(&game_assets_state->asset_storage_arena, String8, MC_PACKED_TEXTURE_COUNT);
 
         for (u32 i = 0; i < MC_PACKED_TEXTURE_COUNT; i++)
@@ -309,7 +357,7 @@ namespace minecraft {
         initialize_texture_atlas(&assets->blocks_atlas,
                                  assets->blocks_sprite_sheet,
                                  MC_PACKED_TEXTURE_COUNT,
-                                 (Rectangle2i*)texture_rects,
+                                 (Rectanglei*)texture_rects,
                                  names,
                                  &game_assets_state->asset_storage_arena);
 
@@ -321,7 +369,7 @@ namespace minecraft {
                                             &game_assets_state->asset_storage_arena);
         Assert(success);
         Assert(get_sub_texture_index(&assets->blocks_atlas, String8FromCString("water")) == Texture_Id_water);
-
+#endif
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);
         set_texture_params_based_on_usage(hud_sprite_texture, TextureUsage_UI);
