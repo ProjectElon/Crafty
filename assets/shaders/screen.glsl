@@ -2,15 +2,19 @@
 
 #version 440 core
 
-layout (location = 0) in vec3 in_position;
-layout (location = 1) in vec2 in_uv;
+const vec2 positions[6] = const vec2[](
+    const vec2(-1.0f,  1.0f),
+    const vec2( 1.0f, -1.0f),
+    const vec2(-1.0f, -1.0f),
 
-out vec2 a_uv;
+    const vec2(-1.0f,  1.0f),
+    const vec2( 1.0f,  1.0f),
+    const vec2( 1.0f, -1.0f)
+);
 
 void main()
 {
-    gl_Position = vec4(in_position, 1.0f);
-    a_uv = in_uv;
+    gl_Position = vec4(positions[gl_VertexID], 0.0f, 1.0f);
 }
 
 #fragment

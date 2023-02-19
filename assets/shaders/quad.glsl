@@ -2,17 +2,35 @@
 
 #version 450 core
 
-layout (location = 0) in vec2 in_position;
-layout (location = 1) in vec2 in_uv;
+const vec2 positions[6] = const vec2[](
 
-layout (location = 2) in vec2  instance_position;
-layout (location = 3) in vec2  instance_scale;
-layout (location = 4) in float instance_rotation;
+    const vec2(-0.5f,  0.5f),
+    const vec2( 0.5f, -0.5f),
+    const vec2(-0.5f, -0.5f),
 
-layout (location = 5) in vec4 instance_color;
-layout (location = 6) in int  instance_texture_index;
-layout (location = 7) in vec2 instance_uv_scale;
-layout (location = 8) in vec2 instance_uv_offset;
+    const vec2(-0.5f,  0.5f),
+    const vec2( 0.5f,  0.5f),
+    const vec2( 0.5f, -0.5f)
+);
+
+const vec2 uvs[6] = const vec2[](
+    const vec2(0.0f, 1.0f),
+    const vec2(1.0f, 0.0f),
+    const vec2(0.0f, 0.0f),
+
+    const vec2(0.0f, 1.0f),
+    const vec2(1.0f, 1.0f),
+    const vec2(1.0f, 0.0f)
+);
+
+layout (location = 0) in vec2  instance_position;
+layout (location = 1) in vec2  instance_scale;
+layout (location = 2) in float instance_rotation;
+
+layout (location = 3) in vec4 instance_color;
+layout (location = 4) in int  instance_texture_index;
+layout (location = 5) in vec2 instance_uv_scale;
+layout (location = 6) in vec2 instance_uv_offset;
 
 out vec4 a_color;
 out vec2 a_uv;
@@ -24,13 +42,13 @@ uniform mat4 u_projection;
 
 void main()
 {
-    mat2 rot = mat2(cos(instance_rotation), -sin(instance_rotation),
-                    sin(instance_rotation), cos(instance_rotation));
+    mat2 rotationMatrix = mat2(cos(instance_rotation), -sin(instance_rotation),
+                               sin(instance_rotation), cos(instance_rotation));
 
-    vec2 position =  in_position * instance_scale * rot;
+    vec2 position = positions[gl_VertexID] * instance_scale * rotationMatrix;
 
     gl_Position     = u_projection * vec4(position + instance_position, 0.0f, 1.0f);
-    a_uv            = in_uv * instance_uv_scale + instance_uv_offset;
+    a_uv            = uvs[gl_VertexID] * instance_uv_scale + instance_uv_offset;
     a_color         = instance_color;
     a_texture_index = instance_texture_index;
 }

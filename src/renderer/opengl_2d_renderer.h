@@ -24,7 +24,7 @@ namespace minecraft {
                                       const glm::vec2 &scale,
                                       f32              rotation,
                                       const glm::vec4 &color,
-                                      Opengl_Texture  *texture    = nullptr,
+                                      Opengl_Texture  *texture   = nullptr,
                                       const glm::vec2 &uv_scale  = { 1.0f, 1.0f },
                                       const glm::vec2 &uv_offset = { 0.0f, 0.0f });
 
@@ -35,11 +35,11 @@ namespace minecraft {
                                       Opengl_Texture_Atlas *atlas,
                                       u32                   sub_texture_index);
 
-    void opengl_2d_renderer_push_string(Bitmap_Font *font,
-                                        String8 text,
-                                        const glm::vec2& text_size,
-                                        const glm::vec2& position,
-                                        const glm::vec4& color);
+    void opengl_2d_renderer_push_string(Bitmap_Font     *font,
+                                        const String8   &text,
+                                        const glm::vec2 &text_size,
+                                        const glm::vec2 &position,
+                                        const glm::vec4 &color);
 
     void opengl_2d_renderer_draw_quads(Opengl_Shader *shader);
 }

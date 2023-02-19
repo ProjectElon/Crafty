@@ -8,10 +8,10 @@ namespace minecraft {
     template< typename T, const u32 MaxElementCount = 65536 >
     struct Circular_Queue
     {
-        T   data[MaxElementCount];
-        i32 start_index;
-        i32 end_index;
-        std::atomic<u32> count; // todo(harlequin): move to concurrent circular queue
+        T data[MaxElementCount];
+        std::atomic< u32 > start_index;
+        std::atomic< u32 > end_index;
+        std::atomic< u32 > count; // todo(harlequin): move to concurrent circular queue
 
         bool initialize()
         {

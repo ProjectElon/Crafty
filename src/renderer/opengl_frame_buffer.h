@@ -16,8 +16,8 @@ namespace minecraft {
     struct Opengl_Frame_Buffer
     {
         u32 handle;
-        f32 width;
-        f32 height;
+        u32 width;
+        u32 height;
 
         u32             color_attachment_count;
         Opengl_Texture *color_attachments;

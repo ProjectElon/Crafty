@@ -97,6 +97,12 @@ namespace minecraft {
                                        game_config,
                                        game_config->is_cursor_visible);
 
+        if (!initialize_game_assets(&game_memory->transient_arena, "../assets/"))
+        {
+            fprintf(stderr, "[ERROR]: failed to initialize game_assets\n");
+            return false;
+        }
+
         if (!initialize_opengl_renderer(game_state->window,
                                         game_config->window_width,
                                         game_config->window_height,
@@ -117,12 +123,6 @@ namespace minecraft {
         if (!initialize_opengl_debug_renderer(&game_memory->permanent_arena))
         {
             fprintf(stderr, "[ERROR]: failed to initialize debug render system\n");
-            return false;
-        }
-
-        if (!initialize_game_assets(&game_memory->transient_arena, "../assets/"))
-        {
-            fprintf(stderr, "[ERROR]: failed to initialize game_assets\n");
             return false;
         }
 

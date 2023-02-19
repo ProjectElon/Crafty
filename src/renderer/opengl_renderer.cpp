@@ -121,21 +121,21 @@ namespace minecraft {
         Opengl_Frame_Buffer transparent_frame_buffer;
 
         Opengl_Vertex_Array chunk_vertex_array;
-        Opengl_Vertex_Array screen_quad_vertex_array;
 
         Command_Buffer opaque_command_buffer;
         Command_Buffer transparent_command_buffer;
         GLsync command_buffer_sync_object;
 
+        Asset_Handle blocks_atlas;
         Opengl_Array_Texture block_array_texture;
 
         Block_Face_Vertex *base_vertex;
         Chunk_Instance    *base_instance;
 
-        std::mutex         free_buckets_mutex;
+        std::mutex free_buckets_mutex;
         Circular_Queue< i32, World::SubChunkBucketCapacity > free_buckets;
 
-        std::mutex         free_instances_mutex;
+        std::mutex free_instances_mutex;
         Circular_Queue< i32, World::SubChunkBucketCapacity > free_instances;
 
         bool enable_fxaa;
@@ -227,44 +227,6 @@ namespace minecraft {
         }
         renderer->transparent_frame_buffer = transparent_frame_buffer;
 
-        struct Screen_Quad_Vertex
-        {
-            glm::vec3 position;
-            glm::vec2 uv;
-        };
-
-        Screen_Quad_Vertex screen_quad_vertices[6] =
-        {
-            { { 1.0f,   1.0f, 0.0f }, { 1.0f, 1.0f } },
-            { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } },
-            { { 1.0f,  -1.0f, 0.0f }, { 1.0f, 0.0f } },
-            { { 1.0f,   1.0f, 0.0f }, { 1.0f, 1.0f } },
-            { { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f } },
-            { { -1.0f, -1.0f, 0.0f }, { 0.0f, 0.0f } }
-        };
-
-        Opengl_Vertex_Array screen_quad_vertex_array = begin_vertex_array(arena);
-
-        Opengl_Vertex_Buffer quad_vertex_buffer = push_vertex_buffer(&screen_quad_vertex_array,
-                                                                     sizeof(Screen_Quad_Vertex),
-                                                                     ArrayCount(screen_quad_vertices),
-                                                                     screen_quad_vertices,
-                                                                     0);
-        push_vertex_attribute(&screen_quad_vertex_array,
-                              &quad_vertex_buffer,
-                              "in_position",
-                              VertexAttributeType_V3,
-                              offsetof(Screen_Quad_Vertex, position));
-
-        push_vertex_attribute(&screen_quad_vertex_array,
-                              &quad_vertex_buffer,
-                              "in_uv",
-                              VertexAttributeType_V2,
-                              offsetof(Screen_Quad_Vertex, uv));
-
-        end_vertex_array(&screen_quad_vertex_array);
-        renderer->screen_quad_vertex_array = screen_quad_vertex_array;
-
         Opengl_Vertex_Array chunk_vertex_array = begin_vertex_array(arena);
 
         GLbitfield flags = GL_MAP_PERSISTENT_BIT |
@@ -338,7 +300,7 @@ namespace minecraft {
         new (&renderer->free_instances_mutex) std::mutex;
 
         renderer->free_buckets.initialize();
-        renderer->free_buckets.initialize();
+        renderer->free_instances.initialize();
 
         for (i32 i = 0; i < World::SubChunkBucketCapacity; ++i)
         {
@@ -346,11 +308,15 @@ namespace minecraft {
             renderer->free_instances.push(i);
         }
 
-        initialize_command_buffer(&renderer->opaque_command_buffer, World::SubChunkBucketCapacity);
-        initialize_command_buffer(&renderer->transparent_command_buffer, World::SubChunkBucketCapacity);
+        initialize_command_buffer(&renderer->opaque_command_buffer,
+                                  World::SubChunkBucketCapacity);
+        initialize_command_buffer(&renderer->transparent_command_buffer,
+                                  World::SubChunkBucketCapacity);
 
-        renderer->frame_buffer_size = { initial_frame_buffer_width, initial_frame_buffer_height };
+        renderer->frame_buffer_size = { initial_frame_buffer_width,
+                                        initial_frame_buffer_height };
 
+#if 1
         // todo(harlequin): temprary
         temp_arena = begin_temprary_memory_arena(arena);
         u8 *magenta_block_texture = ArenaPushArrayAligned(&temp_arena, u8, 32 * 32 * 4);
@@ -437,6 +403,7 @@ namespace minecraft {
         generate_mipmaps(&renderer->block_array_texture);
         end_temprary_memory_arena(&temp_arena);
 
+#endif
         return true;
     }
 
@@ -1701,7 +1668,6 @@ namespace minecraft {
         bind_texture(accum_texture, 2);
         bind_texture(reveal_texture, 3);
 
-        bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
         f32 line_thickness = 3.0f;
@@ -1717,7 +1683,7 @@ namespace minecraft {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClearColor(zeros.r, zeros.g, zeros.b, zeros.a);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT);
 
         bind_shader(screen_shader);
         set_uniform_bool(screen_shader, "u_enable_fxaa", renderer->enable_fxaa);
@@ -1729,8 +1695,6 @@ namespace minecraft {
         Opengl_Texture *screen_texture = &renderer->opaque_frame_buffer.color_attachments[0];
         bind_texture(screen_texture, 4);
 
-        // todo(harlequin): remove renderer->screen_quad_vertex_array and use a predefined vertices in screen.glsl vertex shader
-        bind_vertex_array(&renderer->screen_quad_vertex_array);
         glDrawArrays(GL_TRIANGLES, 0, 6);
     }
 

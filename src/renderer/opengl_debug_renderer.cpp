@@ -1,5 +1,6 @@
 #include "opengl_debug_renderer.h"
 #include "opengl_shader.h"
+#include "opengl_vertex_array.h"
 #include "camera.h"
 #include "game/game.h"
 #include "memory/memory_arena.h"
@@ -11,6 +12,8 @@
 
 namespace minecraft {
 
+    // todo(harlequin): right now we are using a color per line vertex
+    // should we switch to using a color per line instance ?
     struct Line_Vertex
     {
         glm::vec3 position;
@@ -19,55 +22,52 @@ namespace minecraft {
 
     struct Opengl_Debug_Renderer
     {
-        u32 line_vao_id;
-        u32 line_vbo_id;
+        Opengl_Vertex_Array line_vertex_array;
 
-        u32         line_count;
-        Line_Vertex line_vertices[2 * MAX_LINE_COUNT];
+        u32          line_count;
+        Line_Vertex *line_vertices;
     };
 
-    static Opengl_Debug_Renderer *renderer;
+    static Opengl_Debug_Renderer *debug_renderer;
 
     bool initialize_opengl_debug_renderer(Memory_Arena *arena)
     {
-        if (renderer)
+        if (debug_renderer)
         {
             return false;
         }
 
-        renderer = ArenaPushAlignedZero(arena, Opengl_Debug_Renderer);
+        debug_renderer = ArenaPushAlignedZero(arena, Opengl_Debug_Renderer);
+        Assert(debug_renderer);
 
         glEnable(GL_LINE_SMOOTH);
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
 
-        glGenVertexArrays(1, &renderer->line_vao_id);
-        glBindVertexArray(renderer->line_vao_id);
+        GLbitfield flags = GL_MAP_PERSISTENT_BIT |
+                           GL_MAP_WRITE_BIT |
+                           GL_MAP_COHERENT_BIT;
 
-        glGenBuffers(1, &renderer->line_vbo_id);
-        glBindBuffer(GL_ARRAY_BUFFER, renderer->line_vbo_id);
-        glBufferData(GL_ARRAY_BUFFER,
-                     MAX_LINE_COUNT * 2 * sizeof(Line_Vertex),
-                     nullptr,
-                     GL_DYNAMIC_DRAW);
+        Opengl_Vertex_Array line_vertex_array   = begin_vertex_array(arena);
+        Opengl_Vertex_Buffer line_vertex_buffer = push_vertex_buffer(&line_vertex_array,
+                                                                     sizeof(Line_Vertex),
+                                                                     2 * MAX_LINE_COUNT,
+                                                                     nullptr,
+                                                                     flags);
+        push_vertex_attribute(&line_vertex_array,
+                              &line_vertex_buffer,
+                              "position",
+                              VertexAttributeType_V3,
+                              offsetof(Line_Vertex, position));
 
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0,
-                              3,
-                              GL_FLOAT,
-                              GL_FALSE,
-                              sizeof(Line_Vertex),
-                              (const void*)offsetof(Line_Vertex, position));
+        push_vertex_attribute(&line_vertex_array,
+                              &line_vertex_buffer,
+                              "color",
+                              VertexAttributeType_V4,
+                              offsetof(Line_Vertex, color));
 
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1,
-                              4,
-                              GL_FLOAT,
-                              GL_FALSE,
-                              sizeof(Line_Vertex),
-                              (const void*)offsetof(Line_Vertex, color));
-
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
+        end_vertex_array(&line_vertex_array);
+        debug_renderer->line_vertex_array = line_vertex_array;
+        debug_renderer->line_vertices = (Line_Vertex*)line_vertex_buffer.data;
 
         return true;
     }
@@ -80,7 +80,7 @@ namespace minecraft {
                                           Opengl_Shader *shader,
                                           f32 line_thickness /* = 2.0f */)
     {
-        if (!renderer->line_count)
+        if (!debug_renderer->line_count)
         {
             return;
         }
@@ -96,26 +96,20 @@ namespace minecraft {
         glDisable(GL_BLEND);
         glLineWidth(line_thickness);
 
-        glBindVertexArray(renderer->line_vao_id);
-        glBindBuffer(GL_ARRAY_BUFFER, renderer->line_vbo_id);
+        bind_vertex_array(&debug_renderer->line_vertex_array);
 
-        glBufferSubData(GL_ARRAY_BUFFER,
-                        0,
-                        2 * renderer->line_count * sizeof(Line_Vertex),
-                        renderer->line_vertices);
-
-        glDrawArrays(GL_LINES, 0, 2 * renderer->line_count);
-        renderer->line_count = 0;
+        glDrawArrays(GL_LINES, 0, 2 * debug_renderer->line_count);
+        debug_renderer->line_count = 0;
     }
 
     void opengl_debug_renderer_push_line(const glm::vec3& start,
                                          const glm::vec3& end,
                                          const glm::vec4& color)
     {
-        Assert(renderer->line_count < MAX_LINE_COUNT);
-        u32 current_line_vertex_index = renderer->line_count++ * 2;
-        renderer->line_vertices[current_line_vertex_index + 0] = { start, color };
-        renderer->line_vertices[current_line_vertex_index + 1] = { end,   color };
+        Assert(debug_renderer->line_count < MAX_LINE_COUNT);
+        debug_renderer->line_vertices[(debug_renderer->line_count * 2) + 0] = { start, color };
+        debug_renderer->line_vertices[(debug_renderer->line_count * 2) + 1] = { end,   color };
+        u32 current_line_vertex_index = debug_renderer->line_count++;
     }
 
     void opengl_debug_renderer_push_rect(const glm::vec3& p0,

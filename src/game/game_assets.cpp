@@ -108,7 +108,7 @@ namespace minecraft {
                                                      Bitmap_Font);
                 bool loaded = load_font(font,
                                         path.data,
-                                        18,
+                                        20,
                                         &game_assets_state->asset_storage_arena);
                 if (!loaded)
                 {
@@ -370,6 +370,7 @@ namespace minecraft {
         Assert(success);
         Assert(get_sub_texture_index(&assets->blocks_atlas, String8FromCString("water")) == Texture_Id_water);
 #endif
+
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);
         set_texture_params_based_on_usage(hud_sprite_texture, TextureUsage_UI);

@@ -108,7 +108,7 @@ namespace minecraft {
                sizeof(Rectanglei) * atlas->sub_texture_count,
                1,
                file_handle);
-
+        
         for (u32 i = 0; i < atlas->sub_texture_count; i++)
         {
             String8 *sub_texture_name = &atlas->sub_texture_names[i];

@@ -33,22 +33,22 @@ uniform ivec2 u_highlighted_block_chunk_coords;
 #define LIGHT_SOURCE_LEVEL_MASK 15
 #define AMBIENT_OCCLUSION_LEVEL_MASK 3
 
-vec3 local_positions[8] = vec3[](
-    vec3( 0.5f,  0.5f,  0.5f), // 0
-    vec3(-0.5f,  0.5f,  0.5f), // 1
-    vec3(-0.5f,  0.5f, -0.5f), // 2
-    vec3( 0.5f,  0.5f, -0.5f), // 3
-    vec3( 0.5f, -0.5f,  0.5f), // 4
-    vec3(-0.5f, -0.5f,  0.5f), // 5
-    vec3(-0.5f, -0.5f, -0.5f), // 6
-    vec3( 0.5f, -0.5f, -0.5f)  // 7
+const vec3 local_positions[8] = const vec3[](
+    const vec3( 0.5f,  0.5f,  0.5f), // 0
+    const vec3(-0.5f,  0.5f,  0.5f), // 1
+    const vec3(-0.5f,  0.5f, -0.5f), // 2
+    const vec3( 0.5f,  0.5f, -0.5f), // 3
+    const vec3( 0.5f, -0.5f,  0.5f), // 4
+    const vec3(-0.5f, -0.5f,  0.5f), // 5
+    const vec3(-0.5f, -0.5f, -0.5f), // 6
+    const vec3( 0.5f, -0.5f, -0.5f)  // 7
 );
 
-vec2 uv_look_up[4] = vec2[](
-    vec2(1.0f, 0.0f),
-    vec2(0.0f, 0.0f),
-    vec2(0.0f, 1.0f),
-    vec2(1.0f, 1.0f)
+const vec2 uvs[4] = const vec2[](
+    const vec2(1.0f, 0.0f),
+    const vec2(0.0f, 0.0f),
+    const vec2(0.0f, 1.0f),
+    const vec2(1.0f, 1.0f)
 );
 
 uniform vec4 u_biome_color;
@@ -92,7 +92,7 @@ void main()
     float distance_relative_to_camera = length(u_camera_position - position);
     a_fog_factor = clamp(distance_relative_to_camera * u_one_over_chunk_radius, 0.0f, 1.0f);
 
-    a_uv         = uv_look_up[face_corner_id];
+    a_uv         = uvs[face_corner_id];
     a_texture_id = int(in_packed_vertex_attributes1 >> 10);
 
     float sky_light_level = float(in_packed_vertex_attributes1 & SKY_LIGHT_LEVEL_MASK);
