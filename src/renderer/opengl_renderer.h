@@ -8,7 +8,7 @@
 #include <vector>
 #include <atomic>
 
-#define OPENGL_DEBUGGING 0
+#define OPENGL_DEBUGGING 1
 #define OPENGL_TRACE_DEBUG_MESSAGE 1
 
 namespace minecraft {
@@ -52,19 +52,19 @@ namespace minecraft {
 
     void opengl_renderer_begin_frame(const glm::vec4 &clear_color,
                                      const glm::vec4 &tint_color,
-                                     Camera *camera);
+                                     Camera          *camera);
 
-    void opengl_renderer_render_sub_chunk(World *world,
-                                          Chunk *chunk,
+    void opengl_renderer_render_sub_chunk(Sub_Chunk_Render_Data *sub_chunk_render_data);
+
+    void opengl_renderer_render_sub_chunk(Chunk *chunk,
                                           u32    sub_chunk_index);
 
-    void opengl_renderer_render_chunks_at_region(World *world,
-                                                 const World_Region_Bounds &player_region_bounds,
-                                                 Camera *camera);
+    void opengl_renderer_render_chunks(Sub_Chunk_Render_Data *first_active_sub_chunk_render_data,
+                                       Camera                *camera);
 
     void opengl_renderer_end_frame(struct Game_Assets *assets,
-                                   i32 chunk_radius,
-                                   f32 sky_light_level,
+                                   i32                 chunk_radius,
+                                   f32                 sky_light_level,
                                    Block_Query_Result *selected_block_query);
 
     void opengl_renderer_swap_buffers(struct GLFWwindow *window);

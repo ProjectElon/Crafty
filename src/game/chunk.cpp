@@ -65,13 +65,13 @@ namespace minecraft {
         chunk->world_coords = world_coords;
         chunk->position = { world_coords.x * Chunk::Width, 0.0f, world_coords.y * Chunk::Depth };
 
-        for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; ++sub_chunk_index)
+        for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; sub_chunk_index++)
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-            render_data.face_count         =  0;
-            render_data.bucket_index       =  0;
-            render_data.instance_memory_id = -1;
+            render_data.face_count          =  0;
+            render_data.active_bucket_index =  0;
+            render_data.instance_memory_id  = -1;
 
             for (i32 j = 0; j < 2; j++)
             {
@@ -83,6 +83,7 @@ namespace minecraft {
             }
 
             render_data.state = TessellationState_None;
+            render_data.next  = nullptr;
         }
 
         chunk->state              = ChunkState_Initialized;

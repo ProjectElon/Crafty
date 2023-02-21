@@ -166,9 +166,9 @@ namespace minecraft {
     }
 
     GLFWwindow *Platform::open_window(const char *title,
-                                     u32 width,
-                                     u32 height,
-                                     u32 back_buffer_samples)
+                                      u32 width,
+                                      u32 height,
+                                      u32 back_buffer_samples)
     {
         glfwWindowHint(GLFW_SAMPLES, back_buffer_samples);
 

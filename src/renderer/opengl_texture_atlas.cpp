@@ -108,7 +108,7 @@ namespace minecraft {
                sizeof(Rectanglei) * atlas->sub_texture_count,
                1,
                file_handle);
-        
+
         for (u32 i = 0; i < atlas->sub_texture_count; i++)
         {
             String8 *sub_texture_name = &atlas->sub_texture_names[i];
@@ -167,13 +167,13 @@ namespace minecraft {
 
         end_temprary_memory_arena(&temp_arena);
 
-        u32 sub_texture_count;
+        u32 sub_texture_count = 0;
         fread(&sub_texture_count, sizeof(u32), 1, file_handle);
         Assert(sub_texture_count);
 
         Rectanglei *sub_texture_rectangles = ArenaPushArrayAligned(arena,
-                                                                    Rectanglei,
-                                                                    sub_texture_count);
+                                                                   Rectanglei,
+                                                                   sub_texture_count);
         fread(sub_texture_rectangles,
               sizeof(Rectanglei) * sub_texture_count,
               1,
@@ -183,7 +183,7 @@ namespace minecraft {
                                                     String8,
                                                     sub_texture_count);
 
-        for (u32 i = 0; i < atlas->sub_texture_count; i++)
+        for (u32 i = 0; i < sub_texture_count; i++)
         {
             String8 *sub_texture_name = &sub_texture_names[i];
 
@@ -191,14 +191,16 @@ namespace minecraft {
                    sizeof(u64),
                    1,
                    file_handle);
+            if (sub_texture_name->count)
+            {
+                sub_texture_name->data = ArenaPushArray(arena, char, sub_texture_name->count + 1);
+                sub_texture_name->data[sub_texture_name->count] = '\0';
 
-            sub_texture_name->data = ArenaPushArray(arena, char, sub_texture_name->count + 1);
-            sub_texture_name->data[sub_texture_name->count] = '\0';
-
-            fread(sub_texture_name->data,
-                  sizeof(char) * sub_texture_name->count,
-                  1,
-                  file_handle);
+                fread(sub_texture_name->data,
+                      sizeof(char) * sub_texture_name->count,
+                      1,
+                      file_handle);
+            }
         }
 
         bool success = initialize_texture_atlas(atlas,

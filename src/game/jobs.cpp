@@ -35,7 +35,7 @@ namespace minecraft {
         World *world = data->world;
         Chunk *chunk = data->chunk;
 
-        for (i32 sub_chunk_index = Chunk::SubChunkCount - 1; sub_chunk_index >= 0; sub_chunk_index--)
+        for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; sub_chunk_index++)
         {
             Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
             if (render_data.state == TessellationState_Pending)

@@ -15,18 +15,11 @@
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "meta/spritesheet_meta.h"
 #include "game/world.h"
 #include "game/profiler.h"
 #include "game/game.h"
 
-#include <stb/stb_image.h>
 #include <mutex>
-#include <algorithm>
-
-// todo(harlequin): to be removed
-#include <fstream>
-#include <sstream>
 
 namespace minecraft {
 
@@ -316,85 +309,70 @@ namespace minecraft {
         renderer->frame_buffer_size = { initial_frame_buffer_width,
                                         initial_frame_buffer_height };
 
-#if 1
-        // todo(harlequin): temprary
-        temp_arena = begin_temprary_memory_arena(arena);
-        u8 *magenta_block_texture = ArenaPushArrayAligned(&temp_arena, u8, 32 * 32 * 4);
 
-        for (u32 i = 0; i < 32 * 32 * 4; i += 4)
-        {
-            u8 *R = magenta_block_texture + i + 0;
-            u8 *G = magenta_block_texture + i + 1;
-            u8 *B = magenta_block_texture + i + 2;
-            u8 *A = magenta_block_texture + i + 3;
-            *R    = 255;
-            *G    = 0;
-            *B    = 255;
-            *A    = 255;
-        }
-
-        // todo(harlequin): temprary
-        bool recursive = true;
-        std::vector< std::string > paths = list_files_at_path("../assets/textures/blocks", recursive, { ".png" });
-
-        auto compare = [](const std::string& a, const std::string& b) -> bool
-        {
-            unsigned char buf[8];
-
-            std::ifstream a_in(a);
-            a_in.seekg(16);
-            a_in.read(reinterpret_cast<char*>(&buf), 8);
-            a_in.close();
-
-            u32 a_height = (buf[4] << 24) + (buf[5] << 16) + (buf[6] << 8) + (buf[7] << 0);
-
-            std::ifstream b_in(b);
-            b_in.seekg(16);
-            b_in.read(reinterpret_cast<char*>(&buf), 8);
-            b_in.close();
-
-            u32 b_height = (buf[4] << 24) + (buf[5] << 16) + (buf[6] << 8) + (buf[7] << 0);
-
-            if (a_height == b_height)
-            {
-                return a < b;
-            }
-
-            return a_height < b_height;
-        };
-
-        std::sort(std::begin(paths), std::end(paths), compare);
+        Asset_Handle blocks_atlas_handle = load_asset(String8FromCString("../assets/textures/blocks.atlas"));
+        Assert(is_asset_handle_valid(blocks_atlas_handle));
+        Opengl_Texture_Atlas *blocks_atlas = get_texture_atlas(blocks_atlas_handle);
+        Assert(blocks_atlas);
+        Opengl_Texture *blocks_atlas_texture = blocks_atlas->texture;
+        Assert(blocks_atlas_texture);
 
         bool mipmapping = true;
         initialize_array_texture(&renderer->block_array_texture,
                                  32,
                                  32,
-                                 (u32)paths.size(),
+                                 blocks_atlas->sub_texture_count,
                                  TextureFormat_RGBA8,
                                  mipmapping);
 
-        u32 texture_id = 0;
+        temp_arena = begin_temprary_memory_arena(arena);
+        u32 *magenta_pixel_data = ArenaPushArrayAligned(&temp_arena, u32, 32 * 32);
 
-        for (auto& path : paths)
+        for (u32 i = 0; i < 32 * 32; i++)
         {
-            i32 width;
-            i32 height;
-            i32 channels;
+            u32 R = 255;
+            u32 G = 0;
+            u32 B = 255;
+            u32 A = 255;
 
-            stbi_set_flip_vertically_on_load(true);
-            u8* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+            u32 *pixel = &magenta_pixel_data[i];
+            *pixel = (A << 24) | (B << 16) | (G << 8) | R;
+        }
 
-            if (!data)
+        u32 *buffer = ArenaPushArrayAligned(&temp_arena, u32, 32 * 32);
+
+        for (u32 i = 0; i < blocks_atlas->sub_texture_count; i++)
+        {
+            const Rectanglei *rectangle = &blocks_atlas->sub_texture_rectangles[i];
+            u32 *texture = magenta_pixel_data;
+
+            if (rectangle->width == renderer->block_array_texture.width &&
+                rectangle->height == renderer->block_array_texture.height)
             {
-                continue;
+                Assert(rectangle->x >= 0);
+                Assert(rectangle->y >= 0);
+
+                // note(harlequin): opengl uses a lower-left corner rectangle and a y is up to look up a sub image
+                u32 x = rectangle->x;
+                u32 y = blocks_atlas_texture->height - (rectangle->y + rectangle->height);
+
+                glGetTextureSubImage(blocks_atlas_texture->handle,
+                                     0,
+                                     x,
+                                     y,
+                                     0,
+                                     rectangle->width,
+                                     rectangle->height,
+                                     1,
+                                     GL_RGBA,
+                                     GL_UNSIGNED_BYTE,
+                                     sizeof(u32) * 32 * 32,
+                                     buffer);
+
+                texture = buffer;
             }
 
-            set_image_at(&renderer->block_array_texture,
-                         (width == 32 && height == 32) ? data : magenta_block_texture,
-                         texture_id);
-
-            stbi_image_free(data);
-            texture_id++;
+            set_image_at(&renderer->block_array_texture, texture, i);
         }
 
         set_anisotropic_filtering_level(&renderer->block_array_texture,
@@ -403,7 +381,6 @@ namespace minecraft {
         generate_mipmaps(&renderer->block_array_texture);
         end_temprary_memory_arena(&temp_arena);
 
-#endif
         return true;
     }
 
@@ -589,7 +566,7 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        i32 bucket_index = render_data.bucket_index + 1;
+        i32 bucket_index = render_data.active_bucket_index + 1;
         if (bucket_index == 2) bucket_index = 0;
 
         Sub_Chunk_Bucket& opqaue_bucket = render_data.opaque_buckets[bucket_index];
@@ -607,7 +584,6 @@ namespace minecraft {
             renderer->stats.persistent.sub_chunk_used_memory -= render_data.transparent_buckets[bucket_index].face_count * 4 * sizeof(Block_Face_Vertex);
         }
 
-        // render_data.tessellated = false;
         opengl_renderer_upload_sub_chunk_to_gpu(world, chunk, sub_chunk_index);
 
         if (render_data.opaque_buckets[bucket_index].face_count == 0 && is_sub_chunk_bucket_allocated(&render_data.opaque_buckets[bucket_index]))
@@ -620,7 +596,7 @@ namespace minecraft {
             opengl_renderer_free_sub_chunk_bucket(&render_data.transparent_buckets[bucket_index]);
         }
 
-        render_data.bucket_index = bucket_index;
+        render_data.active_bucket_index = bucket_index;
     }
 
     std::array< Block_Query_Result, 4 > get_vertex_neighbours_from_top(Chunk* chunk, const glm::ivec3& block_coords, u16 face, u16 vertex_id)
@@ -1142,7 +1118,7 @@ namespace minecraft {
             const u32& block_flags = block_info->flags;
 
             Sub_Chunk_Render_Data& sub_chunk_render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-            i32 bucket_index = sub_chunk_render_data.bucket_index + 1;
+            i32 bucket_index = sub_chunk_render_data.active_bucket_index + 1;
             if (bucket_index == 2) bucket_index = 0;
             Sub_Chunk_Bucket *bucket = is_transparent ? &sub_chunk_render_data.transparent_buckets[bucket_index] : &sub_chunk_render_data.opaque_buckets[bucket_index];
 
@@ -1389,7 +1365,7 @@ namespace minecraft {
             glm::vec3 block_position = get_block_position(chunk, block_coords);
             glm::vec3 min = block_position - glm::vec3(0.5f, 0.5f, 0.5f);
             glm::vec3 max = block_position + glm::vec3(0.5f, 0.5f, 0.5f);
-            i32 bucket_index = sub_chunk_render_data.bucket_index + 1;
+            i32 bucket_index = sub_chunk_render_data.active_bucket_index + 1;
             if (bucket_index == 2) bucket_index = 0;
             sub_chunk_render_data.aabb[bucket_index].min = glm::min(sub_chunk_render_data.aabb[bucket_index].min, min);
             sub_chunk_render_data.aabb[bucket_index].max = glm::max(sub_chunk_render_data.aabb[bucket_index].max, max);
@@ -1402,7 +1378,7 @@ namespace minecraft {
     {
         Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
 
-        i32 bucket_index = render_data.bucket_index + 1;
+        i32 bucket_index = render_data.active_bucket_index + 1;
         if (bucket_index == 2) bucket_index = 0;
 
         constexpr f32 inf = std::numeric_limits< f32 >::max();
@@ -1447,70 +1423,55 @@ namespace minecraft {
         }
     }
 
-    void opengl_renderer_render_sub_chunk(World *world, Chunk *chunk, u32 sub_chunk_index)
+    void opengl_renderer_render_sub_chunk(Sub_Chunk_Render_Data *render_data)
     {
-        Sub_Chunk_Render_Data& render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-
-        if (render_data.opaque_buckets[render_data.bucket_index].face_count > 0)
+        const u32& active_chunk_index = render_data->active_bucket_index;
+        if (render_data->opaque_buckets[active_chunk_index].face_count > 0)
         {
             push_sub_chunk_bucket(&renderer->opaque_command_buffer,
-                                  &render_data.opaque_buckets[render_data.bucket_index],
-                                  render_data.instance_memory_id);
+                                  &render_data->opaque_buckets[active_chunk_index],
+                                  render_data->instance_memory_id);
         }
 
-        if (render_data.transparent_buckets[render_data.bucket_index].face_count > 0)
+        if (render_data->transparent_buckets[active_chunk_index].face_count > 0)
         {
             push_sub_chunk_bucket(&renderer->transparent_command_buffer,
-                                  &render_data.transparent_buckets[render_data.bucket_index],
-                                  render_data.instance_memory_id);
+                                  &render_data->transparent_buckets[active_chunk_index],
+                                  render_data->instance_memory_id);
         }
 
         auto& stats = renderer->stats;
-        stats.per_frame.face_count += render_data.opaque_buckets[render_data.bucket_index].face_count + render_data.transparent_buckets[render_data.bucket_index].face_count;
+        stats.per_frame.face_count +=
+            render_data->opaque_buckets[active_chunk_index].face_count + render_data->transparent_buckets[active_chunk_index].face_count;
         stats.per_frame.sub_chunk_count++;
     }
 
-    void opengl_renderer_render_chunks_at_region(World *world,
-                                                 const World_Region_Bounds &player_region_bounds,
-                                                 Camera *camera)
+    void opengl_renderer_render_sub_chunk(Chunk *chunk, u32 sub_chunk_index)
     {
-        for (u32 i = 0; i < World::ChunkHashTableCapacity; i++)
+        Assert(sub_chunk_index < Chunk::SubChunkCount);
+        Sub_Chunk_Render_Data *render_data = &chunk->sub_chunks_render_data[sub_chunk_index];
+        opengl_renderer_render_sub_chunk(render_data);
+    }
+
+    void opengl_renderer_render_chunks(Sub_Chunk_Render_Data *first_active_sub_chunk_render_data,
+                                       Camera                *camera)
+    {
+        Sub_Chunk_Render_Data *sub_chunk_render_data = first_active_sub_chunk_render_data;
+        while (sub_chunk_render_data)
         {
-            if (get_entry_state(world->chunk_hash_table_values[i]) != ChunkHashTableEntryState_Occupied)
+            const u32 &active_bucket_index = sub_chunk_render_data->active_bucket_index;
+            Sub_Chunk_Bucket& opaque_bucket = sub_chunk_render_data->opaque_buckets[active_bucket_index];
+            Sub_Chunk_Bucket& transparent_bucket = sub_chunk_render_data->transparent_buckets[active_bucket_index];
+            u64 face_count = (u64)opaque_bucket.face_count + (u64)transparent_bucket.face_count;
+
+            bool is_sub_chunk_visible = face_count > 0 &&
+                                        camera->frustum.is_aabb_visible(sub_chunk_render_data->aabb[active_bucket_index]);
+
+            if (is_sub_chunk_visible)
             {
-                continue;
+                opengl_renderer_render_sub_chunk(sub_chunk_render_data);
             }
-
-            const glm::ivec2& chunk_coords = world->chunk_hash_table_keys[i];
-
-            if (!is_chunk_in_region_bounds(chunk_coords, player_region_bounds))
-            {
-                continue;
-            }
-
-            u16 chunk_node_index = get_entry_value(world->chunk_hash_table_values[i]);
-            Chunk *chunk = &world->chunk_nodes[chunk_node_index].chunk;
-            Assert(chunk);
-
-            if (chunk->state >= ChunkState_Loaded)
-            {
-                for (i32 sub_chunk_index = 0; sub_chunk_index < Chunk::SubChunkCount; ++sub_chunk_index)
-                {
-                    Sub_Chunk_Render_Data &render_data = chunk->sub_chunks_render_data[sub_chunk_index];
-
-                    Sub_Chunk_Bucket& opaque_bucket = render_data.opaque_buckets[render_data.bucket_index];
-                    Sub_Chunk_Bucket& transparent_bucket = render_data.transparent_buckets[render_data.bucket_index];
-                    u64 face_count = (u64)opaque_bucket.face_count + (u64)transparent_bucket.face_count;
-
-                    bool is_sub_chunk_visible = face_count > 0 &&
-                                                camera->frustum.is_aabb_visible(render_data.aabb[render_data.bucket_index]);
-
-                    if (is_sub_chunk_visible)
-                    {
-                        opengl_renderer_render_sub_chunk(world, chunk, sub_chunk_index);
-                    }
-                }
-            }
+            sub_chunk_render_data = sub_chunk_render_data->next;
         }
     }
 

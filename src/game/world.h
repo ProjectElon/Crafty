@@ -80,12 +80,15 @@ namespace minecraft {
         Chunk_Node  chunk_nodes[World::ChunkCapacity];
         Chunk_Node *first_free_chunk_node;
 
+        Sub_Chunk_Render_Data first_active_sub_chunk_render_data_sentinal;
+        Sub_Chunk_Render_Data *last_active_sub_chunk_render_data;
+
         constexpr static u16 ChunkHashTableEntryStateMask = 0xC000;
         constexpr static u16 ChunkHashTableEntryValueMask = 0x0FFF;
         constexpr static i64 ChunkHashTableCapacity       = World::ChunkCapacity;
 
-        glm::ivec2 chunk_hash_table_keys[ChunkHashTableCapacity];
-        u16        chunk_hash_table_values[ChunkHashTableCapacity];
+        glm::ivec2 chunk_hash_table_keys[World::ChunkHashTableCapacity];
+        u16        chunk_hash_table_values[World::ChunkHashTableCapacity];
 
         Circular_Queue< Update_Chunk_Job >                      update_chunk_jobs_queue;
         Circular_Queue< Calculate_Chunk_Light_Propagation_Job > light_propagation_queue;

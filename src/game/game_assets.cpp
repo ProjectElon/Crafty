@@ -4,13 +4,8 @@
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_texture.h"
 #include "renderer/font.h"
-#include "containers/hash_table.h"
-
-// todo(harlequin): temprary
-#include "meta/spritesheet_meta.h"
 
 #include <filesystem>
-#include "game_assets.h"
 
 namespace minecraft {
 
@@ -51,7 +46,7 @@ namespace minecraft {
             Game_Asset_Info *asset_info = game_assets_state->asset_infos + i;
             for (u32 j = 0; j < asset_info->extension_count; j++)
             {
-                String8 *supported_extension = asset_info->extensions + j;
+                String8 *supported_extension = &asset_info->extensions[j];
                 if (equal(extension, supported_extension))
                 {
                     asset_type = (GameAssetType)i;
@@ -108,7 +103,7 @@ namespace minecraft {
                                                      Bitmap_Font);
                 bool loaded = load_font(font,
                                         path.data,
-                                        20,
+                                        22,
                                         &game_assets_state->asset_storage_arena);
                 if (!loaded)
                 {
@@ -219,8 +214,9 @@ namespace minecraft {
                                            (i32)asset_file_path.length(),
                                            asset_file_path.c_str());
 
-                asset_entry->path = asset_path;
-                asset_entry->size = fs::file_size(file_path);
+                asset_entry->state = AssetState_Unloaded;
+                asset_entry->path  = asset_path;
+                asset_entry->size  = fs::file_size(file_path);
 
                 i32 dot_index = find_last_any_char(asset_path, ".");
                 if (dot_index == -1)
@@ -264,7 +260,7 @@ namespace minecraft {
         // todo(harlequin): should we use a hash table here ?
         for (u32 i = 0; i < game_assets_state->asset_count; i++)
         {
-            String8 *str = game_assets_state->asset_paths + i;
+            String8 *str = &game_assets_state->asset_paths[i];
             if (equal(str, &path))
             {
                 handle = i;
@@ -284,7 +280,7 @@ namespace minecraft {
     Asset_Handle load_asset(const String8 &path)
     {
         Asset_Handle asset_handle = find_asset(path);
-        if (asset_handle != INVALID_ASSET_HANDLE)
+        if (is_asset_handle_valid(asset_handle))
         {
             Game_Asset_Entry *asset_entry = &game_assets_state->asset_entries[asset_handle];
             if (asset_entry->state == AssetState_Unloaded)
@@ -340,36 +336,11 @@ namespace minecraft {
 
     void load_game_assets(Game_Assets *assets)
     {
-        assets->blocks_atlas = load_asset(String8FromCString("../assets/textures/blocks.atlas"));
-
         assets->blocks_sprite_sheet = load_asset(String8FromCString("../assets/textures/block_spritesheet.png"));
         Opengl_Texture *block_sprite_sheet = get_texture(assets->blocks_sprite_sheet);
         set_texture_params_based_on_usage(block_sprite_sheet, TextureUsage_SpriteSheet);
 
-#if 0
-        String8 *names = ArenaPushArray(&game_assets_state->asset_storage_arena, String8, MC_PACKED_TEXTURE_COUNT);
-
-        for (u32 i = 0; i < MC_PACKED_TEXTURE_COUNT; i++)
-        {
-            names[i] = { (char*)texture_names[i], strlen(texture_names[i]) };
-        }
-
-        initialize_texture_atlas(&assets->blocks_atlas,
-                                 assets->blocks_sprite_sheet,
-                                 MC_PACKED_TEXTURE_COUNT,
-                                 (Rectanglei*)texture_rects,
-                                 names,
-                                 &game_assets_state->asset_storage_arena);
-
-        bool success = serialize_texture_atlas(&assets->blocks_atlas,
-                                               "../assets/textures/blocks.atlas");
-        Assert(success);
-        success = deserialize_texture_atlas(&assets->blocks_atlas,
-                                            "../assets/textures/blocks.atlas",
-                                            &game_assets_state->asset_storage_arena);
-        Assert(success);
-        Assert(get_sub_texture_index(&assets->blocks_atlas, String8FromCString("water")) == Texture_Id_water);
-#endif
+        assets->blocks_atlas = load_asset(String8FromCString("../assets/textures/blocks.atlas"));
 
         assets->hud_sprite = load_asset(String8FromCString("../assets/textures/hudSprites.png"));
         Opengl_Texture *hud_sprite_texture = get_texture(assets->hud_sprite);

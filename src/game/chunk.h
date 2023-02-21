@@ -201,15 +201,16 @@ namespace minecraft {
         i32             instance_memory_id;
         Chunk_Instance *base_instance;
 
-        AABB aabb[2];
-
-        std::atomic< i32 > bucket_index;
+        std::atomic< i32 > active_bucket_index;
         Sub_Chunk_Bucket opaque_buckets[2];
         Sub_Chunk_Bucket transparent_buckets[2];
+        AABB aabb[2];
 
         std::atomic< TessellationState > state;
 
         i32 face_count;
+
+        Sub_Chunk_Render_Data *next;
     };
 
     struct Chunk
@@ -310,6 +311,6 @@ namespace minecraft {
 
     inline i32 get_sub_chunk_render_data_index(const glm::ivec3& block_coords)
     {
-        return block_coords.y / Chunk::SubChunkHeight;
+        return (Chunk::SubChunkCount - 1) - (block_coords.y / Chunk::SubChunkHeight);
     }
 }

@@ -614,17 +614,16 @@ namespace minecraft {
 
             if (is_under_water)
             {
-                tint_color    = { 0.35f, 0.35f, 0.9f, 1.0f };
-                clear_color  *= tint_color;
+                tint_color   = { 0.35f, 0.35f, 0.9f, 1.0f };
+                clear_color *= tint_color;
             }
 
             opengl_renderer_begin_frame(clear_color,
                                         tint_color,
                                         camera);
 
-            opengl_renderer_render_chunks_at_region(world,
-                                                    world->active_region_bounds,
-                                                    camera);
+            opengl_renderer_render_chunks(world->first_active_sub_chunk_render_data_sentinal.next,
+                                          camera);
 
             opengl_renderer_end_frame(&game_state->assets,
                                       game_config->chunk_radius,

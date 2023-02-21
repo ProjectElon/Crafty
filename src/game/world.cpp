@@ -270,14 +270,28 @@ namespace minecraft {
 
     void load_and_update_chunks(World *world, const World_Region_Bounds& region_bounds)
     {
+        for (u32 i = 0; i < World::ChunkCapacity; i++)
+        {
+            Chunk *chunk = &world->chunk_nodes[i].chunk;
+            if (chunk->state == ChunkState_Saved)
+            {
+                chunk->state = ChunkState_Freed;
+                free_chunk(world, chunk);
+            }
+        }
+
+        world->first_active_sub_chunk_render_data_sentinal.next = nullptr;
+        world->last_active_sub_chunk_render_data = &world->first_active_sub_chunk_render_data_sentinal;
+
         for (i32 z = region_bounds.min.y - World::PendingFreeChunkRadius;
-                 z <= region_bounds.max.y + World::PendingFreeChunkRadius; ++z)
+             z <= region_bounds.max.y + World::PendingFreeChunkRadius;
+             z++)
         {
             for (i32 x = region_bounds.min.x - World::PendingFreeChunkRadius;
-                     x <= region_bounds.max.x + World::PendingFreeChunkRadius; ++x)
+                 x <= region_bounds.max.x + World::PendingFreeChunkRadius;
+                 x++)
             {
                 glm::ivec2 chunk_coords = { x, z };
-
                 Chunk *chunk = insert_and_allocate_chunk(world, chunk_coords);
                 if (chunk)
                 {
@@ -368,6 +382,16 @@ namespace minecraft {
                         calculate_chunk_lighting_queue.push(job);
                     }
                 }
+
+                if (chunk->state >= ChunkState_NeighboursLoaded)
+                {
+                    for (u32 i = 0; i < Chunk::SubChunkCount; i++)
+                    {
+                        Sub_Chunk_Render_Data *render_data             = &chunk->sub_chunks_render_data[i];
+                        world->last_active_sub_chunk_render_data->next = render_data;
+                        world->last_active_sub_chunk_render_data       = render_data;
+                    }
+                }
             }
 
             bool out_of_bounds = chunk_coords.x < region_bounds.min.x - World::PendingFreeChunkRadius ||
@@ -391,16 +415,6 @@ namespace minecraft {
 
                 bool removed = remove_chunk(world, chunk->world_coords);
                 Assert(removed);
-            }
-        }
-
-        for (u32 i = 0; i < World::ChunkCapacity; i++)
-        {
-            Chunk* chunk = &world->chunk_nodes[i].chunk;
-            if (chunk->state == ChunkState_Saved)
-            {
-                chunk->state = ChunkState_Freed;
-                free_chunk(world, chunk);
             }
         }
     }
@@ -646,7 +660,7 @@ namespace minecraft {
         i32 sub_chunk_start_y = sub_chunk_index * Chunk::SubChunkHeight;
         i32 sub_chunk_end_y = (sub_chunk_index + 1) * Chunk::SubChunkHeight - 1;
 
-        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != Chunk::SubChunkCount - 1)
+        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != (Chunk::SubChunkCount - 1))
         {
             queue_update_sub_chunk_job(world->update_chunk_jobs_queue, chunk, sub_chunk_index + 1);
         }
@@ -696,9 +710,9 @@ namespace minecraft {
         }
 
         i32 sub_chunk_start_y = sub_chunk_index * Chunk::SubChunkHeight;
-        i32 sub_chunk_end_y = (sub_chunk_index + 1) * Chunk::SubChunkHeight - 1;
+        i32 sub_chunk_end_y = (sub_chunk_index + 1) * (Chunk::SubChunkHeight - 1);
 
-        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != Chunk::SubChunkCount - 1)
+        if (block_coords.y == sub_chunk_end_y && sub_chunk_index != (Chunk::SubChunkCount - 1))
         {
             queue_update_sub_chunk_job(world->update_chunk_jobs_queue, chunk, sub_chunk_index + 1);
         }

@@ -136,7 +136,7 @@ namespace minecraft {
             u32 G = 255;
             u32 B = 255;
             u32 A = bitmap[i];
-            pixels[i] = R | (G << 8u) | (B << 16u) | (A << 24u);
+            pixels[i] = (A << 24) | (B << 16) | (G << 8) | R;
         }
 
         if (font->atlas.handle)
