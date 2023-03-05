@@ -3,9 +3,6 @@
 #include "core/common.h"
 #include "containers/string.h"
 
-// todo(harlequin): temprary
-#include "renderer/opengl_texture_atlas.h"
-
 namespace minecraft {
 
     struct Memory_Arena;

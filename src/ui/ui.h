@@ -9,49 +9,80 @@ namespace minecraft {
     struct Bitmap_Font;
     struct Opengl_Texture;
     struct Input;
+    struct Memory_Arena;
 
-    struct UI_State
+    enum WidgetFlags : u32
     {
-        glm::vec2    cursor;
-        glm::vec2    offset;
-        glm::vec4    text_color;
-        glm::vec4    fill_color;
-        Bitmap_Font *font;
+        WidgetFlags_Clickable      = (1 << 0),
+        WidgetFlags_DrawText       = (1 << 1),
+        WidgetFlags_DrawBorder     = (1 << 2),
+        WidgetFlags_DrawBackground = (1 << 3),
+        WidgetFlags_Draggable      = (1 << 4)
     };
 
-    struct UI_Data
+    enum SizeKind
     {
-        UI_State default_state;
-        UI_State current_state;
-        Input   *input;
+        SizeKind_Pixels,
+        SizeKind_TextContent,
+        SizeKind_PercentOfParent,
+        SizeKind_ChildSum,
+        SizeKind_MaxChild
     };
 
-    struct UI
+    enum UIAxis
     {
-        static UI_Data internal_data;
-
-        static bool initialize(UI_State *default_state);
-        static void shutdown();
-
-        static void begin(Input *input);
-
-        static void set_font(Bitmap_Font *font);
-        static void set_text_color(const glm::vec4& color);
-        static void set_fill_color(const glm::vec4& color);
-
-        static void set_cursor(const glm::vec2& cursor);
-        static void set_offset(const glm::vec2& offset);
-
-        static bool rect(const glm::vec2& size);
-        static bool text(String8 text);
-        static bool button(String8 text, const glm::vec2& padding = { 5.0f, 5.0f });
-
-        static bool textured_button(String8 text,
-                                    Opengl_Texture *texture,
-                                    const glm::vec2& padding   = { 5.0f, 5.0f },
-                                    const glm::vec2& uv_scale  = { 1.0f, 1.0f },
-                                    const glm::vec2& uv_offset = { 0.0f, 0.0f });
-
-        static void end();
+        UIAxis_X,
+        UIAxis_Y,
+        UIAxis_Count
     };
+
+    struct UI_Size
+    {
+        SizeKind kind;
+        f32      value;
+    };
+
+    struct UI_Widget
+    {
+        UI_Widget *parent;
+        UI_Widget *first;
+        UI_Widget *last;
+        UI_Widget *next;
+
+        UI_Size   semantic_size[UIAxis_Count];
+        u32       flags;
+        String8   text;
+
+        u64 hash;
+
+        glm::vec2 cursor;
+        glm::vec2 relative_position;
+        glm::vec2 position;
+        glm::vec2 size;
+    };
+
+    struct UI_Interaction
+    {
+        UI_Widget *widget;
+        bool       clicked;
+        bool       hovering;
+        bool       dragging;
+    };
+
+    bool initialize_ui(Memory_Arena *arena);
+    void shutdown_ui();
+
+    void ui_begin_frame(Input *input, const glm::vec2 &frame_buffer_size);
+    void ui_end_frame(Bitmap_Font *font);
+
+#define _Stringfiy(S) #S
+#define Stringfiy(S) _Stringfiy(S)
+#define UIName(Name) (Name "#" __FUNCTION__ Stringfiy(__LINE__) Stringfiy(__COUNTER__))
+
+    // note(harlequin): each one should be called with UIName for now
+    UI_Interaction ui_begin_panel(const char *str,  u64 index = 0);
+    void ui_end_panel();
+
+    UI_Interaction ui_label(const char *str,  u64 index = 0);
+    UI_Interaction ui_button(const char *str, u64 index = 0);
 }

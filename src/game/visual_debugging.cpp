@@ -307,6 +307,7 @@ namespace minecraft {
                                     Input            *input,
                                     glm::vec2         frame_buffer_size)
     {
+#if 0
         UI::begin(input);
 
         UI::set_offset({ 10.0f, 10.0f });
@@ -366,5 +367,7 @@ namespace minecraft {
         UI::text(debug_state->block_facing_normal_light_level_text);
 
         UI::end();
+
+#endif
     }
 }

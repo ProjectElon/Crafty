@@ -143,4 +143,14 @@ namespace minecraft {
         u8 *current = (arena->base + arena->allocated);
         return (current - array) / size;
     }
+
+    void *begin_array(Temprary_Memory_Arena *temp_arena, u64 size, u64 alignment)
+    {
+        return begin_array(temp_arena->arena, size, alignment, true);
+    }
+
+    u64 end_array(Temprary_Memory_Arena *temp_arena, u8 *array, u64 size)
+    {
+        return end_array(temp_arena->arena, array, size);
+    }
 }

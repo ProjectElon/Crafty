@@ -3,6 +3,7 @@
 #include "memory/memory_arena.h"
 #include "renderer/opengl_shader.h"
 #include "renderer/opengl_texture.h"
+#include "renderer/opengl_texture_atlas.h"
 #include "renderer/font.h"
 
 #include <filesystem>

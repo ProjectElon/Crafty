@@ -30,12 +30,6 @@ namespace minecraft {
             Value *entry;
         };
 
-        // struct delete_result
-        // {
-        //     bool  Deleted;
-        //     Value Entry;
-        // };
-
         Iterator insert(const Key &key, const Value &value)
         {
             u32 start_index     = hash(key) % MaxCount;

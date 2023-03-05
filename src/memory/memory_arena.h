@@ -16,7 +16,6 @@ namespace minecraft {
     #define ArenaPushArrayAligned(ArenaPointer, Type, Count) (Type*)arena_allocate_aligned((ArenaPointer), sizeof(Type) * (Count), alignof(Type))
     #define ArenaPushArrayAlignedZero(ArenaPointer, Type, Count) (Type*)arena_allocate_aligned_zero((ArenaPointer), sizeof(Type) * (Count), alignof(Type))
 
-
     #define ArenaBeginArray(ArenaPointer, Type) (Type*)begin_array((ArenaPointer), sizeof(Type), alignof(Type))
     #define ArenaEndArray(ArenaPointer, ArrayPointer) end_array((ArenaPointer), (u8*)(ArrayPointer), sizeof(decltype(*ArrayPointer)))
     #define ArenaPushArrayEntry(ArenaPointer, ArrayPointer) (decltype(ArrayPointer))arena_allocate_aligned((ArenaPointer), sizeof(decltype(*ArrayPointer)), alignof(decltype(*ArrayPointer)))
@@ -58,4 +57,7 @@ namespace minecraft {
 
     void* begin_array(Memory_Arena *arena, u64 size, u64 alignment, bool temprary = false);
     u64 end_array(Memory_Arena *arena, u8 *array, u64 size);
+
+    void* begin_array(Temprary_Memory_Arena *temp_arena, u64 size, u64 alignment);
+    u64 end_array(Temprary_Memory_Arena *temp_arena, u8 *array, u64 size);
 }

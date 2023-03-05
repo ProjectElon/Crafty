@@ -1,5 +1,2 @@
-﻿  chunk.cpp
-  jobs.cpp
-  world.cpp
-  opengl_renderer.cpp
+﻿  ui.cpp
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

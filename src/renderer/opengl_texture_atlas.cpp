@@ -99,7 +99,7 @@ namespace minecraft {
         };
 
         const Game_Asset_Entry *texture_asset = get_asset(atlas->texture_asset_handle);
-        String8 *asset_file_path = texture_asset->path;
+        const String8 *asset_file_path = texture_asset->path;
 
         fwrite(&asset_file_path->count, sizeof(u64), 1, file_handle);
         fwrite(asset_file_path->data, sizeof(char) * asset_file_path->count, 1, file_handle);

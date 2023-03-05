@@ -4,6 +4,7 @@
 #include "game/game.h"
 #include "camera.h"
 #include "opengl_debug_renderer.h"
+#include "opengl_texture_atlas.h"
 #include "opengl_shader.h"
 #include "opengl_texture.h"
 #include "opengl_array_texture.h"
@@ -16,7 +17,6 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "game/world.h"
-#include "game/profiler.h"
 #include "game/game.h"
 
 #include <mutex>
