@@ -35,12 +35,6 @@ namespace minecraft {
         Memory_Arena transient_arena;
     };
 
-    enum GameMode
-    {
-        GameMode_Editor,
-        GameMode_Gameplay
-    };
-
     struct Game_State
     {
         Game_Memory     *game_memory;
@@ -56,7 +50,6 @@ namespace minecraft {
         Game_Assets      assets;
         Dropdown_Console console;
         World           *world;
-        GameMode         mode;
 
         f32              frame_timer;
         u32              frames_per_second_counter;
@@ -80,7 +73,6 @@ namespace minecraft {
 
     void toggle_visual_debugging(Game_State *game_state);
     void toggle_inventory(Game_State *game_state);
-    void toggle_edit_mode(Game_State *game_state);
 
     bool game_on_quit(const Event *event, void *sender);
     bool game_on_key_press(const Event *event, void *sender);

@@ -14,6 +14,7 @@ namespace minecraft {
 
     struct Input
     {
+        GLFWwindow *window;
         glm::vec2 previous_mouse_position;
         glm::vec2 mouse_position;
         bool      previous_key_states[MC_KEY_STATE_COUNT];
@@ -27,7 +28,7 @@ namespace minecraft {
     bool initialize_input(Input *input, GLFWwindow *window);
     void shutdown_input(Input *input);
 
-    void update_input(Input *input, GLFWwindow *window);
+    void update_input(Input *input);
 
     bool get_key(Input *input, u16 key_code);
 
@@ -41,10 +42,12 @@ namespace minecraft {
     bool is_button_held(Input *input, u8 button_code);
     bool is_button_released(Input *input, u8 button_code);
 
+    void set_mouse_position(Input           *input,
+                            const glm::vec2 &position);
+
     glm::vec2 get_mouse_position(Input *input);
     glm::vec2 get_mouse_delta(Input *input);
 
     const char *convert_key_code_to_string(u16 key_code);
     const char *convert_button_code_to_string(u16 button_code);
-
 }

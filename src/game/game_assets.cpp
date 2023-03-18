@@ -151,7 +151,6 @@ namespace minecraft {
         game_assets_state = ArenaPushAlignedZero(arena, Game_Assets_State);
         Assert(game_assets_state);
 
-
         game_assets_state->asset_string_arena  = push_sub_arena(arena, MegaBytes(1));
         game_assets_state->asset_path_arena    = push_sub_arena(arena, MegaBytes(1));
         game_assets_state->asset_entry_arena   = push_sub_arena(arena, MegaBytes(1));
@@ -161,19 +160,25 @@ namespace minecraft {
         {
             String8FromCString("png")
         };
-        set_asset_extensions(GameAssetType_Texture, texture_extensions, ArrayCount(texture_extensions));
+        set_asset_extensions(GameAssetType_Texture,
+                             texture_extensions,
+                             ArrayCount(texture_extensions));
 
         String8 shader_extensions[] =
         {
             String8FromCString("glsl")
         };
-        set_asset_extensions(GameAssetType_Shader, shader_extensions, ArrayCount(shader_extensions));
+        set_asset_extensions(GameAssetType_Shader,
+                             shader_extensions,
+                             ArrayCount(shader_extensions));
 
         String8 font_extensions[] =
         {
             String8FromCString("ttf")
         };
-        set_asset_extensions(GameAssetType_Font, font_extensions, ArrayCount(font_extensions));
+        set_asset_extensions(GameAssetType_Font,
+                             font_extensions,
+                             ArrayCount(font_extensions));
 
         String8 texture_atlas_extensions[] =
         {

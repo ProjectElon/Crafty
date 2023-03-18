@@ -42,7 +42,8 @@ namespace minecraft {
         Dropdown_Console *console      = &game_state->console;
 
         game_state->config_file_path = "config";
-        if (!load_game_config(game_config, game_state->config_file_path))
+
+		if (!load_game_config(game_config, game_state->config_file_path))
         {
             fprintf(stderr, "[ERROR]: failed to load game config loading defaults\n");
             load_game_config_defaults(game_config);
@@ -261,7 +262,6 @@ namespace minecraft {
         game_state->is_minimized                 = false;
         game_state->is_cursor_locked             = true;
         game_state->is_running                   = true;
-        game_state->mode                         = GameMode_Gameplay;
 
         WindowMode window_mode   = game_config->window_mode;
         game_config->window_mode = WindowMode_None;
@@ -269,7 +269,6 @@ namespace minecraft {
                                         game_config,
                                         window_mode);
 
-        toggle_edit_mode(game_state);
         return true;
     }
 
@@ -530,22 +529,25 @@ namespace minecraft {
             update_game_time(game_state);
             Platform::pump_messages();
 
-            update_input(input, game_state->window);
+            update_input(input);
             memset(gameplay_input,  0, sizeof(Input));
             memset(inventory_input, 0, sizeof(Input));
 
-            if (game_state->mode == GameMode_Gameplay)
+            if (!game_state->is_cursor_locked)
             {
-                if (game_state->console.state == ConsoleState_Closed)
+                glm::vec2 mouse_p = glm::clamp(input->mouse_position, { 0.0f, 0.0f }, { game_config->window_width, game_config->window_height });
+                set_mouse_position(input, mouse_p);
+            }
+
+            if (game_state->console.state == ConsoleState_Closed)
+            {
+                if (game_state->is_inventory_active)
                 {
-                    if (game_state->is_inventory_active)
-                    {
-                        *inventory_input = *input;
-                    }
-                    else
-                    {
-                        *gameplay_input = *input;
-                    }
+                    *inventory_input = *input;
+                }
+                else
+                {
+                    *gameplay_input = *input;
                 }
             }
 
@@ -639,6 +641,7 @@ namespace minecraft {
                                               &frame_arena);
 
                 draw_visual_debugging_data(&game_state->debug_state,
+                                           &game_state->assets,
                                            input,
                                            frame_buffer_size);
             }
@@ -655,31 +658,13 @@ namespace minecraft {
 
             draw_dropdown_console(console, game_state->delta_time);
 
-            if (game_state->mode == GameMode_Editor)
-            {
-                ui_begin_frame(input, frame_buffer_size);
-
-                ui_begin_panel(UIName("i am a panel"));
-                {
-                    ui_label(UIName("i am a label"));
-
-                    if (ui_button(UIName("i am a button")).clicked)
-                    {
-                        fprintf(stderr, "clicked\n");
-                    }
-                }
-                ui_end_panel();
-
-                Bitmap_Font *font = get_font(game_state->assets.liberation_mono_font);
-                ui_end_frame(font);
-            }
-
             glm::vec2 cursor = { frame_buffer_size.x * 0.5f, frame_buffer_size.y * 0.5f };
             Opengl_Texture *cursor_texture = get_texture(game_state->assets.gameplay_crosshair);
 
             if (!game_state->is_cursor_locked)
             {
                 input->mouse_position = glm::clamp(input->mouse_position, { 0.0f, 0.0f }, frame_buffer_size);
+
                 cursor = input->mouse_position;
                 cursor_texture = get_texture(game_state->assets.inventory_crosshair);
             }
@@ -707,34 +692,6 @@ namespace minecraft {
     void toggle_inventory(Game_State *game_state)
     {
         game_state->is_inventory_active = !game_state->is_inventory_active;
-    }
-
-    void toggle_edit_mode(Game_State *game_state)
-    {
-        if (game_state->mode == GameMode_Gameplay)
-        {
-            game_state->is_cursor_locked = !game_state->is_cursor_locked;
-
-            Platform::toggle_cursor_visiblity(game_state->window,
-                                              &game_state->game_config);
-
-            Platform::set_raw_mouse_motion(game_state->window,
-                                           &game_state->game_config,
-                                           false);
-
-            game_state->mode = GameMode_Editor;
-        }
-        else
-        {
-            Platform::set_raw_mouse_motion(game_state->window,
-                                           &game_state->game_config,
-                                           true);
-
-            Platform::toggle_cursor_visiblity(game_state->window,
-                                              &game_state->game_config);
-
-            game_state->mode = GameMode_Gameplay;
-        }
     }
 
     bool game_on_quit(const Event *event, void *sender)

@@ -1,2 +1,32 @@
-﻿  ui.cpp
+﻿  string.cpp
+  event.cpp
+  file_system.cpp
+  input.cpp
+  platform.cpp
+  Inventory.cpp
+  chunk.cpp
+  console_commands.cpp
+  game.cpp
+  game_assets.cpp
+  game_console_commands.cpp
+  job_system.cpp
+C:\dev\cpp\Crafty\src\game\console_commands.cpp(170,23): warning C4244: 'initializing': conversion from '__int64' to 'u32', possible loss of data
+  jobs.cpp
+  physics.cpp
+  profiler.cpp
+  visual_debugging.cpp
+  world.cpp
+  main.cpp
+  memory_arena.cpp
+  font.cpp
+  opengl_2d_renderer.cpp
+  opengl_debug_renderer.cpp
+  opengl_frame_buffer.cpp
+  opengl_renderer.cpp
+  opengl_texture_atlas.cpp
+  opengl_vertex_array.cpp
+  dropdown_console.cpp
+  ui.cpp
+C:\dev\cpp\Crafty\src\renderer\opengl_vertex_array.cpp(79): warning C4715: 'minecraft::get_component_count': not all control paths return a value
+C:\dev\cpp\Crafty\src\renderer\opengl_vertex_array.cpp(165): warning C4715: 'minecraft::get_opengl_attribute_type': not all control paths return a value
   Minecraft.vcxproj -> C:\dev\cpp\Crafty\bin\Minecraft.exe

@@ -11,6 +11,7 @@ namespace minecraft {
     struct Game_State;
     struct Select_Block_Result;
     struct Temprary_Memory_Arena;
+    struct Game_Assets;
 
     struct Game_Debug_State
     {
@@ -44,6 +45,7 @@ namespace minecraft {
                                        Temprary_Memory_Arena *frame_arena);
 
     void draw_visual_debugging_data(Game_Debug_State *debug_state,
+                                    Game_Assets      *game_assets,
                                     Input            *input,
                                     glm::vec2         frame_buffer_size);
 }

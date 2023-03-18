@@ -101,7 +101,7 @@ namespace minecraft {
         Memory_Arena *arena        = temparay_arena->arena;
         arena->allocated           = temparay_arena->allocated;
         arena->is_temporarily_used = false;
-        temparay_arena->allocated = 0;
+        temparay_arena->allocated  = 0;
     }
 
     void* arena_allocate(Temprary_Memory_Arena *temparay_arena, u64 size)

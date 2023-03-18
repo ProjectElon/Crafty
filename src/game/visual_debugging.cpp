@@ -3,6 +3,7 @@
 #include "memory/memory_arena.h"
 #include "game/world.h"
 #include "game/game.h"
+#include "game/game_assets.h"
 #include "core/input.h"
 #include "ui/ui.h"
 #include "renderer/opengl_renderer.h"
@@ -304,70 +305,57 @@ namespace minecraft {
     }
 
     void draw_visual_debugging_data(Game_Debug_State *debug_state,
+                                    Game_Assets      *game_assets,
                                     Input            *input,
                                     glm::vec2         frame_buffer_size)
     {
-#if 0
-        UI::begin(input);
+        {ui_begin_frame(input, frame_buffer_size);
 
-        UI::set_offset({ 10.0f, 10.0f });
-        UI::set_fill_color({ 0.0f, 0.0f, 0.0f, 0.8f });
-        UI::set_text_color({ 1.0f, 1.0f, 1.0f, 1.0f });
+        ui_push_style(StyleVar_BackgroundColor, { 0.1f, 0.1f, 0.1f, 0.9f });
+        ui_push_style(StyleVar_BorderColor, { 0.9f, 0.9f, 0.9f, 1.0f });
+        ui_push_style(StyleVar_TextColor, { 1.0f, 1.0f, 1.0f, 1.0f });
 
-        UI::rect(frame_buffer_size * glm::vec2(0.33f, 1.0f) - glm::vec2(0.0f, 20.0f));
-        UI::set_cursor({ 10.0f, 10.0f });
-        String8 empty = String8FromCString("");
+        {ui_begin_panel(UIName("Active Chunk"));
+        ui_label(UIName("player_chunk_coords_text"), debug_state->player_chunk_coords_text);
+        ui_label(UIName("player_position_text"),     debug_state->player_position_text);
+        ui_label(UIName("player_chunk_state_text"),  debug_state->player_chunk_state_text);
+        ui_label(UIName("player_chunk_tesslating"),  debug_state->player_chunk_tesslating);
+        ui_end_panel();}
 
-        UI::text(String8FromCString("Active Chunk"));
-        UI::text(debug_state->player_chunk_coords_text);
-        UI::text(debug_state->player_position_text);
-        UI::text(debug_state->player_chunk_state_text);
-        UI::text(debug_state->player_chunk_tesslating);
+        {ui_begin_panel(UIName("Active Block"));
+        ui_label(UIName("block_facing_normal_chunk_coords_text"), debug_state->block_facing_normal_chunk_coords_text);
+        ui_label(UIName("block_facing_normal_block_coords_text"), debug_state->block_facing_normal_block_coords_text);
+        ui_label(UIName("block_facing_normal_face_text"), debug_state->block_facing_normal_face_text);
+        ui_label(UIName("block_facing_normal_sky_light_level_text"), debug_state->block_facing_normal_sky_light_level_text);
+        ui_label(UIName("block_facing_normal_light_source_level_text"), debug_state->block_facing_normal_light_source_level_text);
+        ui_label(UIName("block_facing_normal_light_level_text"), debug_state->block_facing_normal_light_level_text);
+        ui_end_panel();}
 
-        UI::text(empty);
-        String8FromCString("Rendering");
+        {ui_begin_panel(UIName("Rendering"));
+        ui_label(UIName("frames_per_second_text"), debug_state->frames_per_second_text);
+        ui_label(UIName("frame_time_text"), debug_state->frame_time_text);
+        ui_label(UIName("face_count_text"), debug_state->face_count_text);
+        ui_label(UIName("vertex_count_text"), debug_state->vertex_count_text);
+        ui_label(UIName("sub_chunk_bucket_capacity_text"), debug_state->sub_chunk_bucket_capacity_text);
+        ui_label(UIName("sub_chunk_bucket_count_text"), debug_state->sub_chunk_bucket_count_text);
+        ui_label(UIName("sub_chunk_bucket_total_memory_text"), debug_state->sub_chunk_bucket_total_memory_text);
+        ui_label(UIName("sub_chunk_bucket_allocated_memory_text"), debug_state->sub_chunk_bucket_allocated_memory_text);
+        ui_label(UIName("sub_chunk_bucket_used_memory_text"), debug_state->sub_chunk_bucket_used_memory_text);
+        ui_toggle(UIName("FXAA"), opengl_renderer_is_fxaa_enabled());
 
-        UI::text(debug_state->frames_per_second_text);
-        UI::text(debug_state->frame_time_text);
-        UI::text(debug_state->face_count_text);
-        UI::text(debug_state->vertex_count_text);
-        UI::text(debug_state->sub_chunk_bucket_capacity_text);
-        UI::text(debug_state->sub_chunk_bucket_count_text);
-        UI::text(debug_state->sub_chunk_bucket_total_memory_text);
-        UI::text(debug_state->sub_chunk_bucket_allocated_memory_text);
-        UI::text(debug_state->sub_chunk_bucket_used_memory_text);
+        ui_end_panel();}
 
-        bool fxaa_enabled  = opengl_renderer_is_fxaa_enabled();
-        String8 fxaa_label = {};
-        if (fxaa_enabled)
-        {
-            fxaa_label = String8FromCString("FXAA: On");
-        }
-        else
-        {
-            fxaa_label = String8FromCString("FXAA: Off");
-        }
-        UI::text(fxaa_label);
+        {ui_begin_panel(UIName("World Settings"));
+        ui_label(UIName("chunk_radius_text"), debug_state->chunk_radius_text);
+        ui_label(UIName("chunk_radius_text"), debug_state->game_time_text);
+        ui_label(UIName("chunk_radius_text"), debug_state->global_sky_light_level_text);
+        ui_end_panel();}
 
-        UI::text(empty);
-        UI::text(String8FromCString("World Settings"));
-        UI::text(debug_state->chunk_radius_text);
-        UI::text(debug_state->game_time_text);
-        UI::text(debug_state->global_sky_light_level_text);
+        ui_pop_style(StyleVar_TextColor);
+        ui_pop_style(StyleVar_BorderColor);
+        ui_pop_style(StyleVar_BackgroundColor);
 
-        UI::text(empty);
-
-        String8 debug_block_label = String8FromCString("Active Block");
-        UI::text(debug_block_label);
-        UI::text(debug_state->block_facing_normal_chunk_coords_text);
-        UI::text(debug_state->block_facing_normal_block_coords_text);
-        UI::text(debug_state->block_facing_normal_face_text);
-        UI::text(debug_state->block_facing_normal_sky_light_level_text);
-        UI::text(debug_state->block_facing_normal_light_source_level_text);
-        UI::text(debug_state->block_facing_normal_light_level_text);
-
-        UI::end();
-
-#endif
+        Bitmap_Font *font = get_font(game_assets->liberation_mono_font);
+        ui_end_frame(font);}
     }
 }

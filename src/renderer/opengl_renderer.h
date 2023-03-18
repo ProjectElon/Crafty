@@ -89,6 +89,6 @@ namespace minecraft {
     i64 opengl_renderer_get_free_chunk_bucket_count();
 
     void opengl_renderer_set_is_fxaa_enabled(bool enabled);
-    bool opengl_renderer_is_fxaa_enabled();
+    bool *opengl_renderer_is_fxaa_enabled();
     void opengl_renderer_toggle_fxaa();
 }

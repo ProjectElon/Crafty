@@ -34,7 +34,7 @@ namespace minecraft {
         {
             u32 start_index     = hash(key) % MaxCount;
             u32 index           = start_index;
-            u32 insertion_index = -1;
+            i32 insertion_index = -1;
             Iterator iterator   = {};
 
             do

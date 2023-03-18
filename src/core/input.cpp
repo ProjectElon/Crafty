@@ -9,12 +9,15 @@ namespace minecraft {
     bool initialize_input(Input *input, GLFWwindow *window)
     {
         glfwSetInputMode(window, GLFW_LOCK_KEY_MODS, GLFW_TRUE);
+        glfwSetInputMode(window, GLFW_STICKY_KEYS, GLFW_TRUE);
+        glfwSetInputMode(window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
 
         memset(input->key_states,             0, sizeof(bool) * MC_KEY_STATE_COUNT);
         memset(input->previous_key_states,    0, sizeof(bool) * MC_KEY_STATE_COUNT);
         memset(input->button_states,          0, sizeof(bool) * MC_BUTTON_STATE_COUNT);
         memset(input->previous_button_states, 0, sizeof(bool) * MC_BUTTON_STATE_COUNT);
 
+        input->window                    = window;
         input->previous_mouse_position   = { 0.0f, 0.0f };
         input->mouse_position            = { 0.0f, 0.0f };
         input->is_cursor_visible         = true;
@@ -27,7 +30,7 @@ namespace minecraft {
     {
     }
 
-    void update_input(Input *input, GLFWwindow *window)
+    void update_input(Input *input)
     {
         memcpy(input->previous_key_states,    input->key_states,    sizeof(bool) * MC_KEY_STATE_COUNT);
         memcpy(input->previous_button_states, input->button_states, sizeof(bool) * MC_BUTTON_STATE_COUNT);
@@ -35,17 +38,18 @@ namespace minecraft {
         for (u32 key_code = 0; key_code < MC_KEY_STATE_COUNT; key_code++)
         {
             input->key_states[key_code] =
-                glfwGetKey(window, key_code) == GLFW_PRESS;
+                glfwGetKey(input->window, key_code) == GLFW_PRESS;
         }
 
         for (u32 button_code = 0; button_code < MC_BUTTON_STATE_COUNT; button_code++)
         {
             input->button_states[button_code] =
-                glfwGetMouseButton(window, button_code) == GLFW_PRESS;
+                glfwGetMouseButton(input->window, button_code) == GLFW_PRESS;
         }
 
-        f64 mouse_x, mouse_y;
-        glfwGetCursorPos(window, &mouse_x, &mouse_y);
+        f64 mouse_x;
+        f64 mouse_y;
+        glfwGetCursorPos(input->window, &mouse_x, &mouse_y);
 
         input->previous_mouse_position = input->mouse_position;
         input->mouse_position          = { (f32)mouse_x, (f32)mouse_y };
@@ -92,6 +96,14 @@ namespace minecraft {
     {
         return !input->button_states[button_code] &&
                 input->previous_button_states[button_code];
+    }
+
+
+    void set_mouse_position(Input           *input,
+                            const glm::vec2 &position)
+    {
+        input->mouse_position = position;
+        glfwSetCursorPos(input->window, position.x, position.y);
     }
 
     glm::vec2 get_mouse_delta(Input *input)

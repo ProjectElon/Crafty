@@ -1701,9 +1701,9 @@ namespace minecraft {
         renderer->enable_fxaa = enabled;
     }
 
-    bool opengl_renderer_is_fxaa_enabled()
+    bool* opengl_renderer_is_fxaa_enabled()
     {
-        return renderer->enable_fxaa;
+        return &renderer->enable_fxaa;
     }
 
     void opengl_renderer_toggle_fxaa()
